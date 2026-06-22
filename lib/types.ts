@@ -1,0 +1,315 @@
+﻿export interface School {
+  id: string
+  name: string
+  joinCode: string
+  createdBy?: string
+  createdAt: string
+}
+
+export interface Teacher {
+  id: string
+  userId: string
+  name: string
+  schoolName: string
+  schoolId?: string    // UUID from schools table — the real SaaS tenant key
+  subject: string
+  grade: string
+  phone: string
+  languagePreference: string
+  academicYearStart?: string   // ISO date "2025-06-01" — when this school year started
+  currentTerm?: string         // "Term 1" | "Term 2" | "Term 3"
+  teacherCode?: string         // short code non-teaching staff type into the scanner app
+}
+
+export interface Class {
+  id: string
+  teacherId: string    // creator / owner of this class
+  schoolName: string   // legacy string key (kept for backward compat)
+  schoolId?: string    // UUID from schools table — preferred isolation key
+  name: string
+  grade: string
+  section: string
+  academicYear: string
+  createdAt: string
+  classCode?: string
+}
+
+export interface Student {
+  id: string
+  teacherId: string
+  classId: string
+  name: string
+  rollNumber: string
+  isActive: boolean
+  interests: string[]
+  goal: string
+}
+
+export type QuestionType = 'mcq' | 'fill-in-blank' | 'short-answer' | 'long-answer'
+
+export interface AiQuestion {
+  text: string
+  type: QuestionType
+  difficulty: 'easy' | 'medium' | 'hard'
+  marks: number
+  options?: string[]   // MCQ only — ["A. option", "B. option", "C. option", "D. option"]
+  answer: string
+  keywords?: string[]  // short-answer — key terms used for fuzzy/keyword grading
+}
+
+export interface Test {
+  id: string
+  teacherId: string
+  classId?: string
+  subject: string
+  topic: string
+  totalMarks: number
+  conductedOn: string
+  term?: string           // "Term 1" | "Term 2" | "Term 3"
+  questions?: AiQuestion[]
+}
+
+export interface Mark {
+  id: string
+  testId: string
+  studentId: string
+  score: number
+  feedback?: string    // teacher's observation e.g. "confused on fractions", "skipped Q3"
+  breakdown?: { question: number; awarded: number; max: number }[]  // per-question score from scanner
+  enteredAt: string
+  source?: 'manual' | 'ai_scanned' | 'teacher_override'
+  imageUrl?: string
+}
+
+/**
+ * A session = teacher taught a specific syllabus topic to a class on a specific date.
+ * Attendance records are linked to sessions so we know which topic was being taught
+ * when each student was present or absent.
+ */
+export interface Session {
+  id: string
+  classId: string
+  teacherId: string
+  syllabusTopicId: string
+  topic: string            // denormalised for display
+  date: string             // YYYY-MM-DD
+  createdAt: string
+  sessionNote?: string     // what the teacher specifically covered this session
+}
+
+/**
+ * Attendance is now linked to a Session, giving us topic-level presence tracking.
+ * sessionId / syllabusTopicId may be empty string for legacy records recorded before
+ * this model existed.
+ */
+export interface Attendance {
+  id: string
+  sessionId: string        // which teaching session this belongs to
+  studentId: string
+  classId: string
+  syllabusTopicId: string  // which topic was being taught (denormalised)
+  date: string
+  status: 'present' | 'absent' | 'late'
+}
+
+export interface TopicMastery {
+  id: string
+  studentId: string
+  topic: string
+  subject: string
+  mastery: number
+  attempts: number
+  lastUpdated: string
+}
+
+export interface SyllabusTopic {
+  id: string
+  classId: string
+  teacherId?: string   // which teacher's curriculum this belongs to
+  grade?: string       // grade this topic belongs to (= owning class's grade)
+  definitionId?: string // shared across all sections of the same grade; edits/deletes fan out by this
+  topic: string
+  description: string
+  weekNumber?: number
+  estimatedSessions?: number   // AI year-plan: how many class sessions this topic needs
+  orderIndex: number
+  isCompleted: boolean   // per-section completion (each section's row tracks its own)
+  createdAt: string
+}
+
+export interface SyllabusSubTopic {
+  id: string
+  topicId: string       // parent SyllabusTopic.id
+  classId: string       // for easy filtering
+  teacherId?: string    // which teacher's curriculum this belongs to
+  definitionId?: string // shared across sibling sub-topics in other sections of the grade
+  name: string
+  description?: string
+  orderIndex: number
+  isCompleted: boolean
+  completedAt?: string
+  createdAt: string
+}
+
+export interface RecoveryAttempt {
+  id: string
+  studentId: string
+  topic: string
+  approachUsed: string
+  helped: boolean | null
+  generatedAt: string
+}
+
+export interface Warning {
+  level: 'critical' | 'watch' | 'info'
+  category: 'absence' | 'low_marks' | 'struggling'
+  reason: string
+  action: string
+  date?: string   // YYYY-MM-DD of the most recent absence for this topic
+  topic?: string  // topic name, used for catch-up plan creation
+}
+
+export interface StudentWithStats extends Student {
+  warnings: Warning[]
+  attendanceRate: number
+  avgMastery: number
+}
+
+/**
+ * Per-student, per-topic coverage status derived from sessions + attendance + marks.
+ */
+export interface TopicCoverageStatus {
+  syllabusTopicId: string
+  topic: string
+  attended: boolean | null   // null = topic never taught yet
+  score: number | null       // 0-1 percentage, null = no test yet
+  classification:
+    | 'mastered'             // attended + score >= 0.7
+    | 'present-struggling'  // attended + score < 0.7 → explain using interests
+    | 'absent-low'          // absent + score < 0.5 → critical: missed lesson & failing
+    | 'absent-watch'        // absent + 0.5 <= score < 0.7
+    | 'absent-good'         // absent + score >= 0.7 → self-learner potential signal
+    | 'absent-untested'     // absent + no test yet
+    | 'not-taught'          // topic not taught yet
+    | 'not-assessed'        // attended but no test yet
+}
+
+export interface Fingerprint {
+  learningStyle: 'story-based' | 'analytical'
+  isConsistent: boolean
+  peakDay: string
+  strongTopics: string[]
+  weakTopics: string[]
+  improvementRate: number
+  variance: number
+}
+
+export interface PotentialSignal {
+  type: 'uneven_profile' | 'fast_learner' | 'topic_spike'
+  data: Record<string, unknown>
+  sentence?: string
+}
+
+export interface BriefingFinding {
+  type: 'repeated_failures' | 'trend' | 'at_risk' | 'readiness'
+  data: Record<string, unknown>
+}
+
+export interface DailyBriefing {
+  date: string
+  teacherId: string
+  sentences: string[]
+  stats: {
+    proficient: number
+    developing: number
+    struggling: number
+  }
+}
+
+export interface ClassBriefingData {
+  classId: string
+  className: string
+  grade: string
+  section: string
+  studentCount: number
+  nextTopic: string | null
+  nextSubTopic: string | null
+  lastSubTopics: string[]
+  lastSession: {
+    topic: string
+    date: string
+    absentCount: number
+    absentNames: string[]
+  } | null
+  atRiskCount: number
+  atRiskNames: string[]
+  completedTopics: number
+  totalTopics: number
+}
+
+export interface Question {
+  text: string
+  difficulty: 'easy' | 'medium' | 'hard'
+}
+
+export interface RecoveryApproach {
+  explanation: string
+  example: string
+  checkQuestion: string
+}
+
+export interface EnrichedMark extends Mark {
+  totalMarks: number
+  topic: string
+  conductedOn: string
+  term?: string
+}
+
+export interface TimetableEntry {
+  id: string
+  teacherId: string
+  classId: string
+  dayOfWeek: number   // 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  periodNumber: number
+  startTime: string   // "09:00"
+  endTime: string     // "09:45"
+}
+
+export interface LessonPrep {
+  explanation: string
+  examples: string[]
+  commonMistakes: string[]
+  quickActivity: string
+}
+
+export interface InterventionNote {
+  id: string
+  studentId: string
+  teacherId: string
+  note: string
+  date: string       // YYYY-MM-DD
+  createdAt: string
+}
+
+export interface TeacherClassAssignment {
+  id: string
+  teacherId: string
+  classId: string
+  createdAt: string
+}
+
+export interface CatchupMaterial {
+  id: string
+  teacherId: string
+  studentId: string
+  studentName: string
+  topic: string
+  subject: string
+  grade: string
+  explanation: string
+  practiceQuestions: string[]
+  activity: string
+  focusNote: string
+  status: 'approved' | 'given' | 'done'
+  createdAt: string
+}

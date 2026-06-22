@@ -1,0 +1,166 @@
+
+> eduteach@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ○ (pwa) PWA support is disabled.
+ ✓ Ready in 4.7s
+ ✓ Compiled /middleware in 327ms (73 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 3.8s (625 modules)
+ GET /login 200 in 4054ms
+ ✓ Compiled in 409ms (313 modules)
+ ○ Compiling /home ...
+ ✓ Compiled /home in 510ms (668 modules)
+ GET /home 200 in 653ms
+ ✓ Compiled /_not-found in 124ms (671 modules)
+ GET /icons/icon-192.png 404 in 202ms
+ GET /sw.js 404 in 60ms
+ GET /home 200 in 83ms
+ GET /icons/icon-192.png 404 in 36ms
+ ○ Compiling /api/briefing ...
+ ✓ Compiled /api/briefing in 770ms (455 modules)
+{"t":"2026-06-15T09:14:46.104Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1848,"status":"ok"}
+{"t":"2026-06-15T09:14:46.106Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1849,"status":"ok"}
+ POST /api/briefing 200 in 2727ms
+ POST /api/briefing 200 in 2727ms
+ ✓ Compiled /settings in 342ms (680 modules)
+ ✓ Compiled /_not-found in 157ms (683 modules)
+ GET /icons/icon-192.png 404 in 270ms
+ ✓ Compiled /api/briefing in 264ms (804 modules)
+ GET /icons/icon-192.png 404 in 427ms
+ ○ Compiling /alerts ...
+ ✓ Compiled /alerts in 682ms (843 modules)
+{"t":"2026-06-15T09:16:18.410Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1812,"status":"ok"}
+{"t":"2026-06-15T09:16:18.411Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1814,"status":"ok"}
+ POST /api/briefing 200 in 2249ms
+ POST /api/briefing 200 in 2249ms
+ GET /icons/icon-192.png 404 in 87ms
+ GET /icons/icon-192.png 404 in 55ms
+ ○ Compiling /classes/[classId]/students ...
+ ✓ Compiled /classes/[classId]/students in 985ms (779 modules)
+ ✓ Compiled /_not-found in 219ms (782 modules)
+ GET /icons/icon-192.png 404 in 354ms
+ ✓ Compiled /classes/[classId]/syllabus in 357ms (805 modules)
+ GET /icons/icon-192.png 404 in 97ms
+ ✓ Compiled /classes in 287ms (813 modules)
+ GET /icons/icon-192.png 404 in 69ms
+ GET /icons/icon-192.png 404 in 53ms
+ ○ Compiling /classes/[classId]/marks ...
+ ✓ Compiled /classes/[classId]/marks in 512ms (839 modules)
+ GET /icons/icon-192.png 404 in 77ms
+ ✓ Compiled /api/grade-image in 151ms (449 modules)
+ POST /api/grade-image 200 in 3709ms
+ POST /api/grade-image 200 in 6869ms
+ POST /api/grade-image 200 in 4857ms
+[grade-image] SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at POST (webpack-internal:///(rsc)/./app/api/grade-image/route.ts:60:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:55038
+    at async ek.execute (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:45808)
+    at async ek.handle (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:56292)
+    at async doRender (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:1377:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:1599:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:1507:28)
+    at async DevServer.renderPageComponent (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:1931:24)
+    at async DevServer.renderToResponseImpl (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:1969:32)
+    at async DevServer.pipeImpl (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\base-server.js:816:17)
+    at async C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\lib\router-server.js:174:21)
+    at async handleRequest (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\lib\router-server.js:353:24)
+    at async requestHandlerImpl (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\lib\router-server.js:377:13)
+    at async Server.requestListener (C:\Users\d jashwanth sai\Downloads\edu_teacher-master\edu_teacher-master\node_modules\next\dist\server\lib\start-server.js:141:13)
+ POST /api/grade-image 200 in 2914ms
+ POST /api/grade-image 200 in 9130ms
+ GET /icons/icon-192.png 404 in 131ms
+ GET /icons/icon-192.png 404 in 31ms
+ GET /icons/icon-192.png 404 in 49ms
+ ○ Compiling /classes/[classId]/attendance ...
+ ✓ Compiled /classes/[classId]/attendance in 844ms (861 modules)
+ ✓ Compiled in 249ms (440 modules)
+ GET /icons/icon-192.png 404 in 85ms
+ ✓ Compiled in 276ms (438 modules)
+ ✓ Compiled in 211ms (438 modules)
+ ✓ Compiled in 491ms (841 modules)
+ ✓ Compiled in 282ms (438 modules)
+ ✓ Compiled in 229ms (438 modules)
+ ✓ Compiled in 463ms (440 modules)
+ ✓ Compiled /login in 226ms (410 modules)
+ GET /login 200 in 408ms
+ ✓ Compiled /classes in 181ms (417 modules)
+ ✓ Compiled /_not-found in 241ms (846 modules)
+ GET /icons/icon-192.png 404 in 339ms
+ ✓ Compiled /home in 217ms (435 modules)
+ GET /icons/icon-192.png 404 in 41ms
+ GET /login 200 in 51ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 673ms (965 modules)
+ GET /icons/icon-192.png 404 in 829ms
+{"t":"2026-06-15T10:34:51.529Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1794,"status":"ok"}
+{"t":"2026-06-15T10:34:51.529Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1794,"status":"ok"}
+{"t":"2026-06-15T10:34:51.530Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1795,"status":"ok"}
+ POST /api/briefing 200 in 2639ms
+ POST /api/briefing 200 in 2396ms
+ POST /api/briefing 200 in 2641ms
+{"t":"2026-06-15T10:35:13.577Z","route":"briefing","ip":"::1","fromCache":false,"durationMs":1179,"status":"ok"}
+ POST /api/briefing 200 in 1190ms
+ GET /icons/icon-192.png 404 in 30ms
+ GET /icons/icon-192.png 404 in 35ms
+ GET /icons/icon-192.png 404 in 39ms
+ ✓ Compiled /classes in 248ms (528 modules)
+ GET /icons/icon-192.png 404 in 82ms
+ GET /icons/icon-192.png 404 in 32ms
+ ✓ Compiled /settings in 284ms (413 modules)
+ GET /icons/icon-192.png 404 in 78ms
+ GET /icons/icon-192.png 404 in 34ms
+ ✓ Compiled /classes/[classId]/syllabus in 172ms (426 modules)
+ GET /icons/icon-192.png 404 in 67ms
+ ✓ Compiled /api/extract-syllabus in 224ms (428 modules)
+ POST /api/extract-syllabus 200 in 8566ms
+ ✓ Compiled /_not-found in 233ms (857 modules)
+ GET /icons/icon-192.png 404 in 391ms
+ ✓ Compiled /classes in 84ms (434 modules)
+ GET /icons/icon-192.png 404 in 87ms
+ ✓ Compiled /alerts in 282ms (449 modules)
+ GET /icons/icon-192.png 404 in 45ms
+ GET /icons/icon-192.png 404 in 31ms
+ ✓ Compiled in 306ms (440 modules)
+ ✓ Compiled in 818ms (837 modules)
+ ✓ Compiled in 377ms (837 modules)
+ ✓ Compiled in 746ms (844 modules)
+ ✓ Compiled in 461ms (844 modules)
+ ✓ Compiled in 348ms (844 modules)
+ ✓ Compiled in 436ms (844 modules)
+ GET /login 200 in 97ms
+ GET /login 200 in 44ms
+ ✓ Compiled /classes in 206ms (406 modules)
+ ✓ Compiled /_not-found in 292ms (838 modules)
+ GET /icons/icon-192.png 404 in 412ms
+ ✓ Compiled /alerts in 94ms (421 modules)
+ GET /icons/icon-192.png 404 in 52ms
+ GET /icons/icon-192.png 404 in 31ms
+ GET /icons/icon-192.png 404 in 43ms
+ ✓ Compiled in 365ms (443 modules)
+ ✓ Compiled in 390ms (844 modules)
+ ✓ Compiled in 415ms (844 modules)
+ ✓ Compiled in 478ms (844 modules)
+ ✓ Compiled in 684ms (850 modules)
+ GET /login 200 in 102ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 521ms (839 modules)
+ GET /icons/icon-192.png 404 in 616ms
+ ✓ Compiled /classes/[classId]/students in 314ms (413 modules)
+ ✓ Compiled /_not-found in 322ms (848 modules)
+ GET /icons/icon-192.png 404 in 435ms
+ GET /icons/icon-192.png 404 in 52ms
+ ✓ Compiled in 414ms (862 modules)
+ GET /login 200 in 72ms
