@@ -1,15 +1,13 @@
-﻿'use client'
+'use client'
 import React, {
   createContext, useContext, useState, useEffect,
   useCallback, ReactNode, useRef,
 } from 'react'
-import { db } from './db'
 import { supabase } from './supabase'
 import { computeWarnings } from './logic/warnings'
 import { buildFingerprint } from './logic/fingerprint'
 import { detectHiddenPotential } from './logic/potential'
 import { computeBriefingFindings } from './logic/briefing'
-import { syncRecord, flushSyncQueue, startSyncListener } from './sync'
 import * as sbq from './supabase-queries'
 import { useStudentActions }   from './hooks/useStudentActions'
 import { useMarksActions }     from './hooks/useMarksActions'
@@ -17,16 +15,16 @@ import { useAttendanceActions } from './hooks/useAttendanceActions'
 import { useSyllabusActions }  from './hooks/useSyllabusActions'
 import { useScheduleActions }  from './hooks/useScheduleActions'
 import type {
-  Teacher, Student, Test, Mark, TopicMastery, Attendance, Session,
+  Teacher, Student, Test, Mark, TopicMastery, Attendance, Session, LessonSnapshot,
   Class, SyllabusTopic, SyllabusSubTopic, TopicCoverageStatus, ClassBriefingData,
   Warning, Fingerprint, PotentialSignal, BriefingFinding, EnrichedMark, TimetableEntry, CatchupMaterial,
-  TeacherClassAssignment,
+  TeacherClassAssignment, Worksheet,
 } from './types'
 
 interface SignUpData {
   name: string
-  schoolName: string   // used when creating a new school
-  joinCode?: string    // used when joining an existing school by code
+  schoolName: string
+  joinCode?: string
   subject: string
   grade: string
   phone: string
@@ -50,26 +48,22 @@ interface AppContextType {
   signUp: (email: string, password: string, data: SignUpData) => Promise<{ error: string | null; requiresEmailConfirmation?: boolean }>
   logout: () => Promise<void>
 
-  // Class assignments (teacher allotment)
   assignments: TeacherClassAssignment[]
   assignClasses: (classIds: string[]) => Promise<void>
   unassignClass: (classId: string) => Promise<void>
 
-  // Classes
   addClass: (data: { name: string; grade: string; section: string }) => Promise<void>
   deleteClass: (id: string) => Promise<void>
   getClassStudents: (classId: string) => Student[]
 
-  // Students
   addStudent: (classId: string, data: { name: string; rollNumber: string; interests: string[]; goal: string }) => Promise<void>
   addStudentsBulk: (classId: string, names: string[]) => Promise<void>
   toggleStudent: (id: string, active: boolean) => Promise<void>
+  setStudentPin: (id: string, pin: string) => Promise<void>
 
-  // Tests & Marks
   createTest: (data: Omit<Test, 'id' | 'teacherId'>) => Promise<string>
   saveMarks: (testId: string, entries: Array<{ studentId: string; score: number; feedback?: string; source?: string }>) => Promise<void>
 
-  // Sessions + Attendance
   recordSession: (
     classId: string, date: string, syllabusTopicId: string, topic: string,
     entries: Array<{ studentId: string; status: 'present' | 'absent' | 'late' }>,
@@ -79,8 +73,8 @@ interface AppContextType {
   getTopicSessions: (syllabusTopicId: string) => Session[]
   getClassAttendance: (classId: string, date?: string) => Attendance[]
   getStudentTopicCoverage: (studentId: string, syllabusTopicId: string) => TopicCoverageStatus | null
+  saveSessionSnapshot: (sessionId: string, snapshot: LessonSnapshot) => Promise<void>
 
-  // Syllabus topics
   addSyllabusTopic: (classId: string, data: { topic: string; description?: string; weekNumber?: number }) => Promise<string>
   toggleTopicComplete: (topicId: string, isCompleted: boolean) => Promise<void>
   updateSyllabusTopicEstimate: (topicId: string, estimatedSessions: number) => Promise<void>
@@ -88,31 +82,32 @@ interface AppContextType {
   getClassSyllabus: (classId: string) => SyllabusTopic[]
   ensureClassSyllabus: (classId: string) => Promise<number>
 
-  // Syllabus sub-topics
   syllabusSubTopics: SyllabusSubTopic[]
   addSubTopic: (topicId: string, classId: string, data: { name: string; description?: string }) => Promise<void>
   deleteSubTopic: (subTopicId: string) => Promise<void>
   toggleSubTopicComplete: (subTopicId: string, isCompleted: boolean) => Promise<void>
   getTopicSubTopics: (topicId: string) => SyllabusSubTopic[]
 
-  // Timetable
   timetableEntries: TimetableEntry[]
   addTimetableEntry: (entry: Omit<TimetableEntry, 'id' | 'teacherId'>) => Promise<void>
   removeTimetableEntry: (id: string) => Promise<void>
   getTodaySchedule: () => TimetableEntry[]
   getCurrentPeriod: () => TimetableEntry | null
 
-  // Catchup Materials
   catchupMaterials: CatchupMaterial[]
   saveCatchupMaterial: (m: Omit<CatchupMaterial, 'id' | 'teacherId' | 'createdAt'>) => Promise<void>
   updateCatchupStatus: (id: string, status: CatchupMaterial['status']) => Promise<void>
   getCatchupForStudent: (studentId: string) => CatchupMaterial[]
 
+  worksheets: Worksheet[]
+  saveWorksheet: (data: Omit<Worksheet, 'id' | 'teacherId' | 'createdAt'>) => Promise<string>
+  updateWorksheetAnswerKey: (id: string, answerKey: Record<string, string>) => Promise<void>
+  removeWorksheet: (id: string) => Promise<void>
+
   clearAllData: () => Promise<void>
   forceSync: () => Promise<void>
   updateTeacherSettings: (updates: { academicYearStart?: string; currentTerm?: string }) => Promise<void>
 
-  // Computed
   getStudentMastery: (studentId: string) => TopicMastery[]
   getStudentWarnings: (studentId: string) => Warning[]
   getStudentMarks: (studentId: string) => EnrichedMark[]
@@ -128,8 +123,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null)
 
-// Short, human-friendly code (no ambiguous chars like 0/O, 1/I).
-// Used both for class codes and the per-teacher scanner code.
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 function genCode(len = 6) {
   return Array.from({ length: len }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('')
@@ -149,6 +142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([])
   const [catchupMaterials, setCatchupMaterials] = useState<CatchupMaterial[]>([])
   const [assignments, setAssignments] = useState<TeacherClassAssignment[]>([])
+  const [worksheets, setWorksheets] = useState<Worksheet[]>([])
   const [isLoading, setIsLoading]       = useState(true)
   const [syncStatus, setSyncStatus]     = useState<'online' | 'offline' | 'syncing'>('online')
 
@@ -172,87 +166,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { syllabusRef.current   = syllabusTopics }, [syllabusTopics])
   useEffect(() => { subTopicsRef.current  = syllabusSubTopics }, [syllabusSubTopics])
 
-  // ─── Load all IndexedDB data for a teacher (filtered by teacherId) ────────────
+  // ─── Load all data directly from Supabase ────────────────────────────────────
 
-  const loadLocalData = useCallback(async (teacherId: string, _schoolId?: string, _schoolName?: string) => {
-    // Each teacher owns their own classes — query by teacherId.
-    const allClasses = await db.classes.where('teacherId').equals(teacherId).toArray()
-
-    const classIds   = allClasses.map(c => c.id)
-
-    // Students belong to the teacher's classes
-    const [allStudents, allTests, allSessions] = await Promise.all([
-      classIds.length ? db.students.where('classId').anyOf(classIds).toArray() : Promise.resolve([]),
-      db.tests.where('teacherId').equals(teacherId).toArray(),
-      db.sessions.where('teacherId').equals(teacherId).toArray(),
-    ])
-
-    const studentIds = allStudents.map(s => s.id)
-
-    // Syllabus is private per teacher — each subject teacher builds their own
-    // curriculum for a class. Query by teacherId, not classIds.
-    const [allMarks, allMastery, allAttendance, allSyllabus, allSubTopics] = await Promise.all([
-      studentIds.length ? db.marks.where('studentId').anyOf(studentIds).toArray()        : Promise.resolve([]),
-      studentIds.length ? db.topicMastery.where('studentId').anyOf(studentIds).toArray() : Promise.resolve([]),
-      classIds.length   ? db.attendance.where('classId').anyOf(classIds).toArray()       : Promise.resolve([]),
-      db.syllabusTopics.where('teacherId').equals(teacherId).toArray(),
-      db.syllabusSubTopics.where('teacherId').equals(teacherId).toArray(),
-    ])
-
-    // Deduplicate marks: keep only the latest entry per (testId, studentId)
-    const sortedMarks = [...allMarks].sort((a, b) => a.enteredAt.localeCompare(b.enteredAt))
-    const latestByKey = new Map<string, Mark>()
-    for (const m of sortedMarks) latestByKey.set(`${m.testId}|${m.studentId}`, m)
-    const dedupedMarks = [...latestByKey.values()]
-    if (dedupedMarks.length < allMarks.length) {
-      const keepIds = new Set(dedupedMarks.map(m => m.id))
-      const toDelete = allMarks.filter(m => !keepIds.has(m.id)).map(m => m.id)
-      await db.marks.bulkDelete(toDelete)
-    }
-
-    const allTimetable = classIds.length
-      ? await db.timetable.where('classId').anyOf(classIds).toArray()
-      : []
-
-    const allCatchup = await db.catchupMaterials.where('teacherId').equals(teacherId).toArray()
-    const allAssignments = await db.teacherClassAssignments.where('teacherId').equals(teacherId).toArray()
-
-    // Backfill classCode for any existing class that was created before this feature
-    const codeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    const backfilled = await Promise.all(allClasses.map(async (c) => {
-      if (c.classCode) return c
-      const classCode = Array.from({ length: 6 }, () => codeChars[Math.floor(Math.random() * codeChars.length)]).join('')
-      const updated = { ...c, classCode }
-      await db.classes.put(updated)
-      syncRecord('classes', updated).catch(console.error)
-      return updated
-    }))
-
-    setClasses(backfilled)
-    setStudents(allStudents)
-    setTests(allTests)
-    setMarks(dedupedMarks)
-    setMastery(allMastery)
-    setAttendance(allAttendance)
-    setSyllabusTopics(allSyllabus)
-    setSessions(allSessions)
-    setSyllabusSubTopics(allSubTopics)
-    setTimetableEntries(allTimetable)
-    setCatchupMaterials(allCatchup)
-    setAssignments(allAssignments)
-  }, [])
-
-  // ─── Sync from Supabase → IndexedDB → state ─────────────────────────────────
-
-  const fetchAndMergeFromSupabase = useCallback(async (teacherId: string, schoolId?: string, schoolName?: string) => {
-    if (typeof window === 'undefined' || !navigator.onLine) return
-    await flushSyncQueue().catch(console.error)
+  const loadFromSupabase = useCallback(async (teacherId: string, schoolId?: string, schoolName?: string) => {
     try {
-      // Fetch classes for the whole school first so we have classIds for related data
       const cls = await sbq.fetchClasses(teacherId, schoolId, schoolName)
       const classIds = cls.map(c => c.id)
 
-      const [syl, ses, s, t, m, ma, att, sub, tt, cu, asgn] = await Promise.all([
+      const [syl, ses, s, t, m, ma, att, sub, tt, cu, asgn, ws] = await Promise.all([
         sbq.fetchSyllabusTopics(teacherId, classIds),
         sbq.fetchSessions(teacherId),
         sbq.fetchStudentsByClasses(classIds),
@@ -264,28 +185,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sbq.fetchTimetableEntries(teacherId),
         sbq.fetchCatchupMaterials(teacherId),
         sbq.fetchAssignments(teacherId),
+        sbq.fetchWorksheets(teacherId),
       ])
-      await Promise.all([
-        cls.length  ? db.classes.bulkPut(cls)                          : Promise.resolve(),
-        syl.length  ? db.syllabusTopics.bulkPut(syl)                   : Promise.resolve(),
-        ses.length  ? db.sessions.bulkPut(ses)                         : Promise.resolve(),
-        s.length    ? db.students.bulkPut(s)                           : Promise.resolve(),
-        t.length    ? db.tests.bulkPut(t)                              : Promise.resolve(),
-        m.length    ? db.marks.bulkPut(m)                              : Promise.resolve(),
-        ma.length   ? db.topicMastery.bulkPut(ma)                      : Promise.resolve(),
-        att.length  ? db.attendance.bulkPut(att)                       : Promise.resolve(),
-        sub.length  ? db.syllabusSubTopics.bulkPut(sub)                : Promise.resolve(),
-        tt.length   ? db.timetable.bulkPut(tt)                         : Promise.resolve(),
-        cu.length   ? db.catchupMaterials.bulkPut(cu)                  : Promise.resolve(),
-        asgn.length ? db.teacherClassAssignments.bulkPut(asgn)         : Promise.resolve(),
-      ])
-      await loadLocalData(teacherId, schoolId, schoolName)
-    } catch (err) {
-      console.error('Supabase fetch failed:', err)
-    }
-  }, [loadLocalData])
 
-  // ─── Sync + online listeners ─────────────────────────────────────────────────
+      // Backfill classCode for classes that predate the feature
+      const backfilled = cls.map(c => {
+        if (c.classCode) return c
+        const classCode = genCode()
+        const updated = { ...c, classCode }
+        sbq.upsertClass(updated).catch(console.error)
+        return updated
+      })
+
+      // Deduplicate marks (keep latest per testId+studentId)
+      const sortedMarks = [...m].sort((a, b) => a.enteredAt.localeCompare(b.enteredAt))
+      const latestByKey = new Map<string, Mark>()
+      for (const mk of sortedMarks) latestByKey.set(`${mk.testId}|${mk.studentId}`, mk)
+      const dedupedMarks = [...latestByKey.values()]
+
+      setClasses(backfilled)
+      setStudents(s)
+      setTests(t)
+      setMarks(dedupedMarks)
+      setMastery(ma)
+      setAttendance(att)
+      setSyllabusTopics(syl)
+      setSessions(ses)
+      setSyllabusSubTopics(sub)
+      setTimetableEntries(tt)
+      setCatchupMaterials(cu)
+      setAssignments(asgn)
+      setWorksheets(ws)
+    } catch (err) {
+      console.error('loadFromSupabase failed:', err)
+    }
+  }, [])
+
+  // ─── Online/offline status ────────────────────────────────────────────────────
 
   useEffect(() => {
     const handleOnline  = () => setSyncStatus('online')
@@ -297,12 +233,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [])
-
-  useEffect(() => {
-    const cleanup = startSyncListener()
-    flushSyncQueue().catch(console.error)
-    return cleanup
   }, [])
 
   // ─── Auth state listener ─────────────────────────────────────────────────────
@@ -327,36 +257,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // ─── Init: check session + local storage ─────────────────────────────────────
+  // ─── Init: restore session and load data from Supabase ───────────────────────
 
   useEffect(() => {
-    const SYNC_TTL = 2 * 60 * 1000
-    const secure   = window.location.protocol === 'https:' ? '; Secure' : ''
+    const secure = window.location.protocol === 'https:' ? '; Secure' : ''
 
     const init = async () => {
+      // Fast-path: restore teacher identity from localStorage for immediate UI
       const storedStr = localStorage.getItem('eduteach_teacher')
       if (storedStr) {
         try {
           const parsed: Teacher = JSON.parse(storedStr)
           if (parsed.id && parsed.id !== 'teacher-001') {
             setTeacher(parsed)
-            setIsLoading(false)
             document.cookie = `edu-session=1; path=/; SameSite=Strict; max-age=604800${secure}`
-            void loadLocalData(parsed.id, parsed.schoolId, parsed.schoolName)
-              .then(() => {
-                const lastSync = parseInt(localStorage.getItem('eduteach_last_sync') ?? '0')
-                if (Date.now() - lastSync > SYNC_TTL) {
-                  localStorage.setItem('eduteach_last_sync', String(Date.now()))
-                  return fetchAndMergeFromSupabase(parsed.id, parsed.schoolId, parsed.schoolName)
-                }
-              })
-              .catch(console.error)
+            await loadFromSupabase(parsed.id, parsed.schoolId, parsed.schoolName)
+            setIsLoading(false)
             return
           }
         } catch { /* bad JSON */ }
         localStorage.removeItem('eduteach_teacher')
       }
 
+      // No local profile — check Supabase session
       try {
         const sessionResult = await Promise.race([
           supabase.auth.getSession(),
@@ -373,18 +296,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
             setTeacher(fresh)
             localStorage.setItem('eduteach_teacher', JSON.stringify(fresh))
-            localStorage.setItem('eduteach_last_sync', String(Date.now()))
             document.cookie = `edu-session=1; path=/; SameSite=Strict; max-age=604800${secure}`
+            await loadFromSupabase(fresh.id, fresh.schoolId, fresh.schoolName)
             setIsLoading(false)
-            void loadLocalData(fresh.id, fresh.schoolId, fresh.schoolName)
-              .then(() => {
-                const lastSync = parseInt(localStorage.getItem('eduteach_last_sync') ?? '0')
-                if (Date.now() - lastSync > SYNC_TTL) {
-                  localStorage.setItem('eduteach_last_sync', String(Date.now()))
-                  return fetchAndMergeFromSupabase(fresh.id, fresh.schoolId, fresh.schoolName)
-                }
-              })
-              .catch(console.error)
             return
           }
         }
@@ -404,7 +318,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         if (error.message.toLowerCase().includes('email not confirmed')) {
-          return { error: 'Please confirm your email first — check your inbox for a verification link from Supabase.' }
+          return { error: 'Please confirm your email first — check your inbox for a verification link.' }
         }
         return { error: error.message }
       }
@@ -444,35 +358,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (!profile) return { error: 'Profile not found. Please register again.' }
 
-      // Ensure a scanner code exists (backfill for accounts created before this feature).
       if (!profile.teacherCode) {
         profile.teacherCode = genCode()
         await sbq.upsertTeacher(profile).catch(console.error)
       }
 
-      await db.teachers.put(profile)
       setTeacher(profile)
       localStorage.setItem('eduteach_teacher', JSON.stringify(profile))
-      // Clear private data from any previous teacher session on this device.
-      // Classes, students, and attendance are school-shared — do NOT delete them.
-      const otherTestIds = await db.tests.where('teacherId').notEqual(userId).primaryKeys()
-      await Promise.all([
-        db.tests.where('teacherId').notEqual(userId).delete(),
-        db.sessions.where('teacherId').notEqual(userId).delete(),
-        db.syllabusTopics.where('teacherId').notEqual(userId).delete(),
-        db.syllabusSubTopics.where('teacherId').notEqual(userId).delete(),
-        db.timetable.where('teacherId').notEqual(userId).delete(),
-        db.catchupMaterials.where('teacherId').notEqual(userId).delete(),
-        db.teacherClassAssignments.where('teacherId').notEqual(userId).delete(),
-        otherTestIds.length ? db.marks.where('testId').anyOf(otherTestIds as string[]).delete() : Promise.resolve(),
-      ])
-      await loadLocalData(userId, profile.schoolId, profile.schoolName)
-      fetchAndMergeFromSupabase(userId, profile.schoolId, profile.schoolName).catch(console.error)
+      await loadFromSupabase(userId, profile.schoolId, profile.schoolName)
       return { error: null }
     } catch (e) {
       return { error: (e as Error).message ?? 'Sign in failed.' }
     }
-  }, [loadLocalData, fetchAndMergeFromSupabase])
+  }, [loadFromSupabase])
 
   const signUp = useCallback(async (
     email: string,
@@ -508,19 +406,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.session) {
-        // Session available immediately — persist the profile.
         await sbq.upsertTeacher(profile).catch(console.error)
         setTeacher(profile)
-        await loadLocalData(userId)
+        await loadFromSupabase(userId)
       }
 
-      await db.teachers.put(profile)
       localStorage.setItem('eduteach_teacher', JSON.stringify(profile))
       return { error: null, requiresEmailConfirmation: !data.session }
     } catch (e) {
       return { error: (e as Error).message ?? 'Registration failed.' }
     }
-  }, [loadLocalData])
+  }, [loadFromSupabase])
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut()
@@ -538,8 +434,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addClass = useCallback(async (data: { name: string; grade: string; section: string }) => {
     if (!teacher) return
-    const codeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    const classCode = Array.from({ length: 6 }, () => codeChars[Math.floor(Math.random() * codeChars.length)]).join('')
     const newClass: Class = {
       id: crypto.randomUUID(),
       teacherId: teacher.id,
@@ -550,20 +444,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       section: data.section.trim(),
       academicYear: new Date().getFullYear().toString(),
       createdAt: new Date().toISOString(),
-      classCode,
+      classCode: genCode(),
     }
-    await db.classes.add(newClass)
     setClasses(prev => [...prev, newClass])
-    syncRecord('classes', newClass).catch(console.error)
+    sbq.upsertClass(newClass).catch(console.error)
   }, [teacher])
 
   const deleteClass = useCallback(async (id: string) => {
-    await db.classes.delete(id)
     setClasses(prev => prev.filter(c => c.id !== id))
+    supabase.from('classes').delete().eq('id', id).then(undefined, console.error)
   }, [])
 
-  // Bulk-assign a teacher to a list of class IDs (their school allotment).
-  // Skips classes already assigned. Safe to call repeatedly.
   const assignClasses = useCallback(async (classIds: string[]) => {
     if (!teacher) return
     const existing = new Set(assignments.map(a => a.classId))
@@ -571,17 +462,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .filter(id => !existing.has(id))
       .map(id => ({ id: crypto.randomUUID(), teacherId: teacher.id, classId: id, createdAt: new Date().toISOString() }))
     if (!fresh.length) return
-    await db.teacherClassAssignments.bulkPut(fresh)
     setAssignments(prev => [...prev, ...fresh])
-    await Promise.all(fresh.map(a => syncRecord('teacherClassAssignments', a)))
+    await Promise.all(fresh.map(a => sbq.upsertAssignment(a)))
   }, [teacher, assignments])
 
   const unassignClass = useCallback(async (classId: string) => {
     if (!teacher) return
-    await db.teacherClassAssignments
-      .where('teacherId').equals(teacher.id)
-      .and(a => a.classId === classId)
-      .delete()
     setAssignments(prev => prev.filter(a => a.classId !== classId))
     sbq.deleteAssignment(teacher.id, classId).catch(console.error)
   }, [teacher])
@@ -603,38 +489,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!teacher) return
     const tid = teacher.id
 
-    // Scope to owned classes (teacher_id === tid). In multi-teacher mode,
-    // Teacher B may have zero owned classes — only their assignments.
-    const [ownedClassIds, testIds] = await Promise.all([
-      db.classes.where('teacherId').equals(tid).primaryKeys() as Promise<string[]>,
-      db.tests.where('teacherId').equals(tid).primaryKeys() as Promise<string[]>,
-    ])
-    // Students in owned classes (school-shared roster, but teacher created these)
-    const ownedStudentIds: string[] = ownedClassIds.length
-      ? (await db.students.where('classId').anyOf(ownedClassIds).primaryKeys()) as string[]
-      : []
+    const ownedClassIds = classes.filter(c => c.teacherId === tid).map(c => c.id)
+    const testIds = tests.filter(t => t.teacherId === tid).map(t => t.id)
+    const ownedStudentIds = students.filter(s => ownedClassIds.includes(s.classId)).map(s => s.id)
 
-    // ── IndexedDB ──────────────────────────────────────────────────────────
-    await Promise.all([
-      // Owned classes and their shared roster
-      db.classes.where('teacherId').equals(tid).delete(),
-      ownedClassIds.length ? db.students.where('classId').anyOf(ownedClassIds).delete() : Promise.resolve(),
-      // Strictly private-per-teacher data (indexed by teacherId in v11/v12)
-      db.tests.where('teacherId').equals(tid).delete(),
-      db.sessions.where('teacherId').equals(tid).delete(),
-      db.syllabusTopics.where('teacherId').equals(tid).delete(),
-      db.syllabusSubTopics.where('teacherId').equals(tid).delete(),
-      db.timetable.where('teacherId').equals(tid).delete(),
-      db.catchupMaterials.where('teacherId').equals(tid).delete(),
-      db.teacherClassAssignments.where('teacherId').equals(tid).delete(),
-      // Dependents scoped to owned resources
-      ownedClassIds.length ? db.attendance.where('classId').anyOf(ownedClassIds).delete() : Promise.resolve(),
-      testIds.length       ? db.marks.where('testId').anyOf(testIds).delete()             : Promise.resolve(),
-      ownedStudentIds.length ? db.topicMastery.where('studentId').anyOf(ownedStudentIds).delete() : Promise.resolve(),
-      db.syncQueue.clear(),
-    ])
-
-    // ── Supabase (scoped — NEVER use .neq('id','') which deletes all rows) ─
     try {
       await Promise.all([
         supabase.from('classes').delete().eq('teacher_id', tid),
@@ -650,19 +508,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ownedClassIds.length   ? supabase.from('attendance').delete().in('class_id', ownedClassIds)                : Promise.resolve(),
         ownedStudentIds.length ? supabase.from('student_topic_mastery').delete().in('student_id', ownedStudentIds) : Promise.resolve(),
       ])
-    } catch { /* offline — local clear is enough */ }
+    } catch { /* offline — state clear is still correct */ }
 
     setClasses([]); setStudents([]); setTests([]); setMarks([])
     setAttendance([]); setSessions([]); setSyllabusTopics([]); setSyllabusSubTopics([])
     setMastery([]); setTimetableEntries([]); setCatchupMaterials([]); setAssignments([])
     try { localStorage.removeItem('eduteach_briefing_v7') } catch { /* ignore */ }
-  }, [teacher])
+  }, [teacher, classes, tests, students])
 
   const updateTeacherSettings = useCallback(async (updates: { academicYearStart?: string; currentTerm?: string }) => {
     if (!teacher) return
     const updated = { ...teacher, ...updates }
-    await db.teachers.put(updated)
     setTeacher(updated)
+    localStorage.setItem('eduteach_teacher', JSON.stringify(updated))
     try { await sbq.upsertTeacher(updated) } catch { /* offline */ }
   }, [teacher])
 
@@ -731,7 +589,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeStudents.map(s => ({ student: s, attendanceRate: getStudentAttendanceRate(s.id), masteryTrend: 'stable' as const })))
   }, [students, marks, mastery, tests, getStudentAttendanceRate])
 
-  // Only return students from classes this teacher is actively assigned to
   const getActiveStudents = useCallback(() => {
     const assignedIds = new Set([
       ...(assignments ?? []).map(a => a.classId),
@@ -741,7 +598,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [students, assignments, classes, teacher])
 
   const getBriefingData = useCallback((): ClassBriefingData[] => {
-    // Only brief on classes this teacher is assigned to, not all school classes
     const assignedIds = new Set([
       ...(assignments ?? []).map(a => a.classId),
       ...(classes ?? []).filter(c => c.teacherId === teacher?.id).map(c => c.id),
@@ -764,7 +620,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : null
       const lastSession = classSessions[0] ?? null
 
-      // Last 3 completed subtopics under the last session's topic (by orderIndex)
       const lastTopicObj = lastSession
         ? classSyllabus.find(t => t.topic === lastSession.topic) ?? null
         : null
@@ -821,13 +676,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [classes, students, syllabusTopics, sessions, attendance, mastery])
 
+  const saveWorksheet = useCallback(async (data: Omit<Worksheet, 'id' | 'teacherId' | 'createdAt'>): Promise<string> => {
+    if (!teacher) throw new Error('Not logged in')
+    const id = crypto.randomUUID()
+    const record: Worksheet = { ...data, id, teacherId: teacher.id, createdAt: new Date().toISOString() }
+    await sbq.upsertWorksheet(record)
+    setWorksheets(prev => [record, ...prev])
+    return id
+  }, [teacher])
+
+  const updateWorksheetAnswerKey = useCallback(async (id: string, answerKey: Record<string, string>) => {
+    setWorksheets(prev => prev.map(w => w.id === id ? { ...w, answerKey } : w))
+    const updated = worksheets.find(w => w.id === id)
+    if (updated) await sbq.upsertWorksheet({ ...updated, answerKey }).catch(console.error)
+  }, [worksheets])
+
+  const removeWorksheet = useCallback(async (id: string) => {
+    setWorksheets(prev => prev.filter(w => w.id !== id))
+    await sbq.deleteWorksheet(id).catch(console.error)
+  }, [])
+
   const forceSync = useCallback(async () => {
     if (!teacher) return
     setSyncStatus('syncing')
-    localStorage.setItem('eduteach_last_sync', '0')
-    await fetchAndMergeFromSupabase(teacher.id, teacher.schoolId, teacher.schoolName).catch(console.error)
+    await loadFromSupabase(teacher.id, teacher.schoolId, teacher.schoolName).catch(console.error)
     setSyncStatus(navigator.onLine ? 'online' : 'offline')
-  }, [teacher, fetchAndMergeFromSupabase])
+  }, [teacher, loadFromSupabase])
 
   return (
     <AppContext.Provider value={{
@@ -842,6 +716,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...syllabusActions,
       ...scheduleActions,
       syllabusSubTopics, timetableEntries, catchupMaterials,
+      worksheets, saveWorksheet, updateWorksheetAnswerKey, removeWorksheet,
       clearAllData, updateTeacherSettings, forceSync,
       getStudentMastery, getStudentWarnings, getStudentMarks,
       getStudentFingerprint, getStudentAttendanceRate,

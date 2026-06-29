@@ -1,8 +1,17 @@
-export type LogStatus = 'ok' | 'error' | 'rate_limited'
+export type LogStatus = 'ok' | 'error' | 'rate_limited' | 'unauthorized' | 'bad_request'
+
+export function getClientIp(req: { headers: { get: (k: string) => string | null } }): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    req.headers.get('x-real-ip') ??
+    'unknown'
+  )
+}
 
 export interface ApiLogEntry {
   route:      string
   ip:         string
+  userId?:    string   // teacher or student id — omit for public/anonymous routes
   fromCache:  boolean
   durationMs: number
   status:     LogStatus
