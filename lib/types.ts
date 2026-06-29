@@ -43,6 +43,7 @@ export interface Student {
   isActive: boolean
   interests: string[]
   goal: string
+  pin?: string   // 4-digit PIN for student portal login
 }
 
 export type QuestionType = 'mcq' | 'fill-in-blank' | 'short-answer' | 'long-answer'
@@ -75,7 +76,7 @@ export interface Mark {
   studentId: string
   score: number
   feedback?: string    // teacher's observation e.g. "confused on fractions", "skipped Q3"
-  breakdown?: { question: number; awarded: number; max: number }[]  // per-question score from scanner
+  breakdown?: { question: number; awarded: number; max: number; errorType?: 'conceptual' | 'procedural' | 'careless' | null }[]  // per-question score from scanner
   enteredAt: string
   source?: 'manual' | 'ai_scanned' | 'teacher_override'
   imageUrl?: string
@@ -86,6 +87,11 @@ export interface Mark {
  * Attendance records are linked to sessions so we know which topic was being taught
  * when each student was present or absent.
  */
+export interface LessonSnapshot {
+  hook: string
+  realLifeExamples: string[]
+}
+
 export interface Session {
   id: string
   classId: string
@@ -95,6 +101,7 @@ export interface Session {
   date: string             // YYYY-MM-DD
   createdAt: string
   sessionNote?: string     // what the teacher specifically covered this session
+  lessonSnapshot?: LessonSnapshot  // Class Starter + real-life examples saved from that day's engage
 }
 
 /**
@@ -298,6 +305,57 @@ export interface TeacherClassAssignment {
   createdAt: string
 }
 
+export interface StudentDoubt {
+  id: string
+  studentId: string
+  studentName: string
+  classId: string
+  subject: string
+  question: string
+  answer?: string
+  answeredAt?: string
+  createdAt: string
+  status: 'pending' | 'answered'
+}
+
+export interface TopicPoll {
+  id: string
+  studentId: string
+  classId: string
+  syllabusTopicId: string
+  topic: string
+  subject: string
+  response: 'understood' | 'partial' | 'confused'
+  respondedAt: string
+}
+
+export interface WsQuestion {
+  text: string
+  options?: string[]
+  answer?: string
+}
+
+export interface WsSection {
+  type: string
+  label: string
+  marksEach: number
+  questions: WsQuestion[]
+}
+
+export interface Worksheet {
+  id: string
+  teacherId: string
+  classId?: string
+  topic: string
+  subject: string
+  grade: string
+  template?: string
+  totalMarks: number
+  sections: WsSection[]
+  answerKey: Record<string, string>   // "sectionIndex-questionIndex" → answer text
+  createdAt: string
+}
+
 export interface CatchupMaterial {
   id: string
   teacherId: string
@@ -311,5 +369,6 @@ export interface CatchupMaterial {
   activity: string
   focusNote: string
   status: 'approved' | 'given' | 'done'
+  reason?: 'absent' | 'low-score'
   createdAt: string
 }

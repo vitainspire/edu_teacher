@@ -5,70 +5,85 @@
 // Falls back to in-memory automatically when UPSTASH_REDIS_REST_URL is unset
 // (local dev, preview deploys, or if Upstash is temporarily unreachable).
 
-export function getClientIp(req: { headers: { get: (k: string) => string | null } }): string {
-  return (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
-    'unknown'
-  )
-}
+export { getClientIp } from './logger'
 
 // ─── In-memory fallback ───────────────────────────────────────────────────────
 
-const WINDOW_MS    = 60 * 60 * 1000  // 1 hour
-const MAX_REQUESTS = 60               // per IP per window
+const WINDOW_MS = 60 * 60 * 1000  // 1 hour
 
 interface Entry { count: number; windowStart: number }
-const store = new Map<string, Entry>()
+const stores = {
+  standard: new Map<string, Entry>(),
+  vision:   new Map<string, Entry>(),
+}
 
-function checkInMemory(ip: string): { allowed: boolean; remaining: number } {
+function checkInMemory(ip: string, max: number, store: Map<string, Entry>): { allowed: boolean; remaining: number } {
   const now   = Date.now()
   const entry = store.get(ip)
   if (!entry || now - entry.windowStart >= WINDOW_MS) {
     store.set(ip, { count: 1, windowStart: now })
-    return { allowed: true, remaining: MAX_REQUESTS - 1 }
+    return { allowed: true, remaining: max - 1 }
   }
-  if (entry.count >= MAX_REQUESTS) return { allowed: false, remaining: 0 }
+  if (entry.count >= max) return { allowed: false, remaining: 0 }
   entry.count++
-  return { allowed: true, remaining: MAX_REQUESTS - entry.count }
+  return { allowed: true, remaining: max - entry.count }
 }
 
-// ─── Upstash limiter (singleton, lazily initialised) ─────────────────────────
+// ─── Upstash limiter (lazily initialised per tier) ────────────────────────────
 
 type UpstashLimiter = { limit: (id: string) => Promise<{ success: boolean; remaining: number }> }
-let limiter: UpstashLimiter | null | 'uninit' = 'uninit'
+const limiters: Record<string, UpstashLimiter | null | 'uninit'> = {
+  standard: 'uninit',
+  vision:   'uninit',
+}
 
-async function getLimiter(): Promise<UpstashLimiter | null> {
-  if (limiter !== 'uninit') return limiter
+async function getLimiter(tier: 'standard' | 'vision'): Promise<UpstashLimiter | null> {
+  if (limiters[tier] !== 'uninit') return limiters[tier] as UpstashLimiter | null
   const url   = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
-  if (!url || !token) { limiter = null; return null }
+  if (!url || !token) { limiters[tier] = null; return null }
   try {
     const { Redis }     = await import('@upstash/redis')
     const { Ratelimit } = await import('@upstash/ratelimit')
-    limiter = new Ratelimit({
+    const max = tier === 'vision' ? 20 : 60
+    limiters[tier] = new Ratelimit({
       redis: new Redis({ url, token }),
-      limiter: Ratelimit.slidingWindow(60, '1 h'),
-      prefix: 'eduteach:rl',
+      limiter: Ratelimit.slidingWindow(max, '1 h'),
+      prefix: `eduteach:rl:${tier}`,
     }) as unknown as UpstashLimiter
-    return limiter
+    return limiters[tier] as UpstashLimiter
   } catch (e) {
-    console.warn('[rate-limit] Upstash init failed, using in-memory fallback:', e)
-    limiter = null
+    console.warn(`[rate-limit] Upstash init failed for tier=${tier}, using in-memory fallback:`, e)
+    limiters[tier] = null
     return null
   }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+// Standard routes: 60 requests per hour per IP
 export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
-  const lim = await getLimiter()
-  if (!lim) return checkInMemory(ip)
+  const lim = await getLimiter('standard')
+  if (!lim) return checkInMemory(ip, 60, stores.standard)
   try {
     const result = await lim.limit(ip)
     return { allowed: result.success, remaining: result.remaining }
-  } catch {
-    // Upstash unreachable — fail open so teachers aren't blocked
-    return checkInMemory(ip)
+  } catch (e) {
+    // Upstash unreachable — fail open but log so we know the global limiter is down
+    console.warn('[rate-limit] Upstash unavailable, falling back to per-instance memory (standard):', e)
+    return checkInMemory(ip, 60, stores.standard)
+  }
+}
+
+// Vision routes: 20 requests per hour per IP (vision calls are 5-10x more expensive)
+export async function checkVisionRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
+  const lim = await getLimiter('vision')
+  if (!lim) return checkInMemory(ip, 20, stores.vision)
+  try {
+    const result = await lim.limit(ip)
+    return { allowed: result.success, remaining: result.remaining }
+  } catch (e) {
+    console.warn('[rate-limit] Upstash unavailable, falling back to per-instance memory (vision):', e)
+    return checkInMemory(ip, 20, stores.vision)
   }
 }
