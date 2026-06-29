@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import type {
   Teacher, Student, Test, Mark, Attendance, TopicMastery,
   RecoveryAttempt, Class, SyllabusTopic, Session, SyllabusSubTopic, TimetableEntry, CatchupMaterial, InterventionNote,
-  TeacherClassAssignment,
+  TeacherClassAssignment, StudentDoubt, TopicPoll,
 } from './types'
 
 export interface SyncRecord {
@@ -29,6 +29,8 @@ class EduTeachDB extends Dexie {
   catchupMaterials!: Dexie.Table<CatchupMaterial, string>
   interventions!: Dexie.Table<InterventionNote, string>
   teacherClassAssignments!: Dexie.Table<TeacherClassAssignment, string>
+  studentDoubts!: Dexie.Table<StudentDoubt, string>
+  topicPolls!: Dexie.Table<TopicPoll, string>
   syncQueue!: Dexie.Table<SyncRecord, string>
 
   constructor() {
@@ -291,6 +293,66 @@ class EduTeachDB extends Dexie {
       } catch (err) {
         console.error('[db v14] syllabus grade/definitionId backfill skipped:', err)
       }
+    })
+    // v15: student portal — pin field added to students for student login
+    this.version(15).stores({
+      teachers: 'id, userId, phone, schoolId',
+      students: 'id, teacherId, classId, rollNumber, isActive',
+      tests: 'id, teacherId, classId, subject, topic, conductedOn',
+      marks: 'id, testId, studentId, enteredAt',
+      attendance: 'id, sessionId, studentId, classId, syllabusTopicId, date, status',
+      topicMastery: 'id, studentId, topic, subject',
+      recoveryAttempts: 'id, studentId, topic, generatedAt',
+      classes: 'id, teacherId, schoolName, schoolId, classCode',
+      syllabusTopics: 'id, classId, teacherId, grade, definitionId, orderIndex',
+      sessions: 'id, classId, syllabusTopicId, date, teacherId',
+      syllabusSubTopics: 'id, topicId, classId, teacherId, definitionId, orderIndex',
+      timetable: 'id, teacherId, classId, dayOfWeek',
+      catchupMaterials: 'id, teacherId, studentId, status, createdAt',
+      interventions: 'id, studentId, teacherId, date, createdAt',
+      teacherClassAssignments: 'id, teacherId, classId',
+      syncQueue: 'id, tableName, createdAt',
+    })
+    // v16: student doubts — students submit questions, teacher answers
+    this.version(16).stores({
+      teachers: 'id, userId, phone, schoolId',
+      students: 'id, teacherId, classId, rollNumber, isActive',
+      tests: 'id, teacherId, classId, subject, topic, conductedOn',
+      marks: 'id, testId, studentId, enteredAt',
+      attendance: 'id, sessionId, studentId, classId, syllabusTopicId, date, status',
+      topicMastery: 'id, studentId, topic, subject',
+      recoveryAttempts: 'id, studentId, topic, generatedAt',
+      classes: 'id, teacherId, schoolName, schoolId, classCode',
+      syllabusTopics: 'id, classId, teacherId, grade, definitionId, orderIndex',
+      sessions: 'id, classId, syllabusTopicId, date, teacherId',
+      syllabusSubTopics: 'id, topicId, classId, teacherId, definitionId, orderIndex',
+      timetable: 'id, teacherId, classId, dayOfWeek',
+      catchupMaterials: 'id, teacherId, studentId, status, createdAt',
+      interventions: 'id, studentId, teacherId, date, createdAt',
+      teacherClassAssignments: 'id, teacherId, classId',
+      studentDoubts: 'id, studentId, classId, status, createdAt',
+      syncQueue: 'id, tableName, createdAt',
+    })
+    // v17: topic understanding polls — students vote per completed topic (anonymous to teacher)
+    this.version(17).stores({
+      teachers: 'id, userId, phone, schoolId',
+      students: 'id, teacherId, classId, rollNumber, isActive',
+      tests: 'id, teacherId, classId, subject, topic, conductedOn',
+      marks: 'id, testId, studentId, enteredAt',
+      attendance: 'id, sessionId, studentId, classId, syllabusTopicId, date, status',
+      topicMastery: 'id, studentId, topic, subject',
+      recoveryAttempts: 'id, studentId, topic, generatedAt',
+      classes: 'id, teacherId, schoolName, schoolId, classCode',
+      syllabusTopics: 'id, classId, teacherId, grade, definitionId, orderIndex',
+      sessions: 'id, classId, syllabusTopicId, date, teacherId',
+      syllabusSubTopics: 'id, topicId, classId, teacherId, definitionId, orderIndex',
+      timetable: 'id, teacherId, classId, dayOfWeek',
+      catchupMaterials: 'id, teacherId, studentId, status, createdAt',
+      interventions: 'id, studentId, teacherId, date, createdAt',
+      teacherClassAssignments: 'id, teacherId, classId',
+      studentDoubts: 'id, studentId, classId, status, createdAt',
+      topicPolls: 'id, studentId, classId, syllabusTopicId, respondedAt',
+      syncQueue: 'id, tableName, createdAt',
     })
   }
 }

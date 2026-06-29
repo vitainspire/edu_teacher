@@ -1,7 +1,6 @@
 'use client'
 import { useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { db } from '../db'
 import * as sbq from '../supabase-queries'
 import type { Teacher, TimetableEntry, CatchupMaterial } from '../types'
 
@@ -15,13 +14,11 @@ export function useScheduleActions(
   const addTimetableEntry = useCallback(async (data: Omit<TimetableEntry, 'id' | 'teacherId'>) => {
     if (!teacher) return
     const entry: TimetableEntry = { id: crypto.randomUUID(), teacherId: teacher.id, ...data }
-    await db.timetable.add(entry)
     setTimetableEntries(prev => [...prev, entry])
     sbq.upsertTimetableEntry(entry).catch(console.error)
   }, [teacher, setTimetableEntries])
 
   const removeTimetableEntry = useCallback(async (id: string) => {
-    await db.timetable.delete(id)
     setTimetableEntries(prev => prev.filter(e => e.id !== id))
     sbq.deleteTimetableEntry(id).catch(console.error)
   }, [setTimetableEntries])
@@ -50,18 +47,16 @@ export function useScheduleActions(
       teacherId: teacher.id,
       createdAt: new Date().toISOString(),
     }
-    await db.catchupMaterials.put(material)
     setCatchupMaterials(prev => [
       ...prev.filter(m => !(m.studentId === material.studentId && m.topic === material.topic)),
       material,
     ])
-    sbq.upsertCatchupMaterial(material)
+    sbq.upsertCatchupMaterial(material).catch(console.error)
   }, [teacher, setCatchupMaterials])
 
   const updateCatchupStatus = useCallback(async (id: string, status: CatchupMaterial['status']) => {
-    await db.catchupMaterials.update(id, { status })
     setCatchupMaterials(prev => prev.map(m => m.id === id ? { ...m, status } : m))
-    sbq.updateCatchupStatus(id, status)
+    sbq.updateCatchupStatus(id, status).catch(console.error)
   }, [setCatchupMaterials])
 
   const getCatchupForStudent = useCallback((studentId: string) =>

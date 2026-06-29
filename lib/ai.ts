@@ -15,6 +15,7 @@ export interface AIOptions {
   jsonMode?:    boolean   // default true  — adds response_format: { type: 'json_object' }
   maxTokens?:   number
   temperature?: number    // default 0.7
+  timeoutMs?:   number    // default 45 000 ms — vision calls may want 90 000
 }
 
 // ─── Circuit Breaker ─────────────────────────────────────────────────────────
@@ -51,22 +52,36 @@ async function callModel(
   options: AIOptions,
   useJsonMode: boolean,
 ): Promise<string> {
-  const { maxTokens, temperature = 0.7 } = options
+  const { maxTokens, temperature = 0.7, timeoutMs = 45_000 } = options
 
   const body: Record<string, unknown> = { model, messages, temperature }
   if (useJsonMode) body.response_format = { type: 'json_object' }
   if (maxTokens)   body.max_tokens      = maxTokens
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method:  'POST',
-    headers: {
-      Authorization:  `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://eduteach.app',
-      'X-Title':      'EduTeach',
-    },
-    body: JSON.stringify(body),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  let response: Response
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:  'POST',
+      headers: {
+        Authorization:  `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://eduteach.app',
+        'X-Title':      'EduTeach',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      throw new Error(`AI request timed out after ${timeoutMs / 1000}s`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!response.ok) {
     const err = await response.text()

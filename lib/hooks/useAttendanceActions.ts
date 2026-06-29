@@ -1,10 +1,9 @@
 'use client'
 import { useCallback } from 'react'
 import type { RefObject, Dispatch, SetStateAction } from 'react'
-import { db } from '../db'
-import { syncRecord } from '../sync'
+import * as sbq from '../supabase-queries'
 import { computeTopicCoverage } from '../logic/coverage'
-import type { Teacher, Session, Attendance, TopicMastery, SyllabusTopic, TopicCoverageStatus } from '../types'
+import type { Teacher, Session, Attendance, TopicMastery, SyllabusTopic, TopicCoverageStatus, LessonSnapshot } from '../types'
 
 export function useAttendanceActions(
   teacher: Teacher | null,
@@ -27,29 +26,25 @@ export function useAttendanceActions(
     let session: Session
     if (existing) {
       session = { ...existing, sessionNote }
-      await db.sessions.put(session)
       setSessions(prev => prev.map(s => s.id === session.id ? session : s))
-      syncRecord('sessions', session).catch(console.error)
-      const oldAtt = attendanceRef.current!.filter(a => a.sessionId === session.id)
-      if (oldAtt.length) await db.attendance.bulkDelete(oldAtt.map(a => a.id))
+      sbq.upsertSession(session).catch(console.error)
+      sbq.deleteAttendanceBySession(session.id).catch(console.error)
     } else {
       session = {
         id: crypto.randomUUID(), classId, teacherId: teacher.id,
         syllabusTopicId, topic, date, createdAt: new Date().toISOString(),
         sessionNote,
       }
-      await db.sessions.add(session)
       setSessions(prev => [...prev, session])
-      syncRecord('sessions', session).catch(console.error)
+      sbq.upsertSession(session).catch(console.error)
     }
     const newRecords: Attendance[] = entries.map(e => ({
       id: crypto.randomUUID(), sessionId: session.id, studentId: e.studentId,
       classId, syllabusTopicId, date, status: e.status,
     }))
-    await db.attendance.bulkAdd(newRecords)
     setAttendance(prev => [...prev.filter(a => a.sessionId !== session.id), ...newRecords])
-    newRecords.forEach(a => syncRecord('attendance', a).catch(console.error))
-  }, [teacher, sessionsRef, attendanceRef, setSessions, setAttendance])
+    newRecords.forEach(a => sbq.upsertAttendanceRecord(a).catch(console.error))
+  }, [teacher, sessionsRef, setSessions, setAttendance])
 
   const getClassSessions = useCallback((classId: string) =>
     sessionsRef.current!.filter(s => s.classId === classId).sort((a, b) => b.date.localeCompare(a.date)),
@@ -69,5 +64,13 @@ export function useAttendanceActions(
     return computeTopicCoverage(studentId, topic, sessionsRef.current!, attendanceRef.current!, mastersRef.current!)
   }, [syllabusRef, sessionsRef, attendanceRef, mastersRef])
 
-  return { recordSession, getClassSessions, getTopicSessions, getClassAttendance, getStudentTopicCoverage }
+  const saveSessionSnapshot = useCallback(async (sessionId: string, snapshot: LessonSnapshot) => {
+    const session = sessionsRef.current!.find(s => s.id === sessionId)
+    if (!session) return
+    const updated: Session = { ...session, lessonSnapshot: snapshot }
+    setSessions(prev => prev.map(s => s.id === sessionId ? updated : s))
+    sbq.upsertSession(updated).catch(console.error)
+  }, [sessionsRef, setSessions])
+
+  return { recordSession, saveSessionSnapshot, getClassSessions, getTopicSessions, getClassAttendance, getStudentTopicCoverage }
 }

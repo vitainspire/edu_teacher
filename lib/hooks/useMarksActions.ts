@@ -1,8 +1,7 @@
-﻿'use client'
+'use client'
 import { useCallback } from 'react'
 import type { RefObject, Dispatch, SetStateAction } from 'react'
-import { db } from '../db'
-import { syncRecord } from '../sync'
+import * as sbq from '../supabase-queries'
 import { calculateMastery } from '../logic/mastery'
 import type { Teacher, Test, Mark, TopicMastery } from '../types'
 
@@ -18,9 +17,8 @@ export function useMarksActions(
   const createTest = useCallback(async (data: Omit<Test, 'id' | 'teacherId'>): Promise<string> => {
     if (!teacher) return ''
     const test: Test = { ...data, id: crypto.randomUUID(), teacherId: teacher.id }
-    await db.tests.add(test)
     setTests(prev => [...prev, test])
-    syncRecord('tests', test).catch(console.error)
+    sbq.upsertTest(test).catch(console.error)
     return test.id
   }, [teacher, setTests])
 
@@ -42,13 +40,14 @@ export function useMarksActions(
       enteredAt: new Date().toISOString(),
       source: (e.source as Mark['source']) ?? undefined,
     }))
-    await db.marks.bulkPut(newMarks)
+
     const updatedStudentIds = new Set(entries.map(e => e.studentId))
     const updatedMarks = [
       ...marksRef.current!.filter(m => !(m.testId === testId && updatedStudentIds.has(m.studentId))),
       ...newMarks,
     ]
     setMarks(updatedMarks)
+    newMarks.forEach(m => sbq.upsertMark(m).catch(console.error))
 
     const masteryUpdates: TopicMastery[] = []
     for (const entry of entries) {
@@ -62,23 +61,21 @@ export function useMarksActions(
       const existing = mastersRef.current!.find(m => m.studentId === entry.studentId && m.topic === test.topic)
       if (existing) {
         const updated = { ...existing, mastery: newMastery, attempts: studentTopicMarks.length, lastUpdated: new Date().toISOString() }
-        await db.topicMastery.put(updated)
         masteryUpdates.push(updated)
+        sbq.upsertTopicMastery(updated).catch(console.error)
       } else {
         const record: TopicMastery = {
           id: crypto.randomUUID(), studentId: entry.studentId, topic: test.topic, subject: test.subject,
           mastery: newMastery, attempts: studentTopicMarks.length, lastUpdated: new Date().toISOString(),
         }
-        await db.topicMastery.add(record)
         masteryUpdates.push(record)
+        sbq.upsertTopicMastery(record).catch(console.error)
       }
     }
     setMastery(prev => {
       const ids = new Set(masteryUpdates.map(m => `${m.studentId}|${m.topic}`))
       return [...prev.filter(m => !ids.has(`${m.studentId}|${m.topic}`)), ...masteryUpdates]
     })
-    newMarks.forEach(m => syncRecord('marks', m).catch(console.error))
-    masteryUpdates.forEach(m => syncRecord('topicMastery', m).catch(console.error))
   }, [testsRef, marksRef, mastersRef, setMarks, setMastery])
 
   return { createTest, saveMarks }

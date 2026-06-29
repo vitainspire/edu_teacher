@@ -1,8 +1,7 @@
 'use client'
 import { useCallback } from 'react'
 import type { RefObject, Dispatch, SetStateAction } from 'react'
-import { db } from '../db'
-import { syncRecord } from '../sync'
+import * as sbq from '../supabase-queries'
 import type { Teacher, SyllabusTopic, SyllabusSubTopic, Class } from '../types'
 
 export function useSyllabusActions(
@@ -13,15 +12,12 @@ export function useSyllabusActions(
   setSyllabusTopics: Dispatch<SetStateAction<SyllabusTopic[]>>,
   setSyllabusSubTopics: Dispatch<SetStateAction<SyllabusSubTopic[]>>,
 ) {
-  // All sections (classes) of the same grade as `classId`. Always includes the
-  // class itself. A syllabus defined for one section fans out to all of these.
   const gradeSections = useCallback((classId: string): Class[] => {
     const all = classesRef.current ?? []
     const cls = all.find(c => c.id === classId)
     const grade = cls?.grade ?? ''
     const sections = all.filter(c => (c.grade ?? '') === grade)
     if (sections.length) return sections
-    // Class not loaded yet — operate on the single class as a fallback.
     return cls ? [cls] : [{ id: classId, grade } as Class]
   }, [classesRef])
 
@@ -46,21 +42,17 @@ export function useSyllabusActions(
       }
     })
 
-    await db.syllabusTopics.bulkAdd(rows)
     setSyllabusTopics(prev => [...prev, ...rows])
-    rows.forEach(r => syncRecord('syllabusTopics', r).catch(console.error))
+    rows.forEach(r => sbq.upsertSyllabusTopic(r).catch(console.error))
     return rows.find(r => r.classId === classId)?.id ?? rows[0]!.id
   }, [gradeSections, syllabusRef, setSyllabusTopics, teacher])
 
-  // Completion is per-section: only the row the teacher ticked changes.
   const toggleTopicComplete = useCallback(async (topicId: string, isCompleted: boolean) => {
-    await db.syllabusTopics.update(topicId, { isCompleted })
     setSyllabusTopics(prev => prev.map(t => t.id === topicId ? { ...t, isCompleted } : t))
     const topic = syllabusRef.current!.find(t => t.id === topicId)
-    if (topic) syncRecord('syllabusTopics', { ...topic, isCompleted }).catch(console.error)
+    if (topic) sbq.upsertSyllabusTopic({ ...topic, isCompleted }).catch(console.error)
   }, [syllabusRef, setSyllabusTopics])
 
-  // Estimates describe the shared definition → fan out to every section.
   const updateSyllabusTopicEstimate = useCallback(async (topicId: string, estimatedSessions: number) => {
     const topic = syllabusRef.current!.find(t => t.id === topicId)
     const defId = topic?.definitionId
@@ -68,12 +60,10 @@ export function useSyllabusActions(
       ? syllabusRef.current!.filter(t => t.definitionId === defId)
       : (topic ? [topic] : [])
     const ids = new Set(targets.map(t => t.id))
-    await Promise.all(targets.map(t => db.syllabusTopics.update(t.id, { estimatedSessions })))
     setSyllabusTopics(prev => prev.map(t => ids.has(t.id) ? { ...t, estimatedSessions } : t))
-    targets.forEach(t => syncRecord('syllabusTopics', { ...t, estimatedSessions }).catch(console.error))
+    targets.forEach(t => sbq.upsertSyllabusTopic({ ...t, estimatedSessions }).catch(console.error))
   }, [syllabusRef, setSyllabusTopics])
 
-  // Deleting a topic removes it from every section of the grade.
   const deleteSyllabusTopic = useCallback(async (topicId: string) => {
     const topic = syllabusRef.current!.find(t => t.id === topicId)
     const defId = topic?.definitionId
@@ -82,10 +72,10 @@ export function useSyllabusActions(
       : (topic ? [topic] : [])
     const topicIds = new Set(topics.map(t => t.id))
     const subs = subTopicsRef.current!.filter(s => topicIds.has(s.topicId))
-    if (subs.length) await db.syllabusSubTopics.bulkDelete(subs.map(s => s.id))
-    await db.syllabusTopics.bulkDelete([...topicIds])
     setSyllabusTopics(prev => prev.filter(t => !topicIds.has(t.id)))
     setSyllabusSubTopics(prev => prev.filter(s => !topicIds.has(s.topicId)))
+    if (subs.length) sbq.deleteSubTopics(subs.map(s => s.id)).catch(console.error)
+    sbq.deleteSyllabusTopics([...topicIds]).catch(console.error)
   }, [syllabusRef, subTopicsRef, setSyllabusTopics, setSyllabusSubTopics])
 
   const getClassSyllabus = useCallback((classId: string) =>
@@ -94,7 +84,6 @@ export function useSyllabusActions(
 
   // ─── Sub-topics ───────────────────────────────────────────────────────────────
 
-  // Adding a sub-topic fans it out to the matching topic in every section.
   const addSubTopic = useCallback(async (
     topicId: string, classId: string, data: { name: string; description?: string },
   ) => {
@@ -117,12 +106,10 @@ export function useSyllabusActions(
       }
     })
 
-    await db.syllabusSubTopics.bulkAdd(rows)
     setSyllabusSubTopics(prev => [...prev, ...rows])
-    rows.forEach(r => syncRecord('syllabusSubTopics', r).catch(console.error))
+    rows.forEach(r => sbq.upsertSubTopic(r).catch(console.error))
   }, [syllabusRef, subTopicsRef, setSyllabusSubTopics, teacher])
 
-  // Deleting a sub-topic removes it from every section of the grade.
   const deleteSubTopic = useCallback(async (subTopicId: string) => {
     const sub = subTopicsRef.current!.find(s => s.id === subTopicId)
     const defId = sub?.definitionId
@@ -130,36 +117,31 @@ export function useSyllabusActions(
       ? subTopicsRef.current!.filter(s => s.definitionId === defId)
       : (sub ? [sub] : [])
     const ids = new Set(toDelete.map(s => s.id))
-    await db.syllabusSubTopics.bulkDelete([...ids])
     setSyllabusSubTopics(prev => prev.filter(s => !ids.has(s.id)))
+    sbq.deleteSubTopics([...ids]).catch(console.error)
   }, [subTopicsRef, setSyllabusSubTopics])
 
-  // Completion is per-section: toggling cascades only within this section's topic.
   const toggleSubTopicComplete = useCallback(async (subTopicId: string, isCompleted: boolean) => {
     const now = new Date().toISOString()
     const update = { isCompleted, completedAt: isCompleted ? now : undefined }
-    await db.syllabusSubTopics.update(subTopicId, update)
-
     const sub = subTopicsRef.current!.find(s => s.id === subTopicId)
     if (!sub) return
     setSyllabusSubTopics(prev => prev.map(s => s.id === subTopicId ? { ...s, ...update } : s))
-    syncRecord('syllabusSubTopics', { ...sub, ...update }).catch(console.error)
+    sbq.upsertSubTopic({ ...sub, ...update }).catch(console.error)
 
     if (isCompleted) {
       const siblings = subTopicsRef.current!.filter(s => s.topicId === sub.topicId)
       const allDone = siblings.every(s => s.id === subTopicId ? true : s.isCompleted)
       if (allDone && siblings.length > 0) {
-        await db.syllabusTopics.update(sub.topicId, { isCompleted: true })
         setSyllabusTopics(prev => prev.map(t => t.id === sub.topicId ? { ...t, isCompleted: true } : t))
         const parent = syllabusRef.current!.find(t => t.id === sub.topicId)
-        if (parent) syncRecord('syllabusTopics', { ...parent, isCompleted: true }).catch(console.error)
+        if (parent) sbq.upsertSyllabusTopic({ ...parent, isCompleted: true }).catch(console.error)
       }
     } else {
       const parent = syllabusRef.current!.find(t => t.id === sub.topicId)
       if (parent?.isCompleted) {
-        await db.syllabusTopics.update(sub.topicId, { isCompleted: false })
         setSyllabusTopics(prev => prev.map(t => t.id === sub.topicId ? { ...t, isCompleted: false } : t))
-        syncRecord('syllabusTopics', { ...parent, isCompleted: false }).catch(console.error)
+        sbq.upsertSyllabusTopic({ ...parent, isCompleted: false }).catch(console.error)
       }
     }
   }, [syllabusRef, subTopicsRef, setSyllabusTopics, setSyllabusSubTopics])
@@ -170,15 +152,11 @@ export function useSyllabusActions(
       .sort((a, b) => a.orderIndex - b.orderIndex),
   [subTopicsRef])
 
-  // Backfill a section with any grade-level definitions it's missing (e.g. a new
-  // section added after the syllabus was created). Idempotent; safe to call on
-  // every syllabus-page open. Returns the number of topics added.
   const ensureClassSyllabus = useCallback(async (classId: string): Promise<number> => {
     const cls = (classesRef.current ?? []).find(c => c.id === classId)
     if (!cls) return 0
     const grade = cls.grade ?? ''
 
-    // One representative topic per definitionId across this grade's sections.
     const byDef = new Map<string, SyllabusTopic>()
     for (const t of syllabusRef.current!) {
       if ((t.grade ?? '') !== grade || !t.definitionId) continue
@@ -202,7 +180,6 @@ export function useSyllabusActions(
         topic: def.topic, description: def.description, weekNumber: def.weekNumber,
         estimatedSessions: def.estimatedSessions, orderIndex: order++, isCompleted: false, createdAt,
       })
-      // Copy the definition's sub-topics (deduped by their definitionId).
       const seen = new Set<string>()
       let subOrder = 0
       for (const s of subTopicsRef.current!.filter(s => s.topicId === def.id)) {
@@ -217,12 +194,10 @@ export function useSyllabusActions(
       }
     }
 
-    await db.syllabusTopics.bulkAdd(newTopics)
-    if (newSubs.length) await db.syllabusSubTopics.bulkAdd(newSubs)
     setSyllabusTopics(prev => [...prev, ...newTopics])
     if (newSubs.length) setSyllabusSubTopics(prev => [...prev, ...newSubs])
-    newTopics.forEach(t => syncRecord('syllabusTopics', t).catch(console.error))
-    newSubs.forEach(s => syncRecord('syllabusSubTopics', s).catch(console.error))
+    newTopics.forEach(t => sbq.upsertSyllabusTopic(t).catch(console.error))
+    newSubs.forEach(s => sbq.upsertSubTopic(s).catch(console.error))
     return newTopics.length
   }, [classesRef, syllabusRef, subTopicsRef, setSyllabusTopics, setSyllabusSubTopics, teacher])
 

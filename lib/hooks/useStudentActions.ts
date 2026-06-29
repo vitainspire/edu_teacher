@@ -1,8 +1,7 @@
 'use client'
 import { useCallback } from 'react'
 import type { RefObject, Dispatch, SetStateAction } from 'react'
-import { db } from '../db'
-import { syncRecord } from '../sync'
+import * as sbq from '../supabase-queries'
 import type { Teacher, Student } from '../types'
 
 export function useStudentActions(
@@ -26,9 +25,8 @@ export function useStudentActions(
       interests: data.interests,
       goal: data.goal.trim(),
     }
-    await db.students.add(student)
     setStudents(prev => [...prev, student])
-    syncRecord('students', student).catch(console.error)
+    sbq.upsertStudent(student).catch(console.error)
   }, [teacher, studentsRef, setStudents])
 
   const addStudentsBulk = useCallback(async (classId: string, names: string[]) => {
@@ -37,26 +35,30 @@ export function useStudentActions(
     const newStudents: Student[] = names.map(n => n.trim()).filter(Boolean)
       .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
       .map((name, i) => ({
-      id: crypto.randomUUID(),
-      teacherId: teacher.id,
-      classId,
-      name,
-      rollNumber: String(base + i + 1).padStart(2, '0'),
-      isActive: true,
-      interests: [],
-      goal: '',
-    }))
-    await db.students.bulkAdd(newStudents)
+        id: crypto.randomUUID(),
+        teacherId: teacher.id,
+        classId,
+        name,
+        rollNumber: String(base + i + 1).padStart(2, '0'),
+        isActive: true,
+        interests: [],
+        goal: '',
+      }))
     setStudents(prev => [...prev, ...newStudents])
-    newStudents.forEach(s => syncRecord('students', s).catch(console.error))
+    newStudents.forEach(s => sbq.upsertStudent(s).catch(console.error))
   }, [teacher, studentsRef, setStudents])
 
   const toggleStudent = useCallback(async (id: string, active: boolean) => {
-    await db.students.update(id, { isActive: active })
     setStudents(prev => prev.map(s => s.id === id ? { ...s, isActive: active } : s))
     const existing = studentsRef.current!.find(s => s.id === id)
-    if (existing) syncRecord('students', { ...existing, isActive: active }).catch(console.error)
+    if (existing) sbq.upsertStudent({ ...existing, isActive: active }).catch(console.error)
   }, [studentsRef, setStudents])
 
-  return { addStudent, addStudentsBulk, toggleStudent }
+  const setStudentPin = useCallback(async (id: string, pin: string) => {
+    setStudents(prev => prev.map(s => s.id === id ? { ...s, pin } : s))
+    const existing = studentsRef.current!.find(s => s.id === id)
+    if (existing) sbq.upsertStudent({ ...existing, pin }).catch(console.error)
+  }, [studentsRef, setStudents])
+
+  return { addStudent, addStudentsBulk, toggleStudent, setStudentPin }
 }
