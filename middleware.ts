@@ -1,68 +1,90 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
-// Paths/prefixes that are always public — no auth required
-const PUBLIC = ['/login', '/favicon.ico', '/sw.js', '/workbox', '/icons', '/manifest', '/screenshots', '/api/health']
+// Paths that are always public — no auth required
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/student',
+  '/api/student',
+  '/favicon.ico',
+  '/sw.js',
+  '/workbox',
+  '/icons',
+  '/manifest',
+  '/screenshots',
+  '/api/health',
+  // Student-facing AI routes — protected by rate-limit, not Supabase session
+  '/api/practice-quiz',
+  '/api/catchup-plan',
+  // Scanner portal routes — no Supabase session, rate-limited only
+  '/api/multi-grade-scan',
+  '/api/scanner-save-score',
+  '/api/scanner-upload',
+  '/api/worksheet-marks',
+  '/api/worksheet-save-score',
+]
 
-function jwtPayload(token: string): { exp?: number; sub?: string } | null {
-  try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some(
+    p => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '-')
+  )
 }
 
-function isValidJwt(token: string): boolean {
-  const payload = jwtPayload(token)
-  if (!payload || !payload.sub) return false
-  if (payload.exp && payload.exp * 1000 < Date.now()) return false
-  return true
-}
-
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Pass through public paths
-  if (PUBLIC.some(p => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '-'))) {
+  // Always allow public paths
+  if (isPublic(pathname)) return NextResponse.next()
+
+  // Student portal pages — separate cookie auth, no Supabase session needed here
+  if (pathname.startsWith('/student')) {
+    if (!req.cookies.has('edu-student-id')) {
+      return NextResponse.redirect(new URL('/student/login', req.url))
+    }
     return NextResponse.next()
   }
 
-  // Root redirect — check role cookie
+  // Root redirect
   if (pathname === '/') {
-    const hasSession = req.cookies.has('edu-session')
-    if (!hasSession) return NextResponse.redirect(new URL('/login', req.url))
     const role = req.cookies.get('edu-role')?.value
     const dest = role === 'scanner' ? '/scanner/connect' : '/home'
     return NextResponse.redirect(new URL(dest, req.url))
   }
 
-  // Check presence cookie
-  const hasSession = req.cookies.has('edu-session')
+  // Build a Supabase client that can read/refresh the session from cookies.
+  // `auth.getUser()` makes a network call to verify the token signature —
+  // unlike manual base64 decode, this cannot be bypassed with a forged JWT.
+  let response = NextResponse.next({ request: req })
 
-  // If an Authorization header is present, validate the JWT regardless of cookie
-  const authHeader = req.headers.get('authorization') ?? ''
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7)
-    if (!isValidJwt(token)) {
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
-      }
-      return NextResponse.redirect(new URL('/login', req.url))
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+          response = NextResponse.next({ request: req })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
+        },
+      },
     }
-    return NextResponse.next()
-  }
+  )
 
-  if (!hasSession) {
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    // API routes return JSON; page routes redirect to login
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  // Scanner staff attempting to access teacher routes — redirect to scanner
+  // Scanner staff cannot access teacher routes
   if (!pathname.startsWith('/scanner') && !pathname.startsWith('/api/')) {
     const role = req.cookies.get('edu-role')?.value
     if (role === 'scanner') {
@@ -70,7 +92,7 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {

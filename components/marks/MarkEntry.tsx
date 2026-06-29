@@ -1,14 +1,11 @@
-﻿'use client'
+'use client'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
-  Check, Camera, PenLine, Sparkles, RefreshCw,
-  MessageSquare, ChevronDown, ChevronUp, Mic, MicOff, ScanLine, ExternalLink,
+  Check, Sparkles, ChevronDown, ChevronUp, ScanLine, FileImage, X,
+  ZoomIn, ZoomOut, RotateCw, Paperclip, Loader2,
 } from 'lucide-react'
 import type { Student, AiQuestion } from '@/lib/types'
 import clsx from 'clsx'
-import VoiceEntry from './VoiceEntry'
-
-type Mode = 'manual' | 'camera'
 
 interface EntryState {
   score: string
@@ -28,43 +25,68 @@ interface Props {
   totalMarks: number
   topic: string
   questions?: AiQuestion[]
-  prefillScores?: Array<{ studentId: string; score: number; feedback?: string; source?: string; breakdown?: { question: number; awarded: number; max: number }[]; imageUrl?: string }>
+  prefillScores?: Array<{
+    studentId: string
+    score: number
+    feedback?: string
+    source?: string
+    breakdown?: { question: number; awarded: number; max: number; errorType?: string | null }[]
+    imageUrl?: string
+  }>
   onSave: (entries: Array<{ studentId: string; score: number; feedback?: string; source?: string }>) => Promise<void>
   onCancel: () => void
 }
 
-export default function MarkEntry({ students, totalMarks, topic, questions, prefillScores, onSave, onCancel }: Props) {
-  const [mode, setMode]       = useState<Mode>('manual')
-  const [entries, setEntries] = useState<Record<string, EntryState>>({})
-  const [saving, setSaving]   = useState(false)
+function compressToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const MAX = 1600
+      const scale = img.width > MAX ? MAX / img.width : 1
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('Canvas unavailable')); return }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+      resolve({ base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: 'image/jpeg' })
+    }
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')) }
+    img.src = objectUrl
+  })
+}
+
+export default function MarkEntry({ students, totalMarks, questions, prefillScores, onSave, onCancel }: Props) {
+  const [entries, setEntries]     = useState<Record<string, EntryState>>({})
+  const [saving, setSaving]       = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  // Per-student camera scanning
-  const [cameraForId, setCameraForId]   = useState<string | null>(null)
-  const [scanningIds, setScanningIds]   = useState<Set<string>>(new Set())
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  // Per-student AI grading breakdown (only when questions are present)
   const [breakdowns, setBreakdowns]         = useState<Record<string, QuestionBreakdown[]>>({})
   const [breakdownOpen, setBreakdownOpen]   = useState<Record<string, boolean>>({})
-  const [, setGeneralFeedbacks] = useState<Record<string, string>>({})
+  const [imageUrls, setImageUrls]           = useState<Record<string, string>>({})
+  const [uploadingFor, setUploadingFor]     = useState<string | null>(null)
+  const uploadRef = useRef<HTMLInputElement | null>(null)
+  const uploadTargetRef = useRef<string | null>(null)
 
-  // Paper image URLs from scanner (student_id → drive URL)
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
+  // AI scan tracking
+  const [aiScannedIds, setAiScannedIds]           = useState<Set<string>>(new Set())
+  const [originalAiScores, setOriginalAiScores]   = useState<Record<string, number>>({})
+  const [editedIds, setEditedIds]                 = useState<Set<string>>(new Set())
 
-  // AI scan source tracking
-  const [aiScannedIds, setAiScannedIds] = useState<Set<string>>(new Set())
-  const [originalAiScores, setOriginalAiScores] = useState<Record<string, number>>({})
-  const [editedIds, setEditedIds] = useState<Set<string>>(new Set())
+  // Lightbox
+  const [viewingUrl, setViewingUrl]   = useState<string | null>(null)
+  const [viewingName, setViewingName] = useState('')
+  const [zoom, setZoom]               = useState(1)
+  const [rotation, setRotation]       = useState(0)
 
-  // Voice feedback
-  const [voiceFeedbackFor, setVoiceFeedbackFor] = useState<string | null>(null)
-  const recogRef = useRef<SpeechRecognition | null>(null)
-
-  // Prefill from external source
+  // Prefill from scanner results
   useEffect(() => {
     if (!prefillScores?.length) return
+
     setEntries(prev => {
       const next = { ...prev }
       prefillScores.forEach(e => {
@@ -76,7 +98,7 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
       })
       return next
     })
-    // Populate image URLs
+
     const urlMap: Record<string, string> = {}
     prefillScores.forEach(e => { if (e.imageUrl) urlMap[e.studentId] = e.imageUrl })
     if (Object.keys(urlMap).length) setImageUrls(prev => ({ ...prev, ...urlMap }))
@@ -87,9 +109,8 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
     setAiScannedIds(aiIds)
     setOriginalAiScores(aiOriginals)
     setEditedIds(new Set())
-    // Populate scanner question breakdown if present
+
     const bdMap: Record<string, QuestionBreakdown[]> = {}
-    const bdOpenMap: Record<string, boolean> = {}
     prefillScores.forEach(e => {
       if (e.breakdown?.length) {
         bdMap[e.studentId] = e.breakdown.map(b => ({
@@ -98,12 +119,13 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
           maxMarks: b.max,
           feedback: '',
         }))
-        bdOpenMap[e.studentId] = false
       }
     })
     if (Object.keys(bdMap).length) {
       setBreakdowns(prev => ({ ...prev, ...bdMap }))
-      setBreakdownOpen(prev => ({ ...prev, ...bdOpenMap }))
+      const autoOpen: Record<string, boolean> = {}
+      Object.keys(bdMap).forEach(id => { autoOpen[id] = true })
+      setBreakdownOpen(prev => ({ ...prev, ...autoOpen }))
     }
   }, [prefillScores])
 
@@ -111,7 +133,6 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
     entries[id] ?? { score: '', feedback: '', feedbackOpen: false }
 
   const setScore = useCallback((studentId: string, value: string) => {
-    // Allow digits, one decimal point, up to one decimal place (e.g. 12.5)
     if (value === '' || /^\d+(\.\d?)?$/.test(value)) {
       const num = parseFloat(value)
       if (value === '' || value.endsWith('.') || (num >= 0 && num <= totalMarks)) {
@@ -146,104 +167,40 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
     }
   }
 
-  const applyVoice = useCallback((voiceEntries: Array<{ studentId: string; score: number }>) => {
-    setEntries(prev => {
-      const next = { ...prev }
-      voiceEntries.forEach(e => {
-        const cur = next[e.studentId] ?? { score: '', feedback: '', feedbackOpen: false }
-        next[e.studentId] = { ...cur, score: String(e.score) }
-      })
-      return next
-    })
-  }, [])
-
-  // ── Voice feedback ──────────────────────────────────────────────────────────
-  const startVoiceFeedback = (studentId: string) => {
-    const SR = (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition
-      || (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
-    if (!SR) return
-    if (voiceFeedbackFor === studentId) {
-      recogRef.current?.stop()
-      setVoiceFeedbackFor(null)
-      return
-    }
-    recogRef.current?.stop()
-    const recog = new SR()
-    recog.lang = 'en-IN'
-    recog.continuous = false
-    recog.interimResults = false
-    recog.onstart = () => setVoiceFeedbackFor(studentId)
-    recog.onend = () => setVoiceFeedbackFor(null)
-    recog.onresult = (e: SpeechRecognitionEvent) => {
-      const text = e.results[0][0].transcript
-      setFeedback(studentId, text)
-      setEntries(prev => ({
-        ...prev,
-        [studentId]: { ...getEntry(studentId), feedback: text, feedbackOpen: true },
-      }))
-    }
-    recog.start()
-    recogRef.current = recog
+  // ── Teacher-side paper upload ─────────────────────────────────────────────
+  function openUpload(studentId: string) {
+    uploadTargetRef.current = studentId
+    uploadRef.current?.click()
   }
 
-  // ── Per-student camera scan ────────────────────────────────────────────────
-  const triggerCamera = (studentId: string) => {
-    setCameraForId(studentId)
-    setTimeout(() => fileRef.current?.click(), 50)
-  }
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  async function handleUploadFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    const studentId = cameraForId
-    e.target.value = ''
-    if (!file || !studentId) return
-
-    const reader = new FileReader()
-    reader.onload = async ev => {
-      const imageBase64 = ev.target?.result as string
-      setScanningIds(prev => new Set(prev).add(studentId))
-      try {
-        const student = students.find(s => s.id === studentId)
-
-        // Use question-aware grader when questions are saved, else fall back to generic
-        if (questions?.length) {
-          const res = await fetch('/api/grade-paper', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64, questions, totalMarks, topic, studentName: student?.name ?? '' }),
-          })
-          if (!res.ok) throw new Error()
-          const data = await res.json()
-          if (typeof data.totalScore === 'number') {
-            setEntries(prev => ({
-              ...prev,
-              [studentId]: { score: String(data.totalScore), feedback: data.generalFeedback ?? '', feedbackOpen: !!(data.generalFeedback) },
-            }))
-            if (data.breakdown?.length) {
-              setBreakdowns(prev => ({ ...prev, [studentId]: data.breakdown }))
-              setBreakdownOpen(prev => ({ ...prev, [studentId]: true }))
-            }
-            if (data.generalFeedback) setGeneralFeedbacks(prev => ({ ...prev, [studentId]: data.generalFeedback }))
-          }
-        } else {
-          const res = await fetch('/api/grade-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64, students: [{ id: studentId, name: student?.name ?? '' }], totalMarks, topic }),
-          })
-          if (!res.ok) throw new Error()
-          const { entries: graded } = await res.json()
-          if (graded?.length) {
-            const g = graded[0]
-            setEntries(prev => ({ ...prev, [studentId]: { score: String(g.score), feedback: g.feedback ?? '', feedbackOpen: !!(g.feedback) } }))
-          }
-        }
-      } catch { /* teacher can type manually */ }
-      finally {
-        setScanningIds(prev => { const s = new Set(prev); s.delete(studentId); return s })
+    if (!file || !uploadTargetRef.current) return
+    if (uploadRef.current) uploadRef.current.value = ''
+    const studentId = uploadTargetRef.current
+    setUploadingFor(studentId)
+    try {
+      const { base64, mimeType } = await compressToBase64(file)
+      const filename = `teacher_upload_${studentId.slice(0, 8)}_${Date.now()}.jpg`
+      const res = await fetch('/api/upload-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType, filename }),
+      })
+      if (!res.ok) throw new Error('Upload failed')
+      const { url } = (await res.json()) as { url?: string }
+      if (url) {
+        setImageUrls(prev => ({ ...prev, [studentId]: url }))
+        setViewingUrl(url)
+        setViewingName(students.find(s => s.id === studentId)?.name ?? '')
+        setZoom(1)
+        setRotation(0)
       }
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setUploadingFor(null)
     }
-    reader.readAsDataURL(file)
   }
 
   const enteredCount = students.filter(s => getEntry(s.id).score !== '').length
@@ -269,15 +226,17 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
     setSaving(false)
   }
 
-  // ── Shared student row renderer ────────────────────────────────────────────
   const renderStudentRow = (student: Student, idx: number) => {
-    const entry       = getEntry(student.id)
-    const hasScore    = entry.score !== ''
-    const pct         = hasScore ? parseInt(entry.score) / totalMarks : null
-    const isActive    = mode === 'manual' && activeIdx === idx
-    const scanning    = scanningIds.has(student.id)
-    const bdList      = breakdowns[student.id]
-    const bdOpen      = breakdownOpen[student.id] ?? false
+    const entry    = getEntry(student.id)
+    const hasScore = entry.score !== ''
+    const pct      = hasScore ? parseInt(entry.score) / totalMarks : null
+    const isActive = activeIdx === idx
+    const bdList   = breakdowns[student.id]
+    const bdOpen   = breakdownOpen[student.id] ?? false
+    const isAi     = aiScannedIds.has(student.id)
+    const isEdited = editedIds.has(student.id)
+    const paperUrl = imageUrls[student.id]
+    const isUploading = uploadingFor === student.id
 
     return (
       <div key={student.id} className={clsx(
@@ -287,7 +246,7 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
         {/* Main row */}
         <div
           className="flex items-center gap-3 p-3 cursor-pointer"
-          onClick={() => { if (mode === 'manual') { setActiveIdx(idx); inputRefs.current[idx]?.focus() } }}
+          onClick={() => { setActiveIdx(idx); inputRefs.current[idx]?.focus() }}
         >
           {/* Roll badge */}
           <div className={clsx(
@@ -299,72 +258,60 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
 
           <span className="flex-1 font-semibold text-slate-900 min-w-0 truncate">{student.name}</span>
 
-          {/* AI Scanned / Edited badge */}
-          {aiScannedIds.has(student.id) && hasScore && (
-            editedIds.has(student.id) ? (
-              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
-                Edited
+          {/* Source badge */}
+          {isAi && hasScore && (
+            isEdited ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                Overridden
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0">
-                <ScanLine size={9} /> AI Scanned
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 shrink-0">
+                <ScanLine size={9} /> AI Graded
               </span>
             )
           )}
 
-          {/* View scanned paper link */}
-          {imageUrls[student.id] && (
-            <a
-              href={imageUrls[student.id]}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              title="View scanned paper"
+          {/* View paper button OR attach paper button */}
+          {paperUrl ? (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation()
+                setViewingUrl(paperUrl)
+                setViewingName(student.name)
+                setZoom(1)
+                setRotation(0)
+              }}
               className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors shrink-0"
             >
-              <ExternalLink size={9} /> Paper
-            </a>
-          )}
-
-          {/* Camera mode: scan button per student */}
-          {mode === 'camera' && (
+              <FileImage size={9} /> View Paper
+            </button>
+          ) : (
             <button
               type="button"
-              onClick={e => { e.stopPropagation(); triggerCamera(student.id) }}
-              disabled={scanning}
-              className={clsx(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0',
-                hasScore
-                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                  : 'bg-blue-100 text-blue-700 border border-blue-200 active:scale-95',
-              )}
+              onClick={e => { e.stopPropagation(); openUpload(student.id) }}
+              disabled={isUploading}
+              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 transition-colors shrink-0"
             >
-              {scanning
-                ? <><RefreshCw size={12} className="animate-spin" /> Reading…</>
-                : hasScore
-                  ? <><Camera size={12} /> Re-scan</>
-                  : <><Camera size={12} /> Scan paper</>}
+              {isUploading
+                ? <><Loader2 size={9} className="animate-spin" /> Uploading…</>
+                : <><Paperclip size={9} /> Attach Paper</>}
             </button>
           )}
 
-          {/* Manual mode: feedback toggle */}
-          {mode === 'manual' && (
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); toggleFeedback(student.id) }}
-              className={clsx(
-                'flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg transition-colors shrink-0',
-                entry.feedback
-                  ? 'bg-violet-100 text-violet-700'
-                  : 'text-slate-400 hover:bg-slate-100',
-              )}
-            >
-              <MessageSquare size={11} />
-              {entry.feedbackOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-            </button>
-          )}
+          {/* Feedback toggle */}
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); toggleFeedback(student.id) }}
+            className={clsx(
+              'text-xs font-semibold px-2 py-1 rounded-lg transition-colors shrink-0',
+              entry.feedback ? 'bg-violet-100 text-violet-700' : 'text-slate-400 hover:bg-slate-100',
+            )}
+          >
+            {entry.feedbackOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
 
-          {/* Score input (both modes) */}
+          {/* Score input */}
           <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
             <input
               ref={el => { inputRefs.current[idx] = el }}
@@ -399,37 +346,43 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
           )}
         </div>
 
-        {/* Feedback row — visible in both modes once a score is set */}
-        {(entry.feedbackOpen || (mode === 'camera' && hasScore)) && (
-          <div className="px-3 pb-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={entry.feedback}
-                onChange={e => setFeedback(student.id, e.target.value)}
-                placeholder="e.g. confused on Q3, skipped last question, good work…"
-                maxLength={120}
-                className="flex-1 text-sm border border-violet-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 text-slate-700 placeholder:text-slate-300"
-              />
-              <button
-                type="button"
-                onClick={() => startVoiceFeedback(student.id)}
-                className={clsx(
-                  'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all',
-                  voiceFeedbackFor === student.id
-                    ? 'bg-red-500 text-white animate-pulse'
-                    : 'bg-violet-100 text-violet-600 hover:bg-violet-200',
-                )}
-                title="Speak feedback"
-              >
-                {voiceFeedbackFor === student.id ? <MicOff size={14} /> : <Mic size={14} />}
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-1 text-right">{entry.feedback.length}/120</p>
+        {/* AI suggestion info bar */}
+        {isAi && hasScore && (
+          <div className="mx-3 mb-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-100 flex items-center gap-2">
+            <ScanLine size={11} className="text-sky-500 shrink-0" />
+            {isEdited ? (
+              <p className="text-xs text-sky-800 font-medium leading-snug">
+                AI suggested{' '}
+                <span className="font-black line-through text-sky-400">{originalAiScores[student.id]}/{totalMarks}</span>
+                {' → '}
+                <span className="font-black text-amber-700">{entry.score}/{totalMarks}</span>
+                {' '}(teacher override)
+              </p>
+            ) : (
+              <p className="text-xs text-sky-800 font-medium leading-snug">
+                AI graded · suggested{' '}
+                <span className="font-black">{originalAiScores[student.id]}/{totalMarks}</span>
+                {' '}&mdash; edit the score above to override
+              </p>
+            )}
           </div>
         )}
 
-        {/* AI question-by-question breakdown (only after scan with questions) */}
+        {/* Feedback row */}
+        {entry.feedbackOpen && (
+          <div className="px-3 pb-3">
+            <input
+              type="text"
+              value={entry.feedback}
+              onChange={e => setFeedback(student.id, e.target.value)}
+              placeholder="e.g. confused on Q3, skipped last question, good work…"
+              maxLength={120}
+              className="w-full text-sm border border-violet-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 text-slate-700 placeholder:text-slate-300"
+            />
+          </div>
+        )}
+
+        {/* AI question-by-question breakdown */}
         {bdList?.length > 0 && (
           <div className="px-3 pb-3">
             <button
@@ -477,62 +430,90 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
     )
   }
 
-  return (
-    <div className="space-y-4">
-
-      {/* Hidden file input for camera — shared, retargeted per student */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
-      {/* Mode toggle */}
-      <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
-        <button
-          type="button"
-          onClick={() => setMode('manual')}
-          className={clsx(
-            'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
-            mode === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500',
-          )}
-        >
-          <PenLine size={14} /> Enter Manually
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('camera')}
-          className={clsx(
-            'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
-            mode === 'camera' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500',
-          )}
-        >
-          <Camera size={14} /> Scan Papers
-        </button>
+  // ── Paper lightbox ──────────────────────────────────────────────────────────
+  const paperLightbox = viewingUrl && (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 1500, background: 'rgba(0,0,0,0.93)' }}
+      className="flex flex-col"
+      onClick={() => setViewingUrl(null)}
+    >
+      {/* Toolbar — stop propagation so clicks inside don't close */}
+      <div
+        className="flex items-center justify-between px-4 py-3 bg-black/60 backdrop-blur-sm shrink-0"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+            <FileImage size={13} className="text-white/70" />
+          </div>
+          <div>
+            <p className="text-white font-bold text-sm leading-tight">{viewingName}</p>
+            <p className="text-white/40 text-[10px]">Answer paper · tap outside to close</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+            className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors" title="Zoom out">
+            <ZoomOut size={14} />
+          </button>
+          <span className="text-white text-xs font-bold w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button type="button" onClick={() => setZoom(z => Math.min(4, +(z + 0.25).toFixed(2)))}
+            className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors" title="Zoom in">
+            <ZoomIn size={14} />
+          </button>
+          <button type="button" onClick={() => setRotation(r => (r + 90) % 360)}
+            className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors" title="Rotate">
+            <RotateCw size={14} />
+          </button>
+          <button type="button" onClick={() => setViewingUrl(null)}
+            className="w-8 h-8 rounded-lg bg-red-500/80 flex items-center justify-center text-white hover:bg-red-500 transition-colors ml-1" title="Close">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
-      {/* ── Manual mode extras ── */}
-      {mode === 'manual' && (
-        <div className="card">
-          <VoiceEntry students={students} totalMarks={totalMarks} onConfirm={applyVoice} />
-        </div>
-      )}
+      {/* Scrollable image */}
+      <div
+        className="flex-1 overflow-auto flex items-start justify-center p-4"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={viewingUrl}
+          alt={`${viewingName}'s answer paper`}
+          style={{
+            transform: `scale(${zoom}) rotate(${rotation}deg)`,
+            transformOrigin: 'top center',
+            maxWidth: rotation % 180 === 0 ? '100%' : 'calc(100vh - 8rem)',
+            transition: 'transform 0.15s ease',
+            display: 'block',
+          }}
+          draggable={false}
+        />
+      </div>
 
-      {/* ── Camera mode header ── */}
-      {mode === 'camera' && (
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles size={13} className="text-blue-600" />
-            <p className="text-sm font-bold text-blue-900">Scan each student&apos;s paper</p>
-          </div>
-          <p className="text-xs text-blue-600 leading-relaxed">
-            Tap <Camera size={10} className="inline" /> next to a student, take a photo of their answer sheet — AI reads the score and notes automatically.
-          </p>
-        </div>
-      )}
+      <div className="shrink-0 text-center py-2">
+        <p className="text-white/25 text-xs">Tap outside to close · edit score after closing</p>
+      </div>
+    </div>
+  )
+
+  // ── Hidden file input for teacher-side upload ───────────────────────────────
+  const uploadInput = (
+    <input
+      ref={uploadRef}
+      type="file"
+      accept="image/*"
+      className="sr-only"
+      aria-hidden
+      onChange={handleUploadFile}
+    />
+  )
+
+  return (
+    <div className="space-y-4">
+      {paperLightbox}
+      {uploadInput}
 
       {/* Progress bar */}
       <div className="flex items-center justify-between px-1">
@@ -548,7 +529,7 @@ export default function MarkEntry({ students, totalMarks, topic, questions, pref
         </span>
       </div>
 
-      {/* Student list — same for both modes */}
+      {/* Student list */}
       <div className="space-y-2">
         {students.map((student, idx) => renderStudentRow(student, idx))}
       </div>
