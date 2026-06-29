@@ -877,7 +877,7 @@ export default function TestsPage() {
         aiQuestions.forEach(q => { if (q.type && grouped[q.type as QType]) grouped[q.type as QType].push(q) })
         const paperTopic   = effectiveTopic || 'Topic'
         const paperClass   = selectedClass?.name ?? 'Class'
-        const paperSubject = selectedClass?.subject ?? 'Subject'
+        const paperSubject = teacher?.subject ?? 'Subject'
         const paperMarks   = totalMarks
         const paperDate    = new Date(conductedOn).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
         let qNum = 0
@@ -1571,7 +1571,7 @@ export default function TestsPage() {
         aiQuestions.forEach(q => { if (q.type && grouped[q.type as QType]) grouped[q.type as QType].push(q) })
         const paperTopic   = effectiveTopic || 'Topic'
         const paperClass   = selectedClass?.name ?? 'Class'
-        const paperSubject = selectedClass?.subject ?? 'Subject'
+        const paperSubject = teacher?.subject ?? 'Subject'
         const paperMarks   = totalMarks
         const paperDate    = new Date(conductedOn).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
         let qNum = 0

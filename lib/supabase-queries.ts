@@ -1,8 +1,8 @@
-﻿import { supabase } from './supabase'
+import { supabase } from './supabase'
 import type {
   Teacher, Student, Test, Mark, TopicMastery, RecoveryAttempt,
   Class, SyllabusTopic, Attendance, Session, SyllabusSubTopic, TimetableEntry, CatchupMaterial, InterventionNote,
-  TeacherClassAssignment, School,
+  TeacherClassAssignment, School, StudentDoubt, TopicPoll, Worksheet,
 } from './types'
 
 // ─── Schools ──────────────────────────────────────────────────────────────────
@@ -14,13 +14,12 @@ function genJoinCode(): string {
 
 export async function createSchool(name: string, createdBy: string): Promise<School> {
   let code = genJoinCode()
-  // retry on collision (astronomically rare with 32^6 = 1B combinations)
   for (let i = 0; i < 5; i++) {
     const { error } = await supabase.from('schools').insert({
       name, join_code: code, created_by: createdBy,
     })
     if (!error) break
-    if (error.code !== '23505') throw error  // 23505 = unique_violation
+    if (error.code !== '23505') throw error
     code = genJoinCode()
   }
   const { data, error } = await supabase.from('schools')
@@ -102,8 +101,10 @@ export async function upsertClass(c: Class) {
   if (error) throw error
 }
 
-// Fetches the teacher's own classes. Each teacher owns their classes; there is
-// no cross-teacher sharing. (schoolId/schoolName kept for signature compat.)
+export async function deleteClass(id: string) {
+  await supabase.from('classes').delete().eq('id', id)
+}
+
 export async function fetchClasses(teacherId: string, _schoolId?: string, _schoolName?: string): Promise<Class[]> {
   const { data, error } = await supabase
     .from('classes').select('*').order('created_at')
@@ -127,13 +128,11 @@ export async function upsertSyllabusTopic(t: SyllabusTopic) {
     topic: t.topic, description: t.description,
     week_number: t.weekNumber ?? null, order_index: t.orderIndex,
     is_completed: t.isCompleted, created_at: t.createdAt,
+    estimated_sessions: t.estimatedSessions ?? null,
   })
   if (error) throw error
 }
 
-// Fetches only the current teacher's syllabus topics (private per teacher).
-// Each subject teacher has their own curriculum for a class — science teacher
-// has science topics, maths teacher has maths topics, for the same class.
 export async function fetchSyllabusTopics(teacherId: string, classIds: string[]): Promise<SyllabusTopic[]> {
   if (!classIds.length) return []
   const { data, error } = await supabase
@@ -148,7 +147,13 @@ export async function fetchSyllabusTopics(teacherId: string, classIds: string[])
     topic: r.topic, description: r.description ?? '',
     weekNumber: r.week_number ?? undefined, orderIndex: r.order_index ?? 0,
     isCompleted: r.is_completed ?? false, createdAt: r.created_at ?? '',
+    estimatedSessions: r.estimated_sessions ?? undefined,
   }))
+}
+
+export async function deleteSyllabusTopics(ids: string[]) {
+  if (!ids.length) return
+  await supabase.from('syllabus_topics').delete().in('id', ids)
 }
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────
@@ -159,6 +164,7 @@ export async function upsertSession(s: Session) {
     syllabus_topic_id: s.syllabusTopicId || null, topic: s.topic,
     date: s.date, created_at: s.createdAt,
     session_note: s.sessionNote ?? null,
+    lesson_snapshot: s.lessonSnapshot ? JSON.stringify(s.lessonSnapshot) : null,
   }, { onConflict: 'id' })
   if (error) throw error
 }
@@ -172,6 +178,9 @@ export async function fetchSessions(teacherId: string): Promise<Session[]> {
     syllabusTopicId: r.syllabus_topic_id, topic: r.topic,
     date: r.date, createdAt: r.created_at ?? '',
     sessionNote: r.session_note ?? undefined,
+    lessonSnapshot: r.lesson_snapshot
+      ? (typeof r.lesson_snapshot === 'string' ? JSON.parse(r.lesson_snapshot) : r.lesson_snapshot)
+      : undefined,
   }))
 }
 
@@ -181,6 +190,7 @@ export async function upsertStudent(s: Student) {
   const { error } = await supabase.from('students').upsert({
     id: s.id, teacher_id: s.teacherId, class_id: s.classId, name: s.name,
     roll_number: s.rollNumber, is_active: s.isActive, interests: s.interests, goal: s.goal,
+    pin: s.pin ?? null,
   })
   if (error) throw error
 }
@@ -192,11 +202,10 @@ export async function fetchStudents(teacherId: string): Promise<Student[]> {
     id: r.id, teacherId: r.teacher_id, classId: r.class_id ?? '',
     name: r.name, rollNumber: r.roll_number, isActive: r.is_active,
     interests: r.interests ?? [], goal: r.goal ?? '',
+    pin: r.pin ?? undefined,
   }))
 }
 
-// Fetch students for a set of classes — used in multi-teacher mode so Teacher B
-// sees the same roster as Teacher A without needing to re-add all students.
 export async function fetchStudentsByClasses(classIds: string[]): Promise<Student[]> {
   if (!classIds.length) return []
   const { data, error } = await supabase
@@ -206,6 +215,7 @@ export async function fetchStudentsByClasses(classIds: string[]): Promise<Studen
     id: r.id, teacherId: r.teacher_id, classId: r.class_id ?? '',
     name: r.name, rollNumber: r.roll_number, isActive: r.is_active,
     interests: r.interests ?? [], goal: r.goal ?? '',
+    pin: r.pin ?? undefined,
   }))
 }
 
@@ -295,6 +305,12 @@ export async function fetchAttendance(classIds: string[]): Promise<Attendance[]>
   }))
 }
 
+export async function deleteAttendanceBySession(sessionId: string) {
+  try {
+    await supabase.from('attendance').delete().eq('session_id', sessionId)
+  } catch { /* ignore */ }
+}
+
 // ─── Topic Mastery ────────────────────────────────────────────────────────────
 
 export async function upsertTopicMastery(m: TopicMastery) {
@@ -308,9 +324,6 @@ export async function upsertTopicMastery(m: TopicMastery) {
   if (error) throw error
 }
 
-// classIds is preferred over teacherId because students are school-shared.
-// Teacher B who joins a class doesn't own students (teacher_id !== B), so
-// filtering by teacher_id would return zero mastery for Teacher B.
 export async function fetchTopicMastery(teacherId: string, classIds?: string[]): Promise<TopicMastery[]> {
   const { data: students, error: studentsError } = classIds?.length
     ? await supabase.from('students').select('id').in('class_id', classIds)
@@ -336,7 +349,7 @@ export async function upsertSubTopic(t: SyllabusSubTopic): Promise<void> {
       is_completed: t.isCompleted, completed_at: t.completedAt ?? null, created_at: t.createdAt,
     })
     if (error) throw error
-  } catch { /* table may not exist in Supabase yet — ignore */ }
+  } catch { /* table may not exist yet */ }
 }
 
 export async function fetchSubTopics(teacherId: string, classIds: string[]): Promise<SyllabusSubTopic[]> {
@@ -356,6 +369,13 @@ export async function fetchSubTopics(teacherId: string, classIds: string[]): Pro
       createdAt: r.created_at ?? '',
     }))
   } catch { return [] }
+}
+
+export async function deleteSubTopics(ids: string[]) {
+  if (!ids.length) return
+  try {
+    await supabase.from('syllabus_sub_topics').delete().in('id', ids)
+  } catch { /* ignore */ }
 }
 
 // ─── Recovery Attempts ────────────────────────────────────────────────────────
@@ -418,6 +438,7 @@ export async function upsertCatchupMaterial(m: CatchupMaterial) {
       practice_questions: m.practiceQuestions,
       activity: m.activity, focus_note: m.focusNote,
       status: m.status, created_at: m.createdAt,
+      reason: m.reason ?? null,
     })
     if (error) throw error
   } catch { /* table may not exist yet */ }
@@ -435,6 +456,7 @@ export async function fetchCatchupMaterials(teacherId: string): Promise<CatchupM
       practiceQuestions: r.practice_questions ?? [],
       activity: r.activity, focusNote: r.focus_note,
       status: r.status, createdAt: r.created_at,
+      reason: r.reason ?? undefined,
     }))
   } catch { return [] }
 }
@@ -460,6 +482,17 @@ export async function upsertIntervention(n: InterventionNote) {
 export async function fetchInterventions(teacherId: string): Promise<InterventionNote[]> {
   try {
     const { data, error } = await supabase.from('interventions').select('*').eq('teacher_id', teacherId)
+    if (error) return []
+    return (data ?? []).map(r => ({
+      id: r.id, studentId: r.student_id, teacherId: r.teacher_id,
+      note: r.note, date: r.date, createdAt: r.created_at,
+    }))
+  } catch { return [] }
+}
+
+export async function fetchInterventionsByStudent(studentId: string): Promise<InterventionNote[]> {
+  try {
+    const { data, error } = await supabase.from('interventions').select('*').eq('student_id', studentId)
     if (error) return []
     return (data ?? []).map(r => ({
       id: r.id, studentId: r.student_id, teacherId: r.teacher_id,
@@ -501,4 +534,131 @@ export async function fetchAssignments(teacherId: string): Promise<TeacherClassA
       id: r.id, teacherId: r.teacher_id, classId: r.class_id, createdAt: r.created_at ?? '',
     }))
   } catch { return [] }
+}
+
+// ─── Student Doubts ───────────────────────────────────────────────────────────
+
+export async function upsertStudentDoubt(d: StudentDoubt) {
+  try {
+    const { error } = await supabase.from('student_doubts').upsert({
+      id: d.id, student_id: d.studentId, student_name: d.studentName ?? '',
+      class_id: d.classId, subject: d.subject ?? '', question: d.question,
+      answer: d.answer ?? null, answered_at: d.answeredAt ?? null,
+      created_at: d.createdAt, status: d.status,
+    })
+    if (error) throw error
+  } catch { /* table may not exist yet */ }
+}
+
+export async function fetchStudentDoubtsByClasses(classIds: string[]): Promise<StudentDoubt[]> {
+  if (!classIds.length) return []
+  try {
+    const { data, error } = await supabase
+      .from('student_doubts').select('*')
+      .in('class_id', classIds)
+      .order('created_at', { ascending: false })
+    if (error) return []
+    return (data ?? []).map(r => ({
+      id: r.id, studentId: r.student_id, studentName: r.student_name ?? '',
+      classId: r.class_id, subject: r.subject ?? '',
+      question: r.question, answer: r.answer ?? undefined,
+      answeredAt: r.answered_at ?? undefined,
+      createdAt: r.created_at ?? '', status: r.status ?? 'pending',
+    }))
+  } catch { return [] }
+}
+
+export async function updateDoubtAnswer(id: string, answer: string) {
+  try {
+    const { error } = await supabase.from('student_doubts').update({
+      answer, answered_at: new Date().toISOString(), status: 'answered',
+    }).eq('id', id)
+    if (error) throw error
+  } catch { /* ignore */ }
+}
+
+export async function countPendingDoubts(classIds: string[]): Promise<number> {
+  if (!classIds.length) return 0
+  try {
+    const { count } = await supabase
+      .from('student_doubts')
+      .select('id', { count: 'exact', head: true })
+      .in('class_id', classIds)
+      .eq('status', 'pending')
+    return count ?? 0
+  } catch { return 0 }
+}
+
+// ─── Topic Polls ──────────────────────────────────────────────────────────────
+
+export async function upsertTopicPoll(p: TopicPoll) {
+  try {
+    const { error } = await supabase.from('topic_polls').upsert(
+      {
+        id: p.id, student_id: p.studentId, class_id: p.classId,
+        syllabus_topic_id: p.syllabusTopicId, topic: p.topic,
+        subject: p.subject, response: p.response, responded_at: p.respondedAt,
+      },
+      { onConflict: 'student_id,syllabus_topic_id' },
+    )
+    if (error) throw error
+  } catch { /* table may not exist yet */ }
+}
+
+export async function fetchTopicPollsByClass(classId: string): Promise<TopicPoll[]> {
+  try {
+    const { data, error } = await supabase
+      .from('topic_polls').select('*').eq('class_id', classId)
+    if (error) return []
+    return (data ?? []).map(r => ({
+      id: r.id, studentId: r.student_id, classId: r.class_id,
+      syllabusTopicId: r.syllabus_topic_id, topic: r.topic,
+      subject: r.subject, response: r.response, respondedAt: r.responded_at,
+    }))
+  } catch { return [] }
+}
+
+// ─── Worksheets ───────────────────────────────────────────────────────────────
+
+export async function fetchWorksheets(teacherId: string): Promise<Worksheet[]> {
+  try {
+    const res = await fetch(`/api/worksheets?teacherId=${encodeURIComponent(teacherId)}`)
+    if (!res.ok) return []
+    const { worksheets: data } = await res.json()
+    return (data ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id, teacherId: r.teacher_id,
+      classId: r.class_id ?? undefined,
+      topic: r.topic, subject: (r.subject as string) ?? '',
+      grade: (r.grade as string) ?? '', template: (r.template as string) ?? undefined,
+      totalMarks: (r.total_marks as number) ?? 0,
+      sections: r.sections ?? [],
+      answerKey: r.answer_key ?? {},
+      createdAt: (r.created_at as string) ?? '',
+    }))
+  } catch { return [] }
+}
+
+export async function upsertWorksheet(w: Worksheet) {
+  const res = await fetch('/api/worksheets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: w.id, teacherId: w.teacherId,
+      classId: w.classId ?? null,
+      topic: w.topic, subject: w.subject, grade: w.grade,
+      template: w.template ?? null,
+      totalMarks: w.totalMarks,
+      sections: w.sections,
+      answerKey: w.answerKey,
+      createdAt: w.createdAt,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `Save failed (${res.status})`)
+  }
+}
+
+export async function deleteWorksheet(id: string) {
+  await fetch(`/api/worksheets?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
