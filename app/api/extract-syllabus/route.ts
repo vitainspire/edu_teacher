@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callAI } from '@/lib/ai'
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { parseBody, ExtractSyllabusSchema } from '@/lib/schemas'
+import { apiLog, getClientIp } from '@/lib/logger'
 
 const SYSTEM = `You are a school syllabus parser for Indian curriculum (CBSE/State boards).
 Parse the input and return structured topics with their sub-topics.
@@ -35,13 +38,24 @@ function extractJSON(raw: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const t  = Date.now()
+
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'extract-syllabus', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parsed = parseBody(ExtractSyllabusSchema, await req.json().catch(() => null))
+  if (!parsed.ok) {
+    apiLog({ route: 'extract-syllabus', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+    return parsed.response
+  }
+  const { text, image } = parsed.data
+
   try {
-    const { text, image }: { text?: string; image?: string } = await req.json()
-
-    if (!text && !image) {
-      return NextResponse.json({ error: 'Provide text or image' }, { status: 400 })
-    }
-
     const messages = image
       ? [{ role: 'user' as const, content: [
           { type: 'image_url' as const, image_url: { url: image } },
@@ -52,21 +66,19 @@ export async function POST(req: NextRequest) {
     const raw = await callAI(messages, { jsonMode: false, temperature: 0.1 })
 
     if (!raw) {
+      apiLog({ route: 'extract-syllabus', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'empty AI response' })
       return NextResponse.json({ error: 'AI returned an empty response. Please try again.' }, { status: 500 })
     }
 
-    let parsed: { topics?: unknown[] }
+    let result: { topics?: unknown[] }
     try {
-      parsed = JSON.parse(extractJSON(raw))
+      result = JSON.parse(extractJSON(raw))
     } catch {
-      console.error('[extract-syllabus] JSON parse failed, raw:', raw.slice(0, 300))
-      return NextResponse.json(
-        { error: 'Could not parse AI response. Try rephrasing your syllabus text.' },
-        { status: 500 }
-      )
+      apiLog({ route: 'extract-syllabus', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'JSON parse failed' })
+      return NextResponse.json({ error: 'Could not parse AI response. Try rephrasing your syllabus text.' }, { status: 500 })
     }
 
-    const topics = (parsed.topics ?? [])
+    const topics = (result.topics ?? [])
       .map((t: unknown, i: number) => {
         const row = t as Record<string, unknown>
         const rawSubs = Array.isArray(row.subTopics) ? row.subTopics : []
@@ -79,9 +91,10 @@ export async function POST(req: NextRequest) {
       })
       .filter((t: { topic: string }) => t.topic.length > 0)
 
+    apiLog({ route: 'extract-syllabus', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     return NextResponse.json({ topics })
   } catch (err) {
-    console.error('[extract-syllabus] Unexpected error:', err)
+    apiLog({ route: 'extract-syllabus', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Unexpected server error. Please try again.' }, { status: 500 })
   }
 }

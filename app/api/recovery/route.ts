@@ -20,18 +20,34 @@ export async function POST(req: NextRequest) {
     if (!parsed_.ok) return parsed_.response
     const { grade, topic, attempts, previousApproaches, studentName } = parsed_.data
 
-    const prevList = previousApproaches?.length
-      ? `\nPrevious approaches already tried (do NOT repeat these):\n${previousApproaches.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}`
-      : '\nNo previous approaches tried yet.'
+    const helped    = previousApproaches?.filter(a => a.helped === true)  ?? []
+    const notHelped = previousApproaches?.filter(a => a.helped === false) ?? []
+    const partial   = previousApproaches?.filter(a => a.helped === null)  ?? []
 
-    const prompt = `A Grade ${grade} student named ${studentName} in a rural Indian school has tried to understand "${topic}" ${attempts} time(s) without success.
+    let prevList: string
+    if (!previousApproaches?.length) {
+      prevList = '\nNo previous approaches tried yet.'
+    } else {
+      const lines = previousApproaches.map((a, i) => {
+        const outcome = a.helped === true ? '✓ helped' : a.helped === false ? '✗ did not help' : '~ partially helped'
+        return `${i + 1}. [${outcome}] ${a.approachUsed}`
+      }).join('\n')
+      const guidance: string[] = ['\nPrevious approaches and outcomes:\n' + lines]
+      if (notHelped.length)  guidance.push(`⚠ These ${notHelped.length} approach(es) did NOT help — avoid similar styles.`)
+      if (partial.length)    guidance.push(`These ${partial.length} approach(es) partially helped — try a different angle that builds on what worked.`)
+      if (helped.length)     guidance.push(`${helped.length} approach(es) previously helped — the student CAN learn this; try an equally strong but genuinely different angle.`)
+      prevList = guidance.join('\n')
+    }
+
+    const prompt = `A Grade ${grade} student named ${studentName} in a rural Indian school has tried to understand "${topic}" ${attempts} time(s) without full success.
 ${prevList}
 
 Generate ONE completely new explanation approach that:
 1. Uses a real-life Indian example — from cricket, food, farming, festivals, or daily village life
 2. Can be explained verbally in class — no materials or equipment needed
 3. Is genuinely different from all previous approaches listed above
-4. Ends with one short question the teacher can ask to immediately check if the student understood
+4. If any previous approach partially or fully helped, note what worked and take it further from a fresh angle
+5. Ends with one short question the teacher can ask to immediately check if the student understood
 
 Return valid JSON only:
 {
@@ -40,7 +56,9 @@ Return valid JSON only:
   "checkQuestion": "One short question to ask the student to check understanding"
 }`
 
-    const prevKey = (previousApproaches ?? []).slice().sort().join('~~')
+    const prevKey = (previousApproaches ?? [])
+      .map(a => `${a.approachUsed}:${a.helped ?? 'null'}`)
+      .sort().join('~~')
     const { value: parsed, fromCache } = await withCache(
       ck('recovery', topic.toLowerCase().trim(), grade, attempts, prevKey),
       604800,

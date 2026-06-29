@@ -688,6 +688,37 @@ export default function ClassMarksPage() {
             const started    = entryCount > 0 && !allDone
             const isAnalysisOpen = analysisTestId === t.id
             const analysis = analysisData[t.id]
+
+            // Step 4: question-level class analysis from Mark.breakdown
+            const questionStats = (() => {
+              const testMarks = marks.filter(m => m.testId === t.id && m.breakdown && m.breakdown.length > 0)
+              if (testMarks.length === 0) return null
+              const qMap = new Map<number, { total: number; wrong: number; errorCounts: Record<string, number>; max: number }>()
+              for (const mark of testMarks) {
+                for (const b of mark.breakdown!) {
+                  if (!qMap.has(b.question)) qMap.set(b.question, { total: 0, wrong: 0, errorCounts: {}, max: b.max })
+                  const q = qMap.get(b.question)!
+                  q.total++
+                  if (b.awarded < b.max) {
+                    q.wrong++
+                    const et = b.errorType ?? 'unknown'
+                    q.errorCounts[et] = (q.errorCounts[et] ?? 0) + 1
+                  }
+                }
+              }
+              return Array.from(qMap.entries())
+                .map(([qNum, s]) => ({
+                  qNum,
+                  wrongPct: Math.round((s.wrong / s.total) * 100),
+                  wrong: s.wrong,
+                  total: s.total,
+                  dominant: (Object.entries(s.errorCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as 'conceptual' | 'procedural' | 'careless' | null,
+                }))
+                .filter(q => q.wrongPct >= 30)
+                .sort((a, b) => b.wrongPct - a.wrongPct)
+                .slice(0, 8)
+            })()
+
             return (
               <div key={t.id} className="space-y-1">
                 <button
@@ -765,6 +796,54 @@ export default function ClassMarksPage() {
                           </div>
                         </div>
                       </>
+                    )}
+
+                    {/* Question-level class analysis — only shown when scanner breakdown data exists */}
+                    {questionStats && questionStats.length > 0 && (
+                      <div className="bg-white border border-violet-100 rounded-xl px-3 py-3 space-y-2.5">
+                        <p className="text-[10px] font-black text-violet-700 uppercase tracking-wide">
+                          Questions Most Students Got Wrong
+                        </p>
+                        {questionStats.map(q => {
+                          const errorColor = q.dominant === 'conceptual'
+                            ? 'bg-red-100 text-red-700'
+                            : q.dominant === 'procedural'
+                            ? 'bg-amber-100 text-amber-700'
+                            : q.dominant === 'careless'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-slate-100 text-slate-600'
+                          const recommendation = q.dominant === 'conceptual'
+                            ? 'Re-explain core concept from scratch'
+                            : q.dominant === 'procedural'
+                            ? 'Show a worked example step by step'
+                            : q.dominant === 'careless'
+                            ? 'Quick drill — they understand but need practice'
+                            : 'Review this question with the class'
+                          return (
+                            <div key={q.qNum} className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-slate-700 shrink-0">Q{q.qNum}</span>
+                                <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                  <div
+                                    className={`h-2 rounded-full ${q.wrongPct >= 70 ? 'bg-red-500' : q.wrongPct >= 50 ? 'bg-amber-500' : 'bg-violet-400'}`}
+                                    style={{ width: `${q.wrongPct}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-black text-slate-600 shrink-0 w-10 text-right">{q.wrongPct}%</span>
+                                {q.dominant && (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${errorColor}`}>
+                                    {q.dominant}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-500 pl-7">{recommendation}</p>
+                            </div>
+                          )
+                        })}
+                        <p className="text-[10px] text-violet-400 pt-1">
+                          Showing questions where 30%+ of students lost marks · {questionStats[0]?.total ?? 0} papers scanned
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}

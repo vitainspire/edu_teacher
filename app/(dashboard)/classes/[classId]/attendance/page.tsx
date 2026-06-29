@@ -31,6 +31,7 @@ export default function AttendancePage() {
     attendance: rawAttendance,
     recordSession, toggleTopicComplete,
     syllabusSubTopics, toggleSubTopicComplete,
+    saveSessionSnapshot,
   } = useApp()
 
   const cls      = classes.find(c => c.id === classId)
@@ -76,6 +77,8 @@ export default function AttendancePage() {
   const [lessonPrep, setLessonPrep]       = useState<LessonPrep | null>(null)
   const [prepLoading, setPrepLoading]     = useState(false)
   const [prepOpen, setPrepOpen]           = useState(false)
+  const [checkQuestions, setCheckQuestions] = useState<string[] | null>(null)
+  const [checkLoading, setCheckLoading]     = useState(false)
 
   // ── Derived state (no effects needed) ─────────────────────────────────────
   // todaySession: the session saved for this class today, if any
@@ -169,6 +172,16 @@ export default function AttendancePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSaved, students.length, syllabus.length, classSessions.length])
 
+  // Save lesson snapshot when engage data arrives after a fresh save
+  useEffect(() => {
+    if (!justSaved || !engageData?.hook || !todaySession) return
+    saveSessionSnapshot(todaySession.id, {
+      hook: engageData.hook,
+      realLifeExamples: engageData.realLifeExamples ?? [],
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engageData, justSaved, todaySession])
+
   // Auto-pick first incomplete sub-topic when topic changes
   useEffect(() => {
     if (!selectedTopicId) return
@@ -252,6 +265,25 @@ export default function AttendancePage() {
       .finally(() => setEngageLoading(false))
   }
 
+  const fetchCheckQuestions = async (topic: string) => {
+    setCheckQuestions(null)
+    setCheckLoading(true)
+    try {
+      const res = await fetch('/api/understanding-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, subject: cls?.name ?? '', grade: cls?.grade ?? '' }),
+      })
+      if (res.ok) {
+        const data = await res.json() as { questions?: string[] }
+        if (Array.isArray(data.questions) && data.questions.length >= 2) {
+          setCheckQuestions(data.questions.slice(0, 2))
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setCheckLoading(false) }
+  }
+
   const toggle = (studentId: string) => {
     setStatusMap(prev => {
       const cycle: Status[] = ['present', 'absent', 'late']
@@ -302,14 +334,12 @@ export default function AttendancePage() {
     if (!todaySession) return
     const current = effectiveMap[studentId]
     const next: Status = current === 'absent' ? 'late' : 'absent'
-    // Update DB record directly
-    const { db } = await import('@/lib/db')
-    const rec = await db.attendance
-      .where('sessionId').equals(todaySession.id)
-      .filter(a => a.studentId === studentId)
-      .first()
-    if (rec) await db.attendance.update(rec.id, { status: next })
     setLateEdits(prev => ({ ...prev, [studentId]: next }))
+    const { upsertAttendanceRecord } = await import('@/lib/supabase-queries')
+    const rec = rawAttendance.find(a => a.sessionId === todaySession.id && a.studentId === studentId)
+    if (rec) {
+      upsertAttendanceRecord({ ...rec, status: next }).catch(console.error)
+    }
   }
 
   const presentCount   = students.filter(s => effectiveMap[s.id] === 'present').length
@@ -773,6 +803,78 @@ export default function AttendancePage() {
             </div>
           )}
 
+          {/* ── Understanding Check — only shown after save in this session ── */}
+          {justSaved && (
+            <div className="rounded-3xl p-5 space-y-3" style={{
+              background: 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)',
+              boxShadow: '0 8px 32px rgba(3,105,161,0.35)',
+            }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.2)' }}>
+                  <span className="text-lg">🎯</span>
+                </div>
+                <div className="flex-1">
+                  <p className="font-black text-white text-sm leading-none">Understanding Check</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 font-medium">Ask these aloud after teaching</p>
+                </div>
+                {checkQuestions && (
+                  <button type="button"
+                    onClick={() => {
+                      const label = selectedSubTopic
+                        ? `${topicText} — ${selectedSubTopic.name}`
+                        : topicText
+                      fetchCheckQuestions(label)
+                    }}
+                    className="p-2 rounded-xl active:bg-white/20 transition-colors"
+                    style={{ background: 'rgba(255,255,255,0.12)' }}>
+                    <RefreshCw size={13} className="text-white/70" />
+                  </button>
+                )}
+              </div>
+
+              {!checkQuestions && !checkLoading && (
+                <button type="button"
+                  onClick={() => {
+                    const label = selectedSubTopic
+                      ? `${topicText} — ${selectedSubTopic.name}`
+                      : topicText
+                    fetchCheckQuestions(label)
+                  }}
+                  className="w-full py-3 rounded-2xl text-sm font-bold text-white/90 active:scale-[0.98] transition-all"
+                  style={{ background: 'rgba(255,255,255,0.15)' }}>
+                  Generate Check Questions
+                </button>
+              )}
+
+              {checkLoading && (
+                <div className="space-y-2.5">
+                  <div className="h-3 rounded-full animate-pulse w-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
+                  <div className="h-3 rounded-full animate-pulse w-4/5" style={{ background: 'rgba(255,255,255,0.2)' }} />
+                </div>
+              )}
+
+              {checkQuestions && checkQuestions.length >= 2 && (
+                <div className="space-y-2.5">
+                  {checkQuestions.map((q, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                      <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5"
+                        style={{ background: 'rgba(255,255,255,0.25)', color: 'white' }}>
+                        {i === 0 ? 'Q1' : 'Q2'}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-bold mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                          {i === 0 ? 'RECALL' : 'APPLY'}
+                        </p>
+                        <p className="text-sm text-white leading-relaxed font-medium">{q}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Absent students — with late-arrival toggle */}
           {(absentCount > 0 || lateCount > 0) && (
             <div className="card border-red-100 bg-red-50/40">
@@ -870,6 +972,7 @@ export default function AttendancePage() {
               hasInitialized.current = false
               setWeekComplete(null)
               setEngageData(null)
+              setCheckQuestions(null)
               setTopicText('')
               setSelectedTopicId('')
               setSessionNote('')

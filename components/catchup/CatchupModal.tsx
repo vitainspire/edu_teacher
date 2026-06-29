@@ -13,12 +13,40 @@ interface Props {
 }
 
 export default function CatchupModal({ studentId, studentName, topic, score, onClose }: Props) {
-  const { teacher, classes, students, saveCatchupMaterial } = useApp()
+  const {
+    teacher, classes, students, sessions, attendance,
+    getStudentFingerprint, getStudentAttendanceRate,
+    saveCatchupMaterial,
+  } = useApp()
 
   const student   = students.find(s => s.id === studentId)
   const cls       = classes.find(c => c.id === student?.classId)
   const subject   = teacher?.subject ?? ''
   const grade     = cls?.grade ?? teacher?.grade ?? ''
+
+  // Lesson snapshot from the session when this topic was taught
+  const lessonSnapshot = student
+    ? sessions
+        .filter(s => s.classId === student.classId && s.topic.toLowerCase() === topic.toLowerCase())
+        .sort((a, b) => b.date.localeCompare(a.date))[0]?.lessonSnapshot
+    : undefined
+
+  // Step 1: student profile
+  const fingerprint           = student ? getStudentFingerprint(student.id) : null
+  const overallAttendanceRate = student ? getStudentAttendanceRate(student.id) : null
+
+  // Step 2: rare vs chronic classification
+  const absenteeType: 'rare' | 'chronic' =
+    overallAttendanceRate != null && overallAttendanceRate < 0.75 ? 'chronic' : 'rare'
+
+  // Topic-specific attendance: how many sessions of this topic existed, how many missed
+  const topicSessions = student
+    ? sessions.filter(s => s.classId === student.classId && s.topic.toLowerCase() === topic.toLowerCase())
+    : []
+  const topicSessionsTotal   = topicSessions.length
+  const topicSessionsMissed  = topicSessions.filter(s =>
+    attendance.some(a => a.sessionId === s.id && a.studentId === studentId && a.status === 'absent')
+  ).length
 
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(false)
@@ -36,8 +64,13 @@ export default function CatchupModal({ studentId, studentName, topic, score, onC
     setLoading(true)
     setError(false)
     try {
-      const scoreBucket = score == null ? 'none' : score < 50 ? 'low' : score < 75 ? 'medium' : 'high'
-      const ck = aiKey('catchup', { topic: topic.toLowerCase().trim(), subject: subject.toLowerCase(), grade, scoreBucket })
+      const scoreBucket  = score == null ? 'none' : score < 50 ? 'low' : score < 75 ? 'medium' : 'high'
+      const snapshotKey  = lessonSnapshot?.hook ? lessonSnapshot.hook.slice(0, 30).replace(/\s+/g, '_') : 'none'
+      const topInterest  = student?.interests?.[0]?.slice(0, 15).replace(/\s+/g, '_') ?? 'none'
+      const ck = aiKey('catchup', {
+        topic: topic.toLowerCase().trim(), subject: subject.toLowerCase(),
+        grade, scoreBucket, snapshotKey, absenteeType, topInterest,
+      })
       const cached = getAiCache<{ explanation: string; practiceQuestions: string[]; activity: string; focusNote: string }>(ck)
       if (cached) {
         setExplanation(cached.explanation ?? '')
@@ -50,7 +83,16 @@ export default function CatchupModal({ studentId, studentName, topic, score, onC
       const res = await fetch('/api/catchup-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentName, topic, subject, grade, score }),
+        body: JSON.stringify({
+          studentName, topic, subject, grade, score, lessonSnapshot,
+          studentInterests:      student?.interests ?? [],
+          studentGoal:           student?.goal ?? '',
+          learningStyle:         fingerprint?.learningStyle ?? null,
+          overallAttendanceRate,
+          topicSessionsTotal,
+          topicSessionsMissed,
+          absenteeType,
+        }),
       })
       if (!res.ok) throw new Error()
       const data = await res.json()
@@ -74,6 +116,7 @@ export default function CatchupModal({ studentId, studentName, topic, score, onC
       studentId, studentName, topic, subject, grade,
       explanation, practiceQuestions: questions,
       activity, focusNote, status: 'approved',
+      reason: score !== undefined ? 'low-score' : 'absent',
     })
     setSaving(false)
     setSaved(true)
@@ -88,13 +131,33 @@ export default function CatchupModal({ studentId, studentName, topic, score, onC
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 shrink-0">
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-blue-600 uppercase tracking-wide">Catch-up Plan</p>
             <p className="font-black text-slate-900 text-base leading-tight">{studentName}</p>
             <p className="text-xs text-slate-400 font-medium">{topic} · {subject} Grade {grade}</p>
+            {/* Absentee classification + topic attendance */}
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                absenteeType === 'chronic'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                {absenteeType === 'chronic' ? 'Chronic absentee' : 'Rare absentee'}
+              </span>
+              {topicSessionsTotal > 0 && (
+                <span className="text-[10px] font-semibold text-slate-400">
+                  Missed {topicSessionsMissed} of {topicSessionsTotal} session{topicSessionsTotal !== 1 ? 's' : ''} on this topic
+                </span>
+              )}
+              {overallAttendanceRate != null && (
+                <span className="text-[10px] font-semibold text-slate-400">
+                  {Math.round(overallAttendanceRate * 100)}% overall attendance
+                </span>
+              )}
+            </div>
           </div>
           <button type="button" onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 active:bg-slate-200">
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 active:bg-slate-200 shrink-0 ml-3">
             <X size={16} />
           </button>
         </div>

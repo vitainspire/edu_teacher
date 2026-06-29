@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callAI } from '@/lib/ai'
 import { runOCR, runText } from '@/lib/pipeline-client'
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { checkVisionRateLimit, getClientIp } from '@/lib/rate-limit'
+import { apiLog } from '@/lib/logger'
+import { parseBody, ScanStudentsSchema } from '@/lib/schemas'
 
 export const maxDuration = 120
 
@@ -95,19 +99,36 @@ async function scanViaVisionModel(image: string): Promise<string[] | null> {
       { type: 'text' as const, text: PROMPT },
     ],
   }]
-  const raw = await callAI(messages, { jsonMode: false, temperature: 0.1 })
+  const raw = await callAI(messages, { jsonMode: false, temperature: 0.1, timeoutMs: 90_000 })
   if (!raw) return null
   return parseNames(raw)
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const t  = Date.now()
+
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'scan-students', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { allowed } = await checkVisionRateLimit(ip)
+  if (!allowed) {
+    apiLog({ route: 'scan-students', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
+    return NextResponse.json({ error: 'Rate limit exceeded. Try again in an hour.' }, { status: 429 })
+  }
+
+  const parsed = parseBody(ScanStudentsSchema, await req.json().catch(() => null))
+  if (!parsed.ok) {
+    apiLog({ route: 'scan-students', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+    return parsed.response
+  }
+  const { image } = parsed.data
+
   try {
-    const { image }: { image: string } = await req.json()
-
-    if (!image) {
-      return NextResponse.json({ error: 'No image provided' }, { status: 400 })
-    }
-
     // Primary: self-hosted OCR pipeline. Fallback: OpenRouter/Gemini vision.
     let names = await scanViaOcrPipeline(image)
     if (names === null) {
@@ -115,12 +136,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (names === null) {
+      apiLog({ route: 'scan-students', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'Could not extract names' })
       return NextResponse.json({ error: 'Could not read names from image. Try a clearer photo.' }, { status: 500 })
     }
 
+    apiLog({ route: 'scan-students', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     return NextResponse.json({ names })
   } catch (err) {
-    console.error('[scan-students] error:', err)
+    apiLog({ route: 'scan-students', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Unexpected server error. Please try again.' }, { status: 500 })
   }
 }

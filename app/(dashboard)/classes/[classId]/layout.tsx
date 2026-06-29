@@ -1,16 +1,16 @@
 ﻿'use client'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Users, CalendarCheck, PenLine, BookOpen, Activity } from 'lucide-react'
+import { ArrowLeft, Users, CalendarCheck, BookOpen, Activity, BarChart3 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import clsx from 'clsx'
 
 const TABS = [
-  { label: 'Students',   Icon: Users,         path: 'students' },
-  { label: 'Attendance', Icon: CalendarCheck,  path: 'attendance' },
-  { label: 'Marks',      Icon: PenLine,        path: 'marks' },
-  { label: 'Syllabus',   Icon: BookOpen,       path: 'syllabus' },
-  { label: 'Class Report',      Icon: Activity,       path: 'pulse' },
+  { label: 'Students',      Icon: Users,         path: 'students' },
+  { label: 'Attendance',    Icon: CalendarCheck,  path: 'attendance' },
+  { label: 'Syllabus',      Icon: BookOpen,       path: 'syllabus' },
+  { label: 'Class Report',  Icon: Activity,       path: 'pulse' },
+  { label: 'Understanding', Icon: BarChart3,      path: 'understanding' },
 ]
 
 const CLASS_GRADIENTS_STYLE = [

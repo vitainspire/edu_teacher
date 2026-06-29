@@ -15,8 +15,7 @@ import ScoreChart from '@/components/charts/ScoreChart'
 import AttendanceChart from '@/components/charts/AttendanceChart'
 import { getMasteryColor, getMasteryLabel } from '@/lib/logic/mastery'
 import type { RecoveryAttempt, InterventionNote } from '@/lib/types'
-import { db } from '@/lib/db'
-import { syncRecord } from '@/lib/sync'
+import * as sbq from '@/lib/supabase-queries'
 import { aiKey, getAiCache, setAiCache, TTL } from '@/lib/ai-cache'
 
 interface StudentReport {
@@ -68,11 +67,10 @@ export default function StudentDetailPage() {
   const student = students.find((s) => s.id === id)
 
   useEffect(() => {
-    if (id) {
-      db.recoveryAttempts.where('studentId').equals(id).toArray().then(setRecoveryAttempts)
-      db.interventions.where('studentId').equals(id).toArray()
-        .then(notes => setInterventionNotes([...notes].sort((a, b) => b.date.localeCompare(a.date))))
-    }
+    if (!id) return
+    sbq.fetchInterventionsByStudent(id)
+      .then(notes => setInterventionNotes([...notes].sort((a, b) => b.date.localeCompare(a.date))))
+      .catch(console.error)
   }, [id])
 
   const saveNote = async () => {
@@ -86,16 +84,15 @@ export default function StudentDetailPage() {
       date: noteDate,
       createdAt: new Date().toISOString(),
     }
-    await db.interventions.add(note)
     setInterventionNotes(prev => [note, ...prev].sort((a, b) => b.date.localeCompare(a.date)))
     setNoteText('')
     setSavingNote(false)
-    syncRecord('interventions', note).catch(console.error)
+    sbq.upsertIntervention(note).catch(console.error)
   }
 
   const deleteNote = async (noteId: string) => {
-    await db.interventions.delete(noteId)
     setInterventionNotes(prev => prev.filter(n => n.id !== noteId))
+    sbq.deleteIntervention(noteId).catch(console.error)
   }
 
   const toggleVoice = useCallback(() => {
@@ -246,8 +243,8 @@ export default function StudentDetailPage() {
       }))
   })()
   const saveFeedback = async (attempt: RecoveryAttempt) => {
-    await db.recoveryAttempts.add(attempt)
-    setRecoveryAttempts((prev) => [...prev, attempt])
+    setRecoveryAttempts(prev => [...prev, attempt])
+    sbq.upsertRecoveryAttempt(attempt).catch(console.error)
   }
 
   const TABS = [

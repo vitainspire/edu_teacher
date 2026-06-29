@@ -1,7 +1,7 @@
 'use client'
 import { useMemo } from 'react'
 import { usePathname } from 'next/navigation'
-import { Home, LayoutGrid, Bell, GraduationCap, LogOut, Settings2 } from 'lucide-react'
+import { Home, LayoutGrid, Bell, GraduationCap, LogOut, Settings2, PenLine, BookOpen } from 'lucide-react'
 import clsx from 'clsx'
 import { useApp } from '@/lib/context'
 import { computeHomeAlerts } from '@/lib/logic/home-alerts'
@@ -9,7 +9,9 @@ import { useRouter } from 'next/navigation'
 
 const NAV_ITEMS = [
   { href: '/home',     label: 'Home',     Icon: Home },
+  { href: '/today',    label: 'Today',    Icon: BookOpen },
   { href: '/classes',  label: 'Classes',  Icon: LayoutGrid },
+  { href: '/tests',    label: 'Tests',    Icon: PenLine },
   { href: '/alerts',   label: 'Alerts',   Icon: Bell },
   { href: '/settings', label: 'Settings', Icon: Settings2 },
 ]
@@ -17,20 +19,32 @@ const NAV_ITEMS = [
 export default function SideNav() {
   const path = usePathname()
   const router = useRouter()
-  const { teacher, classes, sessions, students, getStudentWarnings, logout } = useApp()
+  const { teacher, classes, sessions, students, tests, marks, getStudentWarnings, logout } = useApp()
 
   const alertCount = useMemo(
     () => computeHomeAlerts(classes, sessions, students, getStudentWarnings).length,
     [classes, sessions, students, getStudentWarnings],
   )
 
+  // Tests where marks have not been fully entered yet
+  const pendingTestCount = useMemo(() => {
+    const myClassIds = new Set(
+      classes.filter(c => c.teacherId === teacher?.id).map(c => c.id)
+    )
+    return tests.filter(t => {
+      if (!t.classId || !myClassIds.has(t.classId)) return false
+      const classStudentCount = students.filter(s => s.classId === t.classId && s.isActive).length
+      const enteredCount = new Set(marks.filter(m => m.testId === t.id).map(m => m.studentId)).size
+      return classStudentCount > 0 && enteredCount < classStudentCount
+    }).length
+  }, [tests, marks, classes, students, teacher])
+
   const handleLogout = async () => { await logout(); router.replace('/login') }
 
   return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 min-h-screen sticky top-0 bg-white border-r border-slate-100"
+    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 overflow-y-auto bg-white border-r border-slate-100"
       style={{ boxShadow: '1px 0 0 #f1f5f9' }}>
 
-      {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-6 border-b border-slate-100">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: 'linear-gradient(135deg, #07153a 0%, #1d4ed8 100%)' }}>
@@ -42,11 +56,12 @@ export default function SideNav() {
         </div>
       </div>
 
-      {/* Nav items */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV_ITEMS.map(({ href, label, Icon }) => {
-          const active   = path === href || path.startsWith(href + '/')
-          const isAlerts = href === '/alerts'
+          const active      = path === href || path.startsWith(href + '/')
+          const isAlerts    = href === '/alerts'
+          const isTests     = href === '/tests'
+          const badge       = isAlerts ? alertCount : isTests ? pendingTestCount : 0
 
           return (
             <button
@@ -64,17 +79,17 @@ export default function SideNav() {
             >
               <div className="relative shrink-0">
                 <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                {isAlerts && alertCount > 0 && (
+                {badge > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-red-500 text-white text-[8px] font-black flex items-center justify-center leading-none"
                     style={{ boxShadow: '0 1px 3px rgba(220,38,38,0.5)' }}>
-                    {alertCount > 9 ? '9+' : alertCount}
+                    {badge > 9 ? '9+' : badge}
                   </span>
                 )}
               </div>
               <span>{label}</span>
-              {isAlerts && alertCount > 0 && !active && (
-                <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-50 text-red-600 text-[10px] font-black flex items-center justify-center">
-                  {alertCount > 9 ? '9+' : alertCount}
+              {badge > 0 && !active && (
+                <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-black flex items-center justify-center">
+                  {badge > 9 ? '9+' : badge}
                 </span>
               )}
             </button>
@@ -82,7 +97,6 @@ export default function SideNav() {
         })}
       </nav>
 
-      {/* Teacher info + logout */}
       <div className="px-4 py-4 border-t border-slate-100">
         <div className="flex items-center gap-3 mb-3 px-2">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0"

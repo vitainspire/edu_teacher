@@ -1,26 +1,36 @@
-﻿'use client'
+'use client'
 import { useState, useCallback, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import {
-  Activity, RefreshCw, Heart, AlertTriangle, Trophy,
-  Target, Users, Sparkles, Link2,
+  RefreshCw, Users, Sparkles, Link2,
+  ChevronDown, ChevronUp, TrendingUp, BookOpen,
+  ClipboardList, AlertTriangle,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { aiKey, getAiCache, setAiCache, TTL } from '@/lib/ai-cache'
 import clsx from 'clsx'
 
-interface PulseReport {
-  health: string
-  concerns: string
-  wins: string
-  focus: string
+interface PulseReport { health: string; concerns: string; wins: string; focus: string }
+interface PeerPair { mentor: string; mentee: string; sharedInterest: string; activity: string }
+
+function pct(n: number) { return `${Math.round(n * 100)}%` }
+
+function StatusChip({ mastery }: { mastery: number }) {
+  if (mastery >= 0.75) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">Proficient</span>
+  if (mastery >= 0.5)  return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">Developing</span>
+  if (mastery > 0)     return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">At Risk</span>
+  return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">Not Tested</span>
 }
 
-interface PeerPair {
-  mentor: string
-  mentee: string
-  sharedInterest: string
-  activity: string
+function MiniBar({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.round(value * 100)}%`, background: color }} />
+      </div>
+      <span className="text-xs font-bold text-slate-600 w-8 text-right">{pct(value)}</span>
+    </div>
+  )
 }
 
 export default function ClassPulsePage() {
@@ -32,38 +42,32 @@ export default function ClassPulsePage() {
     getStudentAvgMastery, getStudentAttendanceRate,
   } = useApp()
 
-  const cls       = classes.find(c => c.id === classId)
-  const students  = getClassStudents(classId)
-  const syllabus  = getClassSyllabus(classId)
-  const sessions  = getClassSessions(classId)
+  const cls      = classes.find(c => c.id === classId)
+  const students = getClassStudents(classId)
+  const syllabus = getClassSyllabus(classId)
+  const sessions = getClassSessions(classId)
 
-  // Pulse report
-  const [pulse, setPulse]               = useState<PulseReport | null>(null)
+  const [pulse,        setPulse]        = useState<PulseReport | null>(null)
   const [pulseLoading, setPulseLoading] = useState(false)
-  const [pulseError, setPulseError]     = useState('')
+  const [pulseError,   setPulseError]   = useState('')
+  const [insightsOpen, setInsightsOpen] = useState(false)
 
-  // Peer pairs
-  const [pairs, setPairs]               = useState<PeerPair[]>([])
-  const [pairsLoading, setPairsLoading] = useState(false)
-  const [pairsError, setPairsError]     = useState('')
+  const [pairs,           setPairs]           = useState<PeerPair[]>([])
+  const [pairsLoading,    setPairsLoading]    = useState(false)
+  const [pairsError,      setPairsError]      = useState('')
   const [selectedTopicId, setSelectedTopicId] = useState('')
 
-  // ── Aggregate class stats ────────────────────────────────────────────────
+  // ── Aggregate stats ──────────────────────────────────────────────────────
   const classTests = tests.filter(t => t.classId === classId)
-
   const testSummary = classTests.map(t => {
-    const testMarks = marks.filter(m => m.testId === t.id)
-    const avg = testMarks.length
-      ? testMarks.reduce((s, m) => s + m.score, 0) / testMarks.length
-      : 0
+    const tm  = marks.filter(m => m.testId === t.id)
+    const avg = tm.length ? tm.reduce((s, m) => s + m.score, 0) / tm.length : 0
     return { topic: t.topic, avgScore: avg, totalMarks: t.totalMarks }
   })
 
   const classAttendance = getClassAttendance(classId)
   const totalPossible   = sessions.length * students.length
-  // Count unique students present per session to avoid inflating the rate with
-  // duplicate or legacy attendance records that share the same classId.
-  const presentCount = sessions.reduce((sum, session) => {
+  const presentCount    = sessions.reduce((sum, session) => {
     const ids = new Set(
       classAttendance
         .filter(a => a.sessionId === session.id && a.status !== 'absent')
@@ -74,206 +78,356 @@ export default function ClassPulsePage() {
   const classAttRate = totalPossible > 0 ? presentCount / totalPossible : 0
 
   const studentStats = students.map(s => ({
-    id: s.id,
-    name: s.name,
+    id: s.id, name: s.name,
     avgMastery: getStudentAvgMastery(s.id),
     attendanceRate: getStudentAttendanceRate(s.id),
-    interests: s.interests,
-    goal: s.goal,
-  }))
+    interests: s.interests, goal: s.goal,
+  })).sort((a, b) => b.avgMastery - a.avgMastery)
 
   const topicCoverage = syllabus.map(t => {
     const taught = sessions.some(s => s.syllabusTopicId === t.id)
-    return { topic: t.topic, status: t.isCompleted ? 'completed' : taught ? 'taught' : 'not taught yet' }
+    // find avg score for this topic across tests
+    const topicTest = testSummary.find(ts => ts.topic.toLowerCase().includes(t.topic.toLowerCase()))
+    return {
+      topic: t.topic,
+      status: t.isCompleted ? 'Completed' : taught ? 'Taught' : 'Not Taught',
+      avgScore: topicTest ? topicTest.avgScore / topicTest.totalMarks : null,
+    }
   })
 
-  // ── Fetch pulse report ───────────────────────────────────────────────────
+  const completedTopics = syllabus.filter(t => t.isCompleted).length
+  const avgMastery      = studentStats.length
+    ? studentStats.reduce((s, st) => s + st.avgMastery, 0) / studentStats.length
+    : 0
+
+  const proficient  = studentStats.filter(s => s.avgMastery >= 0.75).length
+  const developing  = studentStats.filter(s => s.avgMastery >= 0.5 && s.avgMastery < 0.75).length
+  const struggling  = studentStats.filter(s => s.avgMastery > 0 && s.avgMastery < 0.5).length
+  const notAssessed = studentStats.filter(s => s.avgMastery === 0).length
+
+  // ── Fetch pulse (AI insights) ────────────────────────────────────────────
   const fetchPulse = useCallback(async (force = false) => {
-    // Don't call the API before IndexedDB has loaded — would cache empty results
     if (students.length === 0) return
     const attBucket = classAttRate < 0.6 ? 'low' : classAttRate < 0.85 ? 'mid' : 'high'
-    const testKey = testSummary.map(t => t.topic).sort().join('~')
+    const testKey   = testSummary.map(t => t.topic).sort().join('~')
     const ck = aiKey('class-pulse', { classId, attBucket, testKey, sc: students.length, tc: testSummary.length })
     if (!force) {
       const cached = getAiCache<PulseReport>(ck)
       if (cached) { setPulse(cached); return }
     }
-    setPulseLoading(true)
-    setPulseError('')
+    setPulseLoading(true); setPulseError('')
     try {
       const res = await fetch('/api/class-pulse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          className: cls?.name ?? classId,
-          subject: teacher?.subject ?? '',
+          className: cls?.name ?? classId, subject: teacher?.subject ?? '',
           grade: cls?.grade ?? teacher?.grade ?? '',
-          students: studentStats.map(s => ({
-            name: s.name,
-            avgMastery: s.avgMastery,
-            attendanceRate: s.attendanceRate,
-            interests: s.interests,
-          })),
-          tests: testSummary,
-          attendanceRate: classAttRate,
-          topicCoverage,
+          students: studentStats.map(s => ({ name: s.name, avgMastery: s.avgMastery, attendanceRate: s.attendanceRate, interests: s.interests })),
+          tests: testSummary, attendanceRate: classAttRate, topicCoverage: topicCoverage.map(t => ({ topic: t.topic, status: t.status })),
         }),
       })
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
-      setPulse(data)
-      setAiCache(ck, data, TTL.ONE_DAY)
-    } catch {
-      setPulseError('Could not generate pulse report. Please try again.')
-    } finally {
-      setPulseLoading(false)
-    }
+      setPulse(data); setAiCache(ck, data, TTL.ONE_DAY)
+    } catch { setPulseError('Could not generate insights.') }
+    finally { setPulseLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, cls, teacher, classAttRate, students.length, sessions.length, testSummary.length, topicCoverage.length])
 
   // ── Fetch peer pairs ─────────────────────────────────────────────────────
   const fetchPairs = useCallback(async () => {
     if (students.length < 2) return
-    const topic = syllabus.find(t => t.id === selectedTopicId)?.topic ?? 'General'
+    const topic     = syllabus.find(t => t.id === selectedTopicId)?.topic ?? 'General'
     const studentKey = students.map(s => s.id).sort().join('~')
     const ck = aiKey('peer-pair', { topic: topic.toLowerCase().trim(), subject: (teacher?.subject ?? '').toLowerCase(), studentKey })
     const cached = getAiCache<PeerPair[]>(ck)
     if (cached) { setPairs(cached); return }
-    setPairsLoading(true)
-    setPairsError('')
-    setPairs([])
+    setPairsLoading(true); setPairsError(''); setPairs([])
     try {
       const res = await fetch('/api/peer-pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          students: studentStats,
-          topic,
-          subject: teacher?.subject ?? '',
-        }),
+        body: JSON.stringify({ students: studentStats, topic, subject: teacher?.subject ?? '' }),
       })
       if (!res.ok) throw new Error('Failed')
       const { pairs: p } = await res.json()
-      setAiCache(ck, p ?? [], TTL.ONE_DAY)
-      setPairs(p ?? [])
-    } catch {
-      setPairsError('Could not generate peer pairs. Please try again.')
-    } finally {
-      setPairsLoading(false)
-    }
+      setAiCache(ck, p ?? [], TTL.ONE_DAY); setPairs(p ?? [])
+    } catch { setPairsError('Could not generate peer pairs.') }
+    finally { setPairsLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, students.length, selectedTopicId, teacher])
 
   useEffect(() => { fetchPulse() }, [fetchPulse])
 
-  // ── Mastery distribution ─────────────────────────────────────────────────
-  const proficient  = studentStats.filter(s => s.avgMastery >= 0.75).length
-  const developing  = studentStats.filter(s => s.avgMastery >= 0.5 && s.avgMastery < 0.75).length
-  const struggling  = studentStats.filter(s => s.avgMastery > 0 && s.avgMastery < 0.5).length
-  const notAssessed = studentStats.filter(s => s.avgMastery === 0).length
-
-  const PULSE_CARDS = [
-    { label: 'Class Health',      icon: <Heart size={14} className="text-emerald-500" />, bg: 'bg-emerald-50 border-emerald-100', key: 'health' as const },
-    { label: 'Concern Areas',     icon: <AlertTriangle size={14} className="text-amber-500" />, bg: 'bg-amber-50 border-amber-100', key: 'concerns' as const },
-    { label: 'Wins to Celebrate', icon: <Trophy size={14} className="text-yellow-500" />, bg: 'bg-yellow-50 border-yellow-100', key: 'wins' as const },
-    { label: "This Week's Focus", icon: <Target size={14} className="text-blue-500" />, bg: 'bg-blue-50 border-blue-100', key: 'focus' as const },
-  ]
+  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-4 pb-12 space-y-4 max-w-2xl mx-auto">
 
-      {/* Stats row */}
+      {/* ── Report Header ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Class Report</p>
+            <h2 className="text-lg font-black text-slate-900">
+              Grade {cls?.grade ?? '—'}{cls?.section ? ` · Section ${cls.section}` : ''}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {teacher?.subject ?? 'Subject'} · {students.length} Students · Generated {today}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span className={clsx(
+              'px-2.5 py-1 rounded-full text-[11px] font-black',
+              classAttRate >= 0.75 ? 'bg-emerald-100 text-emerald-700' :
+              classAttRate >= 0.5  ? 'bg-amber-100 text-amber-700' :
+              'bg-red-100 text-red-700'
+            )}>
+              {pct(classAttRate)} Attendance
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Overview Metrics ── */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: 'Strong', n: proficient, color: 'text-emerald-700', bg: 'bg-emerald-50' },
-          { label: 'Improving', n: developing, color: 'text-amber-700',   bg: 'bg-amber-50' },
-          { label: 'Needs Help', n: struggling, color: 'text-red-700',     bg: 'bg-red-50' },
-          { label: 'Not tested', n: notAssessed, color: 'text-slate-500',  bg: 'bg-slate-50' },
-        ].map(({ label, n, color, bg }) => (
-          <div key={label} className={clsx('rounded-2xl p-2.5 text-center border border-white/60', bg)}>
-            <p className={clsx('text-xl font-black', color)}>{n}</p>
-            <p className="text-[10px] text-slate-500 font-semibold leading-tight mt-0.5">{label}</p>
+          { label: 'Avg Mastery',   value: pct(avgMastery),         sub: 'class average',       color: avgMastery >= 0.75 ? '#059669' : avgMastery >= 0.5 ? '#d97706' : '#dc2626' },
+          { label: 'Attendance',    value: pct(classAttRate),        sub: `${sessions.length} sessions`,  color: classAttRate >= 0.75 ? '#059669' : '#d97706' },
+          { label: 'Syllabus',      value: `${completedTopics}/${syllabus.length}`, sub: 'topics done', color: '#2563eb' },
+          { label: 'Tests',         value: String(classTests.length), sub: 'conducted',           color: '#7c3aed' },
+        ].map(({ label, value, sub, color }) => (
+          <div key={label} className="bg-white border border-slate-200 rounded-2xl p-3 text-center">
+            <p className="text-xl font-black" style={{ color }}>{value}</p>
+            <p className="text-[10px] font-bold text-slate-500 leading-tight mt-0.5">{label}</p>
+            <p className="text-[9px] text-slate-400 mt-0.5">{sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Attendance bar */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-bold text-slate-700">Class Attendance</span>
-          <span className="text-sm font-black text-blue-700">{Math.round(classAttRate * 100)}%</span>
+      {/* ── Mastery Distribution ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={14} className="text-slate-400" />
+          <p className="text-xs font-black uppercase tracking-wide text-slate-600">Mastery Distribution</p>
         </div>
-        <div className="w-full bg-slate-100 rounded-full h-2.5">
-          <div
-            className={clsx('h-2.5 rounded-full transition-all', classAttRate >= 0.75 ? 'bg-emerald-500' : classAttRate >= 0.5 ? 'bg-amber-400' : 'bg-red-500')}
-            style={{ width: `${Math.round(classAttRate * 100)}%` }}
-          />
-        </div>
-        <p className="text-xs text-slate-400 mt-1.5">{sessions.length} sessions · {students.length} students</p>
-      </div>
-
-      {/* AI Pulse Report */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center">
-              <Activity size={15} className="text-violet-600" />
-            </div>
-            <span className="font-bold text-slate-800">Class Report</span>
-          </div>
-          {!pulseLoading && (
-            <button
-              onClick={() => fetchPulse(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw size={15} className="text-slate-400" />
-            </button>
-          )}
-        </div>
-
-        {pulseLoading && (
-          <div className="space-y-2">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="card space-y-2">
-                <div className="h-3 bg-slate-100 rounded-full animate-pulse w-28" />
-                <div className="h-4 bg-slate-100 rounded-full animate-pulse w-full" />
-                <div className="h-4 bg-slate-100 rounded-full animate-pulse w-4/5" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!pulseLoading && pulseError && (
-          <div className="card text-center py-5">
-            <p className="text-sm text-red-600">{pulseError}</p>
-            <button onClick={() => fetchPulse(true)} className="mt-2 text-sm text-blue-600 font-semibold">Retry</button>
-          </div>
-        )}
-
-        {!pulseLoading && !pulseError && pulse && (
+        {students.length === 0 ? (
+          <p className="text-xs text-slate-400">No students yet.</p>
+        ) : (
           <>
-            {PULSE_CARDS.map(({ label, icon, bg, key }) => (
-              <div key={key} className={clsx('border rounded-2xl p-4', bg)}>
-                <div className="flex items-center gap-1.5 mb-2">
-                  {icon}
-                  <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">{label}</p>
+            {/* Stacked bar */}
+            <div className="flex h-3 rounded-full overflow-hidden mb-3 gap-px">
+              {proficient  > 0 && <div className="bg-emerald-500 transition-all" style={{ flex: proficient }} />}
+              {developing  > 0 && <div className="bg-amber-400  transition-all" style={{ flex: developing }} />}
+              {struggling  > 0 && <div className="bg-red-500    transition-all" style={{ flex: struggling }} />}
+              {notAssessed > 0 && <div className="bg-slate-200  transition-all" style={{ flex: notAssessed }} />}
+            </div>
+            <div className="grid grid-cols-4 gap-1 text-center">
+              {[
+                { label: 'Proficient',  n: proficient,  color: 'text-emerald-600' },
+                { label: 'Developing',  n: developing,  color: 'text-amber-600' },
+                { label: 'At Risk',     n: struggling,  color: 'text-red-600' },
+                { label: 'Not Tested',  n: notAssessed, color: 'text-slate-400' },
+              ].map(({ label, n, color }) => (
+                <div key={label}>
+                  <p className={clsx('text-sm font-black', color)}>{n}</p>
+                  <p className="text-[9px] text-slate-400 font-medium">{label}</p>
                 </div>
-                <p className="text-sm text-slate-700 leading-relaxed">{pulse[key]}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </>
         )}
+      </div>
 
-        {!pulseLoading && !pulseError && !pulse && students.length === 0 && (
-          <div className="card text-center py-8">
-            <Users size={28} className="text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 text-sm">Add students and record sessions to generate a class pulse.</p>
+      {/* ── Student Performance Table ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+          <Users size={14} className="text-slate-400" />
+          <p className="text-xs font-black uppercase tracking-wide text-slate-600">Student Performance</p>
+        </div>
+        {students.length === 0 ? (
+          <p className="text-xs text-slate-400 px-5 py-4">No students added yet.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="text-left px-5 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Student</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Mastery</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Attendance</th>
+                <th className="text-right px-5 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {studentStats.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center text-[11px] font-black text-slate-600 shrink-0">
+                        {s.name[0]}
+                      </div>
+                      <span className="font-semibold text-slate-800 text-sm">{s.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 min-w-[120px]">
+                    <MiniBar value={s.avgMastery} color={s.avgMastery >= 0.75 ? '#059669' : s.avgMastery >= 0.5 ? '#d97706' : s.avgMastery > 0 ? '#dc2626' : '#e2e8f0'} />
+                  </td>
+                  <td className="px-3 py-3 min-w-[100px]">
+                    <MiniBar value={s.attendanceRate} color={s.attendanceRate >= 0.75 ? '#2563eb' : '#d97706'} />
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <StatusChip mastery={s.avgMastery} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Topic Coverage Table ── */}
+      {syllabus.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+            <BookOpen size={14} className="text-slate-400" />
+            <p className="text-xs font-black uppercase tracking-wide text-slate-600">Topic Coverage</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="text-left px-5 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Topic</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Status</th>
+                <th className="text-right px-5 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Test Score</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {topicCoverage.map((t, i) => (
+                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3 font-medium text-slate-800">{t.topic}</td>
+                  <td className="px-3 py-3 text-center">
+                    <span className={clsx(
+                      'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold',
+                      t.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                      t.status === 'Taught'    ? 'bg-blue-100 text-blue-700' :
+                      'bg-slate-100 text-slate-500'
+                    )}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right text-slate-600 font-semibold">
+                    {t.avgScore !== null ? pct(t.avgScore) : <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Test Results Table ── */}
+      {testSummary.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+            <ClipboardList size={14} className="text-slate-400" />
+            <p className="text-xs font-black uppercase tracking-wide text-slate-600">Test Results</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="text-left px-5 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Test / Topic</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Avg Score</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Max</th>
+                <th className="text-right px-5 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400">Class %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {testSummary.map((t, i) => {
+                const pctVal = t.totalMarks > 0 ? t.avgScore / t.totalMarks : 0
+                return (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-5 py-3 font-medium text-slate-800">{t.topic}</td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-700">{t.avgScore.toFixed(1)}</td>
+                    <td className="px-3 py-3 text-center text-slate-400">{t.totalMarks}</td>
+                    <td className="px-5 py-3 text-right">
+                      <span className={clsx(
+                        'font-black text-sm',
+                        pctVal >= 0.75 ? 'text-emerald-600' : pctVal >= 0.5 ? 'text-amber-600' : 'text-red-600'
+                      )}>{pct(pctVal)}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── AI Insights (collapsible) ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <button
+          onClick={() => {
+            if (!insightsOpen && !pulse && !pulseLoading) fetchPulse()
+            setInsightsOpen(o => !o)
+          }}
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={14} className="text-violet-500" />
+            <p className="text-xs font-black uppercase tracking-wide text-slate-600">AI Insights</p>
+            <span className="text-[10px] text-slate-400 font-medium normal-case">generated summary</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {!pulseLoading && (
+              <button
+                onClick={e => { e.stopPropagation(); fetchPulse(true) }}
+                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-slate-100"
+              >
+                <RefreshCw size={12} className="text-slate-400" />
+              </button>
+            )}
+            {insightsOpen ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronDown size={15} className="text-slate-400" />}
+          </div>
+        </button>
+
+        {insightsOpen && (
+          <div className="border-t border-slate-100 px-5 py-4 space-y-3">
+            {pulseLoading && (
+              <div className="space-y-2">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="h-2.5 bg-slate-100 rounded-full animate-pulse w-24" />
+                    <div className="h-3.5 bg-slate-100 rounded-full animate-pulse w-full" />
+                    <div className="h-3.5 bg-slate-100 rounded-full animate-pulse w-4/5" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {!pulseLoading && pulseError && (
+              <p className="text-sm text-red-500">{pulseError} <button onClick={() => fetchPulse(true)} className="underline font-semibold">Retry</button></p>
+            )}
+            {!pulseLoading && !pulseError && pulse && (
+              <div className="space-y-3">
+                {[
+                  { label: 'Class Health',      key: 'health'   as const, color: 'text-emerald-600' },
+                  { label: 'Concern Areas',     key: 'concerns' as const, color: 'text-amber-600' },
+                  { label: 'Wins to Celebrate', key: 'wins'     as const, color: 'text-yellow-600' },
+                  { label: "This Week's Focus", key: 'focus'    as const, color: 'text-blue-600' },
+                ].map(({ label, key, color }) => (
+                  <div key={key}>
+                    <p className={clsx('text-[10px] font-black uppercase tracking-wide mb-1', color)}>{label}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed">{pulse[key]}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!pulseLoading && !pulseError && !pulse && (
+              <p className="text-xs text-slate-400">No insights generated yet.</p>
+            )}
           </div>
         )}
       </div>
 
-      {/* Peer Pairing */}
+      {/* ── Study Partners ── */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -281,24 +435,16 @@ export default function ClassPulsePage() {
           </div>
           <span className="font-bold text-slate-800">Study Partners</span>
         </div>
-
         <p className="text-sm text-slate-500">
-          Pairs a stronger student with a weaker one who shares interests — peer support without the teacher being everywhere.
+          Pairs a stronger student with a weaker one who shares interests.
         </p>
-
-        {/* Topic selector for context */}
         <div>
           <label className="label">Topic context (optional)</label>
-          <select
-            value={selectedTopicId}
-            onChange={e => setSelectedTopicId(e.target.value)}
-            className="input-field"
-          >
+          <select value={selectedTopicId} onChange={e => setSelectedTopicId(e.target.value)} className="input-field">
             <option value="">General class performance</option>
             {syllabus.map(t => <option key={t.id} value={t.id}>{t.topic}</option>)}
           </select>
         </div>
-
         <button
           onClick={fetchPairs}
           disabled={pairsLoading || students.length < 2}
@@ -308,15 +454,10 @@ export default function ClassPulsePage() {
             ? <><RefreshCw size={15} className="animate-spin" /> Generating Pairs…</>
             : <><Sparkles size={15} /> Generate Peer Pairs</>}
         </button>
-
         {students.length < 2 && (
           <p className="text-xs text-slate-400 text-center">Need at least 2 students to generate pairs.</p>
         )}
-
-        {pairsError && (
-          <p className="text-sm text-red-600 text-center">{pairsError}</p>
-        )}
-
+        {pairsError && <p className="text-sm text-red-600 text-center">{pairsError}</p>}
         {!pairsLoading && pairs.length > 0 && (
           <div className="space-y-2">
             {pairs.map((pair, i) => (
@@ -343,9 +484,7 @@ export default function ClassPulsePage() {
                   </div>
                 </div>
                 {pair.sharedInterest && pair.sharedInterest !== 'different interests' && (
-                  <p className="text-xs text-violet-600 font-semibold mb-1.5">
-                    Shared: {pair.sharedInterest}
-                  </p>
+                  <p className="text-xs text-violet-600 font-semibold mb-1.5">Shared: {pair.sharedInterest}</p>
                 )}
                 <div className="bg-slate-50 rounded-xl px-3 py-2">
                   <p className="text-xs font-bold text-slate-500 mb-0.5">Activity</p>

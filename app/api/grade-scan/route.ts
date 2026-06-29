@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerComponentClient } from "@/lib/supabase-server";
 import { gradeMcq, gradeFib, gradeShortAnswer } from "@/lib/graders";
 import type { AiQuestion } from "@/lib/types";
+import { apiLog, getClientIp } from "@/lib/logger";
 
 export const maxDuration = 60;
 
@@ -43,7 +44,7 @@ interface OpenRouterChoice { message: OpenRouterMessage }
 interface OpenRouterResponse { choices: OpenRouterChoice[] }
 
 interface ExtractedAnswer { questionIndex: number; text: string }
-interface LongAnswerGrade { questionIndex: number; marksAwarded: number; feedback: string }
+interface LongAnswerGrade { questionIndex: number; marksAwarded: number; feedback: string; errorType?: 'conceptual' | 'procedural' | 'careless' | null }
 interface ExtractionResult {
   answers?: ExtractedAnswer[]
   longAnswerGrades?: LongAnswerGrade[]
@@ -71,7 +72,6 @@ function buildPrompt(
 
   const qLines = questions.map((q, i) => {
     const type = q.type ?? 'long-answer';
-    const isLong = longAnswerIndices.has(i);
 
     if (type === 'mcq') {
       const opts = q.options?.join('  ') ?? '';
@@ -83,9 +83,9 @@ function buildPrompt(
     if (type === 'short-answer') {
       return `Q${i + 1} [Short answer, ${q.marks}m]: ${q.text}\n   → Extract the student's full written answer.`;
     }
-    // long-answer — extract + grade
+    // long-answer — extract + grade + classify error
     const modelAns = q.answer ? `\n   Model answer: ${q.answer}` : '';
-    return `Q${i + 1} [Long answer, ${q.marks}m — EXTRACT AND GRADE THIS]:${modelAns}\n   Question: ${q.text}\n   → Extract the student's answer AND award marks (0–${q.marks}) with brief feedback.`;
+    return `Q${i + 1} [Long answer, ${q.marks}m — EXTRACT AND GRADE THIS]:${modelAns}\n   Question: ${q.text}\n   → Extract answer AND award marks (0–${q.marks}) with brief feedback AND set errorType:\n     "conceptual" = student misunderstands the core idea\n     "procedural" = understands idea but wrong method or steps\n     "careless" = mostly correct, minor arithmetic or language slip\n     null = full marks`;
   }).join('\n\n');
 
   const hasLong = longAnswerIndices.size > 0;
@@ -111,7 +111,7 @@ function buildPrompt(
     `    { "questionIndex": 1, "text": "the student wrote here" }\n` +
     `  ],\n` +
     (hasLong
-      ? `  "longAnswerGrades": [\n    { "questionIndex": ${[...longAnswerIndices][0]}, "marksAwarded": 3, "feedback": "Good attempt" }\n  ],\n`
+      ? `  "longAnswerGrades": [\n    { "questionIndex": ${[...longAnswerIndices][0]}, "marksAwarded": 3, "feedback": "Good attempt", "errorType": "procedural" }\n  ],\n`
       : `  "longAnswerGrades": [],\n`) +
     `  "generalFeedback": "One sentence summary"\n` +
     `}`
@@ -134,14 +134,18 @@ function parseExtractionResult(raw: string): ExtractionResult {
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
+  const ip = getClientIp(request as unknown as { headers: { get: (k: string) => string | null } })
+  const t  = Date.now()
+
   const supabase = await createServerComponentClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) {
+    apiLog({ route: 'grade-scan', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ?? 'unknown';
   if (isRateLimited(ip)) {
+    apiLog({ route: 'grade-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
     return NextResponse.json({ error: 'Rate limit exceeded. Try again in an hour.' }, { status: 429 });
   }
 
@@ -194,13 +198,13 @@ export async function POST(request: Request) {
       }),
     });
   } catch (err) {
-    console.error('[grade-scan] OpenRouter fetch error:', err);
+    apiLog({ route: 'grade-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Failed to reach grading service' }, { status: 502 });
   }
 
   if (!openRouterRes.ok) {
     const errText = await openRouterRes.text();
-    console.error('[grade-scan] OpenRouter error:', openRouterRes.status, errText);
+    apiLog({ route: 'grade-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: `OpenRouter ${openRouterRes.status}` })
     return NextResponse.json({ error: `Grading service returned ${openRouterRes.status}` }, { status: 502 });
   }
 
@@ -223,6 +227,7 @@ export async function POST(request: Request) {
 
     let marksAwarded: number;
     let feedback: string;
+    let errorType: 'conceptual' | 'procedural' | 'careless' | null = null;
 
     if (type === 'mcq') {
       const g = gradeMcq(scanned, q.answer ?? '', max);
@@ -236,14 +241,19 @@ export async function POST(request: Request) {
       const g = gradeShortAnswer(scanned, q.keywords ?? [], max);
       marksAwarded = g.marksAwarded;
       feedback     = g.feedback;
+      // Heuristic: classify short-answer errors without AI
+      if (marksAwarded < max && scanned.trim()) {
+        errorType = marksAwarded === 0 ? 'conceptual' : 'procedural';
+      }
     } else {
-      // long-answer — use LLM grade
+      // long-answer — use LLM grade + LLM error classification
       const llmGrade = longGradeMap.get(i);
       marksAwarded = llmGrade ? Math.max(0, Math.min(llmGrade.marksAwarded ?? 0, max)) : 0;
       feedback     = llmGrade?.feedback ?? (scanned ? 'Graded by AI' : 'No answer written');
+      errorType    = marksAwarded < max ? (llmGrade?.errorType ?? null) : null;
     }
 
-    return { question: i + 1, awarded: marksAwarded, max, note: feedback };
+    return { question: i + 1, awarded: marksAwarded, max, note: feedback, errorType };
   });
 
   const score = Math.min(
@@ -252,6 +262,7 @@ export async function POST(request: Request) {
   );
 
   if (isPreSelected) {
+    apiLog({ route: 'grade-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     return NextResponse.json({
       studentId,
       studentName: studentName ?? null,
@@ -265,6 +276,7 @@ export async function POST(request: Request) {
   // Multi-student mode — match name from paper
   const aiName = typeof result.studentName === 'string' ? result.studentName : null;
   const matchedStudent = findClosestStudent(aiName, students ?? []);
+  apiLog({ route: 'grade-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
   return NextResponse.json({
     matchedStudent: matchedStudent ?? null,
     score,

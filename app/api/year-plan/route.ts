@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callOpenRouter } from '@/lib/openrouter'
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { parseBody, YearPlanSchema } from '@/lib/schemas'
+import { apiLog, getClientIp } from '@/lib/logger'
 
 function extractJSON(raw: string): string {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
@@ -10,15 +13,24 @@ function extractJSON(raw: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const { topics, totalWeeks, sessionsPerWeek, subject, grade }: {
-      topics: Array<{ id: string; topic: string; description?: string }>
-      totalWeeks: number
-      sessionsPerWeek: number
-      subject: string
-      grade: string
-    } = await req.json()
+  const ip = getClientIp(req)
+  const t  = Date.now()
 
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'year-plan', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parsed = parseBody(YearPlanSchema, await req.json().catch(() => null))
+  if (!parsed.ok) {
+    apiLog({ route: 'year-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+    return parsed.response
+  }
+  const { topics, totalWeeks, sessionsPerWeek, subject, grade } = parsed.data
+
+  try {
     const totalSessions = totalWeeks * sessionsPerWeek
     const topicList = topics
       .map((t, i) => `${i + 1}. ${t.topic}${t.description ? ` — ${t.description}` : ''}`)
@@ -46,19 +58,27 @@ Return ONLY a valid JSON array in this exact order (same order as the topics abo
 ]`
 
     const raw = await callOpenRouter([{ role: 'user', content: prompt }])
-    const parsed: Array<{ id: string; estimatedSessions: number; rationale: string }> = JSON.parse(extractJSON(raw))
 
-    // Safety: ensure every topic has an entry with a valid number
+    let aiPlan: Array<{ id: string; estimatedSessions: number; rationale: string }>
+    try {
+      aiPlan = JSON.parse(extractJSON(raw))
+      if (!Array.isArray(aiPlan)) throw new Error('not an array')
+    } catch {
+      apiLog({ route: 'year-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'JSON parse failed' })
+      return NextResponse.json({ error: 'Failed to parse year plan' }, { status: 500 })
+    }
+
     const fallback = Math.round(totalSessions / topics.length)
     const plan = topics.map((t, i) => ({
       id: t.id,
-      estimatedSessions: parsed[i]?.estimatedSessions > 0 ? parsed[i].estimatedSessions : fallback,
-      rationale: parsed[i]?.rationale ?? '',
+      estimatedSessions: (aiPlan[i]?.estimatedSessions > 0) ? aiPlan[i].estimatedSessions : fallback,
+      rationale: aiPlan[i]?.rationale ?? '',
     }))
 
+    apiLog({ route: 'year-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     return NextResponse.json({ plan })
   } catch (err) {
-    console.error('[year-plan]', err)
+    apiLog({ route: 'year-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Failed to generate year plan' }, { status: 500 })
   }
 }

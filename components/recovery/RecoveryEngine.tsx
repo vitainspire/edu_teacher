@@ -34,8 +34,11 @@ export default function RecoveryEngine({
     setError('')
     setFeedbackSaved(false)
     try {
-      const previousApproaches = previousAttempts.map((a) => a.approachUsed)
-      const prevKey = [...previousApproaches].sort().join('~~')
+      const previousApproaches = previousAttempts.map(a => ({
+        approachUsed: a.approachUsed,
+        helped:       a.helped,
+      }))
+      const prevKey = previousApproaches.map(a => `${a.approachUsed}:${a.helped ?? 'null'}`).sort().join('~~')
       const ck = aiKey('recovery', { topic: topic.toLowerCase().trim(), grade, attempts, prevKey })
       const cached = getAiCache<Approach>(ck)
       if (cached) { setApproach(cached); setLoading(false); return }

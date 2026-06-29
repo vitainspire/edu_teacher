@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { callAI } from '@/lib/ai'
 import { gradeMcq, gradeFib, gradeShortAnswer } from '@/lib/graders'
 import type { AiQuestion } from '@/lib/types'
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { checkVisionRateLimit, getClientIp } from '@/lib/rate-limit'
+import { apiLog } from '@/lib/logger'
 
 interface Breakdown {
   questionIndex: number
   marksAwarded: number
   maxMarks: number
   feedback: string
+  errorType: 'conceptual' | 'procedural' | 'careless' | null
 }
 
 interface ExtractedAnswer { questionIndex: number; text: string }
-interface LongAnswerGrade { questionIndex: number; marksAwarded: number; feedback: string }
+interface LongAnswerGrade { questionIndex: number; marksAwarded: number; feedback: string; errorType?: 'conceptual' | 'procedural' | 'careless' | null }
 interface ExtractionResult {
   answers?: ExtractedAnswer[]
   longAnswerGrades?: LongAnswerGrade[]
@@ -28,6 +32,22 @@ function extractJSON(raw: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const t  = Date.now()
+
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'grade-paper', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { allowed } = await checkVisionRateLimit(ip)
+  if (!allowed) {
+    apiLog({ route: 'grade-paper', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
+    return NextResponse.json({ error: 'Rate limit exceeded. Try again in an hour.' }, { status: 429 })
+  }
+
   try {
     const { imageBase64, questions, totalMarks, topic, studentName }: {
       imageBase64: string
@@ -38,6 +58,7 @@ export async function POST(req: NextRequest) {
     } = await req.json()
 
     if (!imageBase64 || !questions?.length) {
+      apiLog({ route: 'grade-paper', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
       return NextResponse.json({ error: 'Image and questions are required' }, { status: 400 })
     }
 
@@ -58,7 +79,7 @@ export async function POST(req: NextRequest) {
         return `Q${i + 1} [Short answer, ${q.marks}m]: ${q.text}\n   → Extract the student's full written answer.`
       }
       const modelAns = q.answer ? `\n   Model answer: ${q.answer}` : ''
-      return `Q${i + 1} [Long answer, ${q.marks}m — EXTRACT AND GRADE]:${modelAns}\n   Question: ${q.text}\n   → Extract answer AND award marks (0–${q.marks}) with brief feedback.`
+      return `Q${i + 1} [Long answer, ${q.marks}m — EXTRACT AND GRADE]:${modelAns}\n   Question: ${q.text}\n   → Extract answer AND award marks (0–${q.marks}) with brief feedback AND set errorType:\n     "conceptual" = student misunderstands the core idea\n     "procedural" = understands idea but wrong method or steps\n     "careless" = mostly correct, minor arithmetic or language slip\n     null = full marks`
     }).join('\n\n')
 
     const prompt =
@@ -74,7 +95,7 @@ export async function POST(req: NextRequest) {
       `{\n` +
       `  "answers": [{ "questionIndex": 0, "text": "C" }, ...],\n` +
       (longIndices.size > 0
-        ? `  "longAnswerGrades": [{ "questionIndex": ${[...longIndices][0]}, "marksAwarded": 3, "feedback": "..." }],\n`
+        ? `  "longAnswerGrades": [{ "questionIndex": ${[...longIndices][0]}, "marksAwarded": 3, "feedback": "...", "errorType": "procedural" }],\n`
         : `  "longAnswerGrades": [],\n`) +
       `  "generalFeedback": "One sentence summary"\n` +
       `}`
@@ -85,7 +106,7 @@ export async function POST(req: NextRequest) {
         { type: 'image_url', image_url: { url: imageBase64 } },
         { type: 'text', text: prompt },
       ],
-    }], { temperature: 0.1 })
+    }], { temperature: 0.1, timeoutMs: 90_000 })
 
     if (!raw) {
       return NextResponse.json({ error: 'AI returned empty response' }, { status: 500 })
@@ -112,6 +133,7 @@ export async function POST(req: NextRequest) {
 
       let marksAwarded: number
       let feedback: string
+      let errorType: 'conceptual' | 'procedural' | 'careless' | null = null
 
       if (type === 'mcq') {
         const g = gradeMcq(scanned, q.answer ?? '', max)
@@ -122,13 +144,17 @@ export async function POST(req: NextRequest) {
       } else if (type === 'short-answer') {
         const g = gradeShortAnswer(scanned, q.keywords ?? [], max)
         marksAwarded = g.marksAwarded; feedback = g.feedback
+        if (marksAwarded < max && scanned.trim()) {
+          errorType = marksAwarded === 0 ? 'conceptual' : 'procedural'
+        }
       } else {
         const llmGrade = longGradeMap.get(i)
         marksAwarded = llmGrade ? Math.max(0, Math.min(llmGrade.marksAwarded ?? 0, max)) : 0
         feedback     = llmGrade?.feedback ?? (scanned ? 'Graded by AI' : 'No answer written')
+        errorType    = marksAwarded < max ? (llmGrade?.errorType ?? null) : null
       }
 
-      return { questionIndex: i, marksAwarded, maxMarks: max, feedback }
+      return { questionIndex: i, marksAwarded, maxMarks: max, feedback, errorType }
     })
 
     const totalScore = Math.min(
@@ -136,13 +162,14 @@ export async function POST(req: NextRequest) {
       totalMarks,
     )
 
+    apiLog({ route: 'grade-paper', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     return NextResponse.json({
       totalScore,
       breakdown,
       generalFeedback: result.generalFeedback ?? '',
     })
   } catch (err) {
-    console.error('[grade-paper]', err)
+    apiLog({ route: 'grade-paper', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })
   }
 }

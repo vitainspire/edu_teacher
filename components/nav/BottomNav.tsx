@@ -1,13 +1,14 @@
 'use client'
 import { useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LayoutGrid, Bell, Settings2 } from 'lucide-react'
+import { Home, LayoutGrid, Bell, Settings2, BookOpen } from 'lucide-react'
 import clsx from 'clsx'
 import { useApp } from '@/lib/context'
 import { computeHomeAlerts } from '@/lib/logic/home-alerts'
 
 const NAV_ITEMS = [
   { href: '/home',     label: 'Home',     Icon: Home },
+  { href: '/today',    label: 'Today',    Icon: BookOpen },
   { href: '/classes',  label: 'Classes',  Icon: LayoutGrid },
   { href: '/alerts',   label: 'Alerts',   Icon: Bell },
   { href: '/settings', label: 'Settings', Icon: Settings2 },
@@ -29,6 +30,7 @@ export default function BottomNav() {
         {NAV_ITEMS.map(({ href, label, Icon }) => {
           const active   = path === href || path.startsWith(href + '/')
           const isAlerts = href === '/alerts'
+          const badge    = isAlerts ? alertCount : 0
 
           return (
             <button
@@ -55,13 +57,12 @@ export default function BottomNav() {
                   />
                 </div>
 
-                {/* Alert badge */}
-                {isAlerts && alertCount > 0 && (
+                {badge > 0 && (
                   <span
                     className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center leading-none"
                     style={{ boxShadow: '0 1px 4px rgba(220,38,38,0.5)' }}
                   >
-                    {alertCount > 9 ? '9+' : alertCount}
+                    {badge > 9 ? '9+' : badge}
                   </span>
                 )}
               </div>

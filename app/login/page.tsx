@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/context'
-import { Eye, EyeOff, GraduationCap, Zap, Building2, ScanLine, ArrowLeft, UserCheck } from 'lucide-react'
+import { Eye, EyeOff, GraduationCap, Zap, Building2, ScanLine, ArrowLeft, UserCheck, BookOpen } from 'lucide-react'
 import clsx from 'clsx'
 import { supabase } from '@/lib/supabase'
 
@@ -15,7 +15,7 @@ const LANGUAGES = [
   { value: 'kannada', label: 'ಕನ್ನಡ' },
 ]
 
-type Portal = 'select' | 'teacher' | 'scanner'
+type Portal = 'select' | 'teacher' | 'scanner' | 'student'
 
 function setRoleCookie(role: 'teacher' | 'scanner') {
   document.cookie = `edu-role=${role}; path=/; SameSite=Strict; max-age=604800`
@@ -27,6 +27,7 @@ function setSessionCookie() {
 
 /* ── Portal selector ──────────────────────────────────────────── */
 function PortalSelector({ onSelect }: { onSelect: (p: Portal) => void }) {
+  const router = useRouter()
   return (
     <div className="w-full max-w-sm relative z-10">
       <div className="text-center mb-8">
@@ -77,6 +78,23 @@ function PortalSelector({ onSelect }: { onSelect: (p: Portal) => void }) {
             <div className="flex-1 min-w-0">
               <p className="text-base font-black text-gray-900">Scanner Staff Portal</p>
               <p className="text-xs text-gray-400 mt-0.5 font-medium">Scan & AI-grade answer papers</p>
+            </div>
+            <span className="text-gray-300 text-lg">›</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => router.push('/student/login')}
+          className="w-full rounded-3xl overflow-hidden text-left active:scale-[0.98] transition-transform"
+          style={{ background: 'rgba(255,255,255,0.97)', boxShadow: '0 20px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.1)' }}
+        >
+          <div className="p-5 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+              <BookOpen size={26} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-black text-gray-900">Student Portal</p>
+              <p className="text-xs text-gray-400 mt-0.5 font-medium">View your progress & catchup plans</p>
             </div>
             <span className="text-gray-300 text-lg">›</span>
           </div>

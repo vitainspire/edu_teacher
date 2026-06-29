@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callOpenRouter } from '@/lib/openrouter'
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { parseBody, TestAnalysisSchema } from '@/lib/schemas'
+import { apiLog, getClientIp } from '@/lib/logger'
 
 function extractJSON(raw: string): string {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
@@ -10,17 +13,24 @@ function extractJSON(raw: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const t  = Date.now()
+
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'test-analysis', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parsed = parseBody(TestAnalysisSchema, await req.json().catch(() => null))
+  if (!parsed.ok) {
+    apiLog({ route: 'test-analysis', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+    return parsed.response
+  }
+  const { topic, totalMarks, grade, subject, results } = parsed.data
+
   try {
-    const { topic, totalMarks, grade, subject, results }: {
-      topic: string
-      totalMarks: number
-      grade: string
-      subject: string
-      results: Array<{ name: string; score: number; percentage: number }>
-    } = await req.json()
-
-    if (!results?.length) return NextResponse.json({ error: 'No results provided' }, { status: 400 })
-
     const avg = results.reduce((s, r) => s + r.percentage, 0) / results.length
     const sorted = [...results].sort((a, b) => b.percentage - a.percentage)
     const resultLines = sorted
@@ -52,10 +62,19 @@ Return ONLY valid JSON:
 }`
 
     const raw = await callOpenRouter([{ role: 'user', content: prompt }])
-    const parsed = JSON.parse(extractJSON(raw))
-    return NextResponse.json(parsed)
+
+    let result: { summary?: string; topPerformers?: string; needHelp?: string; action?: string }
+    try {
+      result = JSON.parse(extractJSON(raw))
+    } catch {
+      apiLog({ route: 'test-analysis', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'JSON parse failed' })
+      return NextResponse.json({ error: 'Failed to parse analysis' }, { status: 500 })
+    }
+
+    apiLog({ route: 'test-analysis', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
+    return NextResponse.json(result)
   } catch (err) {
-    console.error('test-analysis error:', err)
+    apiLog({ route: 'test-analysis', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Failed to analyse test' }, { status: 500 })
   }
 }

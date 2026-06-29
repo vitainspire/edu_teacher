@@ -1,22 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callOpenRouter } from '@/lib/openrouter'
-
-interface TopicInfo {
-  topic: string
-  description: string
-  weekNumber?: number
-  isCompleted: boolean
-}
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { parseBody, LessonPlanSchema } from '@/lib/schemas'
+import { apiLog, getClientIp } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
-  try {
-    const { topics, className, subject, studentInterests }: {
-      topics: TopicInfo[]
-      className: string
-      subject: string
-      studentInterests: string[]   // top interests across class
-    } = await req.json()
+  const ip = getClientIp(req)
+  const t  = Date.now()
 
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'lesson-plan', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parsed = parseBody(LessonPlanSchema, await req.json().catch(() => null))
+  if (!parsed.ok) {
+    apiLog({ route: 'lesson-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+    return parsed.response
+  }
+  const { topics, className, subject, studentInterests } = parsed.data
+
+  try {
     const pending = topics.filter(t => !t.isCompleted)
     const done    = topics.filter(t => t.isCompleted).length
 
@@ -60,10 +66,19 @@ Return ONLY valid JSON:
 }`
 
     const raw = await callOpenRouter([{ role: 'user', content: prompt }])
-    const parsed = JSON.parse(raw)
-    return NextResponse.json(parsed)
+
+    let result: { weeks?: unknown[] }
+    try {
+      result = JSON.parse(raw)
+    } catch {
+      apiLog({ route: 'lesson-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'JSON parse failed' })
+      return NextResponse.json({ weeks: [] })
+    }
+
+    apiLog({ route: 'lesson-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
+    return NextResponse.json(result)
   } catch (err) {
-    console.error('[lesson-plan]', err)
+    apiLog({ route: 'lesson-plan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ weeks: [] }, { status: 200 })
   }
 }

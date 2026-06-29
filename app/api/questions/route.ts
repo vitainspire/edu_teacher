@@ -15,37 +15,27 @@ interface Section {
   label: string
 }
 
-// Confirmed paper templates
+// Subjective-only patterns (short-answer + long-answer)
 const PATTERNS: Record<number, Section[]> = {
   10: [
-    { marks: 1, count: 2,  difficulty: 'easy',   type: 'mcq',           label: 'Multiple Choice' },
-    { marks: 2, count: 1,  difficulty: 'easy',   type: 'fill-in-blank', label: 'Fill in the Blank' },
-    { marks: 2, count: 1,  difficulty: 'medium', type: 'short-answer',  label: 'Short Answer' },
-    { marks: 4, count: 1,  difficulty: 'hard',   type: 'long-answer',   label: 'Long Answer' },
+    { marks: 2, count: 3, difficulty: 'easy',   type: 'short-answer', label: 'Short Answer' },
+    { marks: 4, count: 1, difficulty: 'hard',   type: 'long-answer',  label: 'Long Answer'  },
   ],
   20: [
-    { marks: 1, count: 4,  difficulty: 'easy',   type: 'mcq',           label: 'Multiple Choice' },
-    { marks: 2, count: 3,  difficulty: 'easy',   type: 'fill-in-blank', label: 'Fill in the Blank' },
-    { marks: 2, count: 2,  difficulty: 'medium', type: 'short-answer',  label: 'Short Answer' },
-    { marks: 6, count: 1,  difficulty: 'hard',   type: 'long-answer',   label: 'Long Answer' },
+    { marks: 2, count: 4, difficulty: 'easy',   type: 'short-answer', label: 'Short Answer' },
+    { marks: 6, count: 2, difficulty: 'hard',   type: 'long-answer',  label: 'Long Answer'  },
   ],
   25: [
-    { marks: 1, count: 5,  difficulty: 'easy',   type: 'mcq',           label: 'Multiple Choice' },
-    { marks: 2, count: 3,  difficulty: 'easy',   type: 'fill-in-blank', label: 'Fill in the Blank' },
-    { marks: 3, count: 2,  difficulty: 'medium', type: 'short-answer',  label: 'Short Answer' },
-    { marks: 8, count: 1,  difficulty: 'hard',   type: 'long-answer',   label: 'Long Answer' },
+    { marks: 3, count: 5, difficulty: 'medium', type: 'short-answer', label: 'Short Answer' },
+    { marks: 5, count: 2, difficulty: 'hard',   type: 'long-answer',  label: 'Long Answer'  },
   ],
   50: [
-    { marks: 1,  count: 10, difficulty: 'easy',   type: 'mcq',           label: 'Multiple Choice' },
-    { marks: 2,  count: 4,  difficulty: 'easy',   type: 'fill-in-blank', label: 'Fill in the Blank' },
-    { marks: 3,  count: 4,  difficulty: 'medium', type: 'short-answer',  label: 'Short Answer' },
-    { marks: 10, count: 2,  difficulty: 'hard',   type: 'long-answer',   label: 'Long Answer' },
+    { marks: 4, count: 5, difficulty: 'medium', type: 'short-answer', label: 'Short Answer' },
+    { marks: 6, count: 5, difficulty: 'hard',   type: 'long-answer',  label: 'Long Answer'  },
   ],
   100: [
-    { marks: 1,  count: 20, difficulty: 'easy',   type: 'mcq',           label: 'Multiple Choice' },
-    { marks: 2,  count: 8,  difficulty: 'easy',   type: 'fill-in-blank', label: 'Fill in the Blank' },
-    { marks: 4,  count: 6,  difficulty: 'medium', type: 'short-answer',  label: 'Short Answer' },
-    { marks: 10, count: 4,  difficulty: 'hard',   type: 'long-answer',   label: 'Long Answer' },
+    { marks: 4,  count: 10, difficulty: 'medium', type: 'short-answer', label: 'Short Answer' },
+    { marks: 12, count: 5,  difficulty: 'hard',   type: 'long-answer',  label: 'Long Answer'  },
   ],
 }
 
@@ -57,32 +47,7 @@ function getPattern(totalMarks: number): Section[] {
   return PATTERNS[closest]
 }
 
-interface RawQuestion {
-  text: string
-  type: string
-  difficulty: string
-  marks: number
-  options?: string[] | null
-  answer?: string
-  keywords?: string[]
-}
 
-// LLMs often embed MCQ options inside the question text instead of the options array.
-// This extracts them and moves them to options[], cleaning the question text.
-function normaliseMcq(q: RawQuestion): RawQuestion {
-  if (q.type !== 'mcq') return q
-  if (q.options && q.options.length >= 2) return q
-
-  // Match patterns like: (a) text   (A) text   a) text   A. text
-  const rx = /\(?\b([a-dA-D])[.)]\)?\s+([^(a-dA-D\n]{2,}?)(?=\s*\(?\b[a-dA-D][.)]\)?|$)/g
-  const hits = [...q.text.matchAll(rx)]
-  if (hits.length < 2) return q
-
-  const options = hits.map(m => `${m[1].toUpperCase()}. ${m[2].trim()}`)
-  const firstIdx = q.text.search(/\(?\b[a-dA-D][.)]\)?/)
-  const cleanText = (firstIdx > 0 ? q.text.slice(0, firstIdx) : q.text).replace(/[:\s]+$/, '')
-  return { ...q, text: cleanText, options }
-}
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
@@ -106,51 +71,34 @@ export async function POST(req: NextRequest) {
       `  Section ${String.fromCharCode(65 + i)} — ${s.label}: ${s.count} question${s.count > 1 ? 's' : ''} × ${s.marks} mark${s.marks > 1 ? 's' : ''} each (${s.type}, difficulty: ${s.difficulty})`
     ).join('\n')
 
-    const prompt = `Generate a ${total}-mark exam paper for Grade ${grade} ${subject} on the topic: "${topic}".
+    const prompt = `Generate a ${total}-mark subjective exam paper for Grade ${grade} ${subject} on the topic: "${topic}".
 
 Paper structure — follow EXACTLY (correct count and marks per section):
 ${sectionLines}
 Total: ${total} marks
 
-CRITICAL RULES FOR MCQ:
-- The "text" field must contain ONLY the question sentence. Do NOT put options inside the text.
-- Put all 4 options in the "options" array: ["A. <option>", "B. <option>", "C. <option>", "D. <option>"]
-- Set "answer" to the correct letter only: "A", "B", "C", or "D"
-- WRONG: { "text": "Which is a planet? (a) Sun (b) Moon (c) Earth (d) Star", "options": [] }
-- RIGHT: { "text": "Which of these is a planet?", "options": ["A. Sun", "B. Moon", "C. Earth", "D. Star"], "answer": "C" }
-
-Rules for other types:
-- fill-in-blank: sentence with ______ for the blank. "answer" = the exact word/phrase.
-- short-answer: "answer" = 1-3 sentence model answer. "keywords" = 2-4 key terms for grading.
-- long-answer: "answer" = full model answer paragraph.
-
-General rules:
+Rules:
+- short-answer: question requires a 2-4 sentence written response. "answer" = model answer (2-4 sentences). "keywords" = 3-5 key terms a teacher would look for when grading.
+- long-answer: question requires a detailed paragraph response. "answer" = full model answer paragraph (5-8 sentences).
 - Simple language for Grade ${grade} students in Indian schools
 - Use Indian contexts (farming, cricket, food, festivals, Indian cities, rupees)
 - Self-contained questions only — no "refer to diagram" or "as discussed"
-- Follow section counts exactly
+- Follow section counts exactly — no MCQ, no fill-in-the-blank
 
 Return valid JSON only — no markdown, no extra text:
 {
   "questions": [
-    { "text": "Which of these is a planet?", "type": "mcq", "difficulty": "easy", "marks": 1, "options": ["A. Sun", "B. Moon", "C. Earth", "D. Star"], "answer": "C", "keywords": [] },
-    { "text": "The Sun rises in the ______.", "type": "fill-in-blank", "difficulty": "easy", "marks": 2, "options": [], "answer": "east", "keywords": [] },
-    { "text": "Why is the Sun important for life on Earth?", "type": "short-answer", "difficulty": "medium", "marks": 2, "options": [], "answer": "The Sun provides light and heat...", "keywords": ["light", "heat", "energy"] },
-    { "text": "Describe the water cycle in detail.", "type": "long-answer", "difficulty": "hard", "marks": 4, "options": [], "answer": "The water cycle is...", "keywords": [] }
+    { "text": "Why is the Sun important for life on Earth?", "type": "short-answer", "difficulty": "easy", "marks": 2, "options": [], "answer": "The Sun provides light and heat needed for plants to grow and for humans to stay warm. Without the Sun, life on Earth would not be possible.", "keywords": ["light", "heat", "energy", "plants"] },
+    { "text": "Describe the water cycle and explain why it is important for living things.", "type": "long-answer", "difficulty": "hard", "marks": 4, "options": [], "answer": "The water cycle is the continuous movement of water...", "keywords": [] }
   ]
 }`
 
     const { value: parsed, fromCache } = await withCache(
-      ck('questions', 'v3', topic.toLowerCase().trim(), grade, total),
+      ck('questions', 'v4-subj', topic.toLowerCase().trim(), grade, total),
       2592000,
       async () => {
         const result = await callOpenRouter([{ role: 'user', content: prompt }])
-        const data = JSON.parse(result)
-        // Normalise MCQ options in case the LLM embedded them in question text
-        if (Array.isArray(data.questions)) {
-          data.questions = data.questions.map(normaliseMcq)
-        }
-        return data
+        return JSON.parse(result)
       },
     )
     apiLog({ route: 'questions', ip, fromCache, durationMs: Date.now() - t, status: 'ok' })

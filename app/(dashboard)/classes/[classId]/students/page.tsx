@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   UserPlus, AlertTriangle, BookOpen,
-  ChevronUp, Check, ChevronRight, Pencil, Search, X,
+  ChevronUp, Check, ChevronRight, Pencil, Search, X, Copy,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import AddStudentModal from '@/components/students/AddStudentModal'
@@ -39,15 +39,25 @@ const AVATAR_GRADIENTS = [
 
 export default function ClassStudentsPage() {
   const { classId } = useParams() as { classId: string }
-  const { getClassStudents, getStudentAvgMastery, getStudentWarnings } = useApp()
+  const { getClassStudents, getStudentAvgMastery, getStudentWarnings, classes, students: allStudents } = useApp()
 
-  const [addOpen, setAddOpen]         = useState(false)
+  const cls = classes.find(c => c.id === classId)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const [addOpen, setAddOpen]       = useState(false)
   const [search, setSearch]           = useState('')
   const [expandedId, setExpandedId]   = useState<string | null>(null)
   const [editInterests, setEditInterests] = useState<Record<string, string[]>>({})
   const [editGoal, setEditGoal]           = useState<Record<string, string>>({})
   const [saving, setSaving]               = useState<string | null>(null)
   const [saved, setSaved]                 = useState<Set<string>>(new Set())
+
+  const copyCode = () => {
+    if (!cls?.classCode) return
+    navigator.clipboard.writeText(cls.classCode).then(() => {
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    })
+  }
 
   const students = getClassStudents(classId)
   const filteredStudents = search.trim()
@@ -75,11 +85,12 @@ export default function ClassStudentsPage() {
     e.preventDefault()
     e.stopPropagation()
     setSaving(studentId)
-    const { db } = await import('@/lib/db')
-    await db.students.update(studentId, {
-      interests: editInterests[studentId] ?? [],
-      goal: (editGoal[studentId] ?? '').trim(),
-    })
+    const student = allStudents.find(s => s.id === studentId)
+    if (student) {
+      const updated = { ...student, interests: editInterests[studentId] ?? [], goal: (editGoal[studentId] ?? '').trim() }
+      const { upsertStudent } = await import('@/lib/supabase-queries')
+      upsertStudent(updated).catch(console.error)
+    }
     setSaving(null)
     setSaved(prev => new Set([...prev, studentId]))
     setExpandedId(null)
@@ -88,6 +99,29 @@ export default function ClassStudentsPage() {
 
   return (
     <div>
+      {/* Class Code Banner */}
+      {cls?.classCode && (
+        <div className="mx-4 mt-4 mb-1 rounded-2xl px-4 py-3 flex items-center gap-3"
+          style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)' }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-blue-300 text-[10px] font-bold uppercase tracking-widest mb-0.5">Class Code — Share with students</p>
+            <p className="text-white font-black text-2xl tracking-[0.18em] leading-none">{cls.classCode}</p>
+            <p className="text-blue-300/70 text-[11px] mt-1">Students enter this code at the Student Portal to log in</p>
+          </div>
+          <button
+            type="button"
+            onClick={copyCode}
+            className="shrink-0 flex flex-col items-center gap-1 bg-white/15 hover:bg-white/25 active:scale-95 transition-all rounded-xl px-3 py-2.5"
+          >
+            {codeCopied
+              ? <Check size={18} className="text-emerald-400" />
+              : <Copy size={18} className="text-white" />
+            }
+            <span className="text-[10px] font-bold text-white/70">{codeCopied ? 'Copied!' : 'Copy'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Sub-header */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-500">
@@ -270,6 +304,7 @@ export default function ClassStudentsPage() {
                         className="input-field text-sm"
                       />
                     </div>
+
 
                     <button
                       onClick={e => handleSaveProfile(e, student.id)}

@@ -1,19 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callAI } from '@/lib/ai'
+import { createServerComponentClient } from '@/lib/supabase-server'
+import { checkVisionRateLimit, getClientIp } from '@/lib/rate-limit'
+import { parseBody, GradeImageSchema } from '@/lib/schemas'
+import { apiLog } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const t  = Date.now()
+
+  const supabase = await createServerComponentClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    apiLog({ route: 'grade-image', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { allowed } = await checkVisionRateLimit(ip)
+  if (!allowed) {
+    apiLog({ route: 'grade-image', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
+    return NextResponse.json({ error: 'Rate limit exceeded. Try again in an hour.' }, { status: 429 })
+  }
+
+  const parsed = parseBody(GradeImageSchema, await req.json().catch(() => null))
+  if (!parsed.ok) {
+    apiLog({ route: 'grade-image', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+    return parsed.response
+  }
+  const { imageBase64, students, totalMarks, topic } = parsed.data
+
   try {
-    const { imageBase64, students, totalMarks, topic }: {
-      imageBase64: string   // data:image/...;base64,...
-      students: Array<{ id: string; name: string }>
-      totalMarks: number
-      topic: string
-    } = await req.json()
-
-    if (!imageBase64 || !students?.length) {
-      return NextResponse.json({ entries: [] })
-    }
-
     const studentList = students.map((s, i) => `${i + 1}. ${s.name} (id: ${s.id})`).join('\n')
 
     const prompt = `You are helping a teacher grade student test papers.
@@ -46,32 +62,36 @@ Rules:
         { type: 'image_url', image_url: { url: imageBase64 } },
         { type: 'text',      text: prompt },
       ],
-    }], { temperature: 0.2 })
+    }], { temperature: 0.2, timeoutMs: 90_000 })
 
-    const parsed = JSON.parse(raw)
+    let parsed2: { entries?: unknown[] }
+    try {
+      parsed2 = JSON.parse(raw)
+    } catch {
+      apiLog({ route: 'grade-image', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: 'JSON parse failed' })
+      return NextResponse.json({ entries: [] })
+    }
 
-    // Validate scores are within range
-    const entries = (parsed.entries ?? [])
+    const entries = (parsed2.entries ?? [])
       .filter(
-        (e: { studentId: string; score: number; feedback?: string }) =>
-          typeof e.score === 'number' &&
-          e.score >= 0 &&
-          e.score <= totalMarks &&
-          students.some(s => s.id === e.studentId)
+        (e: unknown) => {
+          const r = e as { studentId: string; score: number }
+          return typeof r.score === 'number' && r.score >= 0 && r.score <= totalMarks && students.some(s => s.id === r.studentId)
+        }
       )
-      .map((e: { studentId: string; score: number; feedback?: string }) => ({
-        studentId: e.studentId,
-        score: e.score,
-        feedback: typeof e.feedback === 'string' ? e.feedback.trim() : '',
-      }))
+      .map((e: unknown) => {
+        const r = e as { studentId: string; score: number; feedback?: string }
+        return { studentId: r.studentId, score: r.score, feedback: typeof r.feedback === 'string' ? r.feedback.trim() : '' }
+      })
 
+    apiLog({ route: 'grade-image', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     return NextResponse.json({ entries })
   } catch (err) {
     const msg = String(err)
+    apiLog({ route: 'grade-image', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: msg })
     if (msg.startsWith('[ai]')) {
       return NextResponse.json({ error: 'AI service temporarily unavailable. Please retry shortly.' }, { status: 503 })
     }
-    console.error('[grade-image]', err)
     return NextResponse.json({ entries: [] })
   }
 }
