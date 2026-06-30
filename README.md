@@ -1,108 +1,22 @@
-# EduTeach
+# EduTeach — Technical Architecture
 
-An AI-powered daily companion for government and NGO school teachers in India. Built to  reduce admin burden, and surface student risks before they become failures.
-
----
-
-## What It Does
-
-EduTeach helps teachers with four core jobs:
-
-| Job | What the app does |
-|-----|-------------------|
-| **Track** | Attendance per session, marks per test, syllabus progress |
-| **Warn** | Flags at-risk students automatically from attendance + score patterns |
-| **Prepare** | AI-generated lesson prep notes, daily briefing, year plans |
-| **Recover** | Catch-up plans for absent students with teacher review before saving |
-
----
-
-## Key Features
-
-### Daily Flow
-- **Daily Briefing** — AI summary every morning: next topic, absent students from last session, at-risk count
-- **Today's Schedule** — timetable on home screen with current period highlighted, tap to take attendance
-- **Alert Badge** — notification count on Alerts tab, no need to check manually
-
-### Student Tracking
-- Session-based attendance (linked to the topic being taught, not just a date)
-- Per-student topic coverage: attended + scored vs absent + low score
-- Early warning system: `critical` (7+ day gap or 3+ at-risk students) and `watch` (4+ day gap)
-- Student profiles with attendance rate, mastery trends, fingerprint, and potential signals
-
-### AI Features (require internet)
-- **Lesson Prep** — explanation, Indian examples, common mistakes, quick activity for any topic
-- **Catch-up Plans** — generated per absent student based on their actual missed topic and test score. Teacher reviews and edits before approving.
-- **Recovery Engine** — personalised recovery approaches for struggling students
-- **AI Grading** — photo-based answer sheet grading
-- **Peer Pairing** — suggests which students to pair for peer learning
-- **Year Plan** — generates a full syllabus plan from a topic list
-
-### Teacher Tools
-- Flexible test creation — works with or without a saved syllabus
-- Revision suggestions — surfaces weakest class topics before creating a test
-- Timetable editor — per-day period schedule with class assignment
-- Settings — academic year start date, current term
+AI-powered classroom management platform for teachers. Tracks attendance, marks, and syllabus while using LLMs to generate lesson plans, grade handwritten papers, and surface at-risk students.
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 14 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS |
-| Database | Supabase (PostgreSQL) |
-| Offline Storage | Dexie.js v6 (IndexedDB) |
-| AI | OpenRouter API — `google/gemini-2.5-flash` |
-| Auth | Supabase Auth |
-| Hosting | Vercel |
-
----
-
-## Setup
-
-### 1. Clone and install
-
-```bash
-git clone <repo-url>
-cd eduteach
-npm install
-```
-
-### 2. Environment variables
-
-Create `.env.local` in the root:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-OPENROUTER_API_KEY=your_openrouter_api_key
-OPENROUTER_MODEL=google/gemini-2.5-flash
-```
-
-### 3. Supabase — run migrations in order
-
-Go to your Supabase project → SQL Editor and run each file in `supabase/`:
-
-```
-migration_001.sql   — core tables (teachers, students, classes, etc.)
-migration_002.sql   — sessions + attendance schema
-migration_003.sql   — syllabus sub-topics
-migration_004.sql   — marks feedback column
-migration_005.sql   — feedback column fix
-migration_006.sql   — timetable table
-migration_007.sql   — catchup_materials table
-```
-
-### 4. Run locally
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000)
+|---|---|
+| Framework | Next.js 14.2.5 — App Router, SSR |
+| UI | React 18, Tailwind CSS 3.4, Lucide Icons |
+| Database | Supabase (PostgreSQL + Auth + Storage) |
+| AI | OpenRouter (default: `google/gemini-2.5-flash`) |
+| Rate Limiting | Upstash Redis + in-memory fallback |
+| Offline Storage | Dexie (IndexedDB wrapper) |
+| Validation | Zod 4.4.3 |
+| PWA | @ducanh2912/next-pwa |
+| Deployment | Vercel |
 
 ---
 
@@ -110,73 +24,308 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ```
 app/
-  (dashboard)/
-    home/           — Home screen with schedule + briefing
-    alerts/         — Early warnings + catch-up plans
-    classes/
-      [classId]/
-        attendance/ — Take attendance + lesson prep
-        marks/      — Record tests, enter scores, revision suggestions
-        students/   — Class roll
-        syllabus/   — Topic tracker
-        pulse/      — Class engagement analytics
-    students/[id]/  — Individual student profile
-    settings/       — Academic year, term, timetable
-    year-summary/   — Year-level analytics
-  api/
-    briefing/       — Daily AI briefing
-    catchup-plan/   — Catch-up material generation
-    engage/         — Session engagement notes
-    lesson-prep/    — Pre-class preparation notes
-    recovery/       — Student recovery approaches
-    ...
-
-components/
-  catchup/          — CatchupModal, ViewPlanModal
-  home/             — TodaySchedule
-  nav/              — BottomNav (mobile), SideNav (desktop)
-  briefing/         — DailyBriefing
-  classes/          — CreateClassModal
-  ...
+├── (dashboard)/          # Teacher portal — requires Supabase auth
+│   ├── home/             # Daily briefing, schedule, onboarding
+│   ├── classes/
+│   │   └── [classId]/    # Students, Attendance, Syllabus, Marks, Pulse, Understanding
+│   ├── students/[id]/    # Student profile — warnings, mastery, fingerprint, potential
+│   ├── tests/            # Tests + worksheet manager
+│   ├── today/            # Today's prep — AI lesson generation
+│   ├── alerts/           # At-risk warnings
+│   ├── doubts/           # Student-submitted questions
+│   └── settings/         # Academic year, term settings
+│
+├── (scanner)/            # Scanner portal — cookie-based auth (no Supabase session)
+│   └── scanner/
+│       ├── connect/      # Join via teacher code
+│       └── [classId]/tests/[testId]/
+│           ├── scan/          # Camera → AI grade single paper
+│           ├── batch-scan/    # Bulk scan
+│           └── multi-scan/    # Multi-student batch grading
+│
+├── student/              # Student portal — roll number + class code auth
+│   ├── login/
+│   └── home/             # Badges, marks timeline, catch-up materials
+│
+└── api/                  # 38 API routes (see below)
 
 lib/
-  context.tsx       — Global app state (AppContext)
-  db.ts             — Dexie IndexedDB schema (v7)
-  types.ts          — All TypeScript interfaces
-  supabase-queries.ts — Supabase CRUD functions
-  logic/
-    warnings.ts     — Student warning computation
-    home-alerts.ts  — Home screen alert computation
-    mastery.ts      — Topic mastery calculation
-    coverage.ts     — Per-student topic coverage
-    fingerprint.ts  — Learning fingerprint
-    briefing.ts     — Briefing data computation
-
-supabase/           — SQL migration files
+├── context.tsx           # Global state (AppContext + useApp hook)
+├── supabase.ts           # Supabase client (anon key — browser)
+├── supabase-admin.ts     # Supabase admin client (service role — server only)
+├── supabase-queries.ts   # 40+ typed query functions
+├── db.ts                 # Dexie IndexedDB schema (v17, 17 tables)
+├── ai.ts                 # OpenRouter wrapper with circuit breaker
+├── rate-limit.ts         # Upstash + in-memory rate limiting
+├── server-cache.ts       # Server-side 24h response cache
+├── logger.ts             # Structured JSON logging + IP extraction
+├── types.ts              # 40+ TypeScript interfaces
+├── schemas.ts            # Zod validation schemas
+├── graders.ts            # MCQ / fill-in-the-blank / short answer graders
+├── logic/                # Briefing, fingerprint, mastery, warnings, potential
+└── hooks/                # useStudentActions, useMarksActions, useAttendanceActions, …
 ```
 
 ---
 
-## Offline Behaviour
+## Authentication — Three Portals
 
-All data is written to IndexedDB (Dexie) first, then synced to Supabase when online. The app is fully usable without internet except for AI features (lesson prep, briefing, catch-up plans, recovery). Warning computation and all analytics run locally from IndexedDB.
+### Teacher (dashboard)
+- Supabase email + password auth
+- JWT stored in `sb-*` cookies, verified in middleware via `supabase.auth.getUser()`
+- `edu-role=teacher` cookie set on login
+
+### Scanner staff
+- No Supabase account required
+- Joins using teacher's 6-char `teacher_code`
+- `edu-role=scanner` + `edu-session=1` cookies
+- Middleware blocks scanner users from accessing dashboard routes
+- API access controlled by IP-based rate limiting
+
+### Student portal
+- Login: class code + roll number → validates against `classes` + `students` tables
+- Sets `edu-student-id` httpOnly cookie (30-day expiry)
+- Multi-subject: single login shows all subjects (matched by grade + section + school)
+
+### Middleware (`middleware.ts`)
+1. Public paths bypass auth — `/login`, `/api/student/*`, `/api/health`, static files
+2. Scanner role → redirect to `/scanner/connect` if no session
+3. Teacher role → verify Supabase JWT, redirect to `/login` if expired
+4. Student paths → check `edu-student-id` cookie
 
 ---
 
-## Design System
+## Database Schema
 
-- Navy-blue primary palette: `#07153a`, `#1d4ed8`, `#2563eb`
-- Mobile-first, responsive — bottom nav on mobile, sidebar on desktop (≥768px)
-- No purple/violet in production UI
+| Table | Purpose |
+|---|---|
+| `schools` | Multi-tenant isolation |
+| `teachers` | Teacher accounts, `teacher_code`, language preference |
+| `classes` | Class entities with `class_code` for student login |
+| `students` | Roster — roll number, pin, interests, goal |
+| `tests` | Test metadata — subject, topic, total marks |
+| `marks` | Scores — source: `manual / ai / override`, JSONB breakdown |
+| `sessions` | Teaching sessions — date, topic, lesson snapshot |
+| `attendance` | Per-student per-session status: `present / absent / late` |
+| `syllabus_topics` | Curriculum topics with completion flag and order |
+| `syllabus_sub_topics` | Sub-topic breakdown |
+| `student_topic_mastery` | Rolling mastery score per topic (0–1) |
+| `timetable` | Period schedule — day, period number, start/end time |
+| `catchup_materials` | AI-generated recovery plans per student per topic |
+| `student_doubts` | Questions submitted by students (anonymous to class) |
+| `topic_polls` | Understanding votes: `understood / partial / confused` |
+| `worksheets` | Printable worksheets with sections and answer key (JSONB) |
+| `worksheets_marks` | Marks from worksheet scanning |
+| `teacher_class_assignments` | Explicit class-teacher mapping for shared classes |
+
+**Storage bucket**: `scanned-papers` — uploaded paper images, organised as `scanner/{testId}/` or `worksheets/{worksheetId}/`
+
+> RLS is disabled on all tables. Auth is enforced at the application layer. Service role key is server-side only — never exposed to the browser.
 
 ---
 
-## Context
+## API Routes
 
-Built for Indian government school teachers who:
-- Manage 40–60 students per class
-- Have unreliable or no internet during school hours
-- Cannot rely on students having phones or internet
-- Need to maintain paper records in parallel
+### AI Generation
+| Route | What it does |
+|---|---|
+| `POST /api/smart-lesson` | Lesson plan with prior-grade gaps woven in naturally |
+| `POST /api/lesson-prep` | Quick topic prep — explanation, examples, mistakes |
+| `POST /api/generate-worksheet` | MCQ / fill / short / long question generation |
+| `POST /api/practice-quiz` | 4-question student practice quiz |
+| `POST /api/engage` | Class opener + real-life examples |
+| `POST /api/catchup-plan` | Recovery plan for absent/struggling student |
+| `POST /api/recovery` | Recovery approaches per topic |
+| `POST /api/extract-syllabus` | Extract topics from pasted curriculum text |
+| `POST /api/year-plan` | Full academic year plan from topic list |
+| `POST /api/briefing` | Daily morning briefing summary |
+| `POST /api/test-analysis` | AI analysis of class test scores |
+| `POST /api/student-report` | Individual student AI report |
+| `POST /api/questions` | Question generation for a topic |
 
-The app reduces teacher admin time, not student-facing interaction.
+### Vision / Scanning
+| Route | What it does |
+|---|---|
+| `POST /api/grade-scan` | Grade single handwritten paper via vision |
+| `POST /api/grade-paper` | Grade paper against questions + model answer |
+| `POST /api/multi-grade-scan` | Batch grade multiple papers |
+| `POST /api/scanner-upload` | Upload scanned paper to Supabase Storage |
+
+### Data
+| Route | What it does |
+|---|---|
+| `POST /api/save-score` | Save marks from teacher UI |
+| `POST /api/scanner-save-score` | Save marks from scanner portal |
+| `POST /api/worksheet-save-score` | Save worksheet grades from scanner |
+| `POST /api/worksheet-marks` | Record worksheet marks |
+| `POST /api/scan-students` | List students for batch scanning |
+| `GET/POST/DELETE /api/worksheets` | Worksheet CRUD |
+
+### Analytics
+| Route | What it does |
+|---|---|
+| `POST /api/class-pulse` | Class health — weak topics, at-risk students |
+| `POST /api/peer-pair` | Suggest peer learning pairs |
+| `POST /api/potential` | Detect hidden potential signals (slow starters, spikes) |
+| `POST /api/understanding-check` | Query poll results for a topic |
+
+### Student Portal
+| Route | What it does |
+|---|---|
+| `POST /api/student/login` | Authenticate via class code + roll number |
+| `GET /api/student/init` | Load student profile + all subject tabs |
+| `POST /api/student/tab-data` | Marks + mastery + attendance for one subject |
+| `POST /api/student/doubt` | Submit a question |
+| `POST /api/student/poll` | Submit understanding vote |
+| `POST /api/student/profile` | Update interests / goal |
+
+**Rate limits**
+- Standard: 60 req / hour / IP (Upstash Redis, falls back to in-memory)
+- Vision: 20 req / hour / IP (separate bucket for expensive vision calls)
+
+---
+
+## Key Data Flows
+
+### Smart Lesson Generation
+```
+Teacher enters topic → POST /api/smart-lesson
+  → Fetch active students for class
+  → Aggregate marks + topic_mastery → compute avg mastery per topic
+  → Identify gaps (avg < 65%)
+  → Prompt OpenRouter: teach today's topic, weave gap explanations
+    in naturally at the moment they arise — never as prerequisites
+  → Return: hook + sections (teach/check) + bridgeNotes + closingActivity
+  → Render inline on Today's Prep card
+```
+
+### Paper Scanning & Grading
+```
+Scanner takes photo → /api/scanner-upload → Supabase Storage
+  → /api/multi-grade-scan: sends image + questions to OpenRouter vision
+  → Vision model reads handwriting, extracts answers, scores against key
+  → /api/scanner-save-score: inserts into marks, updates topic_mastery
+```
+
+### At-Risk Detection
+```
+On every marks/attendance save:
+  → lib/logic/warnings.ts recomputes per student
+  → Checks: consecutive absences, repeated low scores, topic mastery < 40%,
+    sudden drop, no improvement after catchup
+  → Warning levels: critical / watch / info
+  → Surfaces on /alerts page and home briefing
+```
+
+### Student Multi-Subject Login
+```
+Student → class code + roll number → /api/student/login
+  → Validate class → validate student in class
+  → Set edu-student-id cookie
+  → /api/student/init: find all classes with same grade+section+school
+  → Match student by roll number across classes
+  → Return tabs[] — one per subject
+  → Student switches subjects without re-login
+```
+
+---
+
+## State Management
+
+**`lib/context.tsx`** — single AppContext loaded once on mount, holds all data.
+
+```
+teacher, classes, students, tests, marks, mastery
+sessions, attendance, syllabusTopics, syllabusSubTopics
+timetableEntries, catchupMaterials, worksheets, assignments
+syncStatus ('online' | 'offline' | 'syncing'), isLoading
+```
+
+**Computed selectors** (called on demand, not stored):
+- `getStudentWarnings(id)` — warning cards from mastery + attendance + marks
+- `getStudentFingerprint(id)` — learning style, consistency, peak day
+- `getStudentPotential(id)` — hidden signals (slow starter, topic spikes)
+- `getBriefingData()` — next topic, absentees, at-risk count per class
+- `getClassSyllabus(classId)` — ordered syllabus topics with completion
+
+**Domain hooks** (keep context.tsx slim):
+- `useStudentActions` — add, toggle, set pin
+- `useMarksActions` — save marks, create test
+- `useAttendanceActions` — record session, record attendance
+- `useSyllabusActions` — add topic, toggle complete
+- `useScheduleActions` — timetable, catchup materials
+
+---
+
+## Offline Support
+
+- **Dexie (IndexedDB)**: 17-table schema mirrors the Supabase schema locally
+- **Sync queue**: writes go to IndexedDB first, sync to Supabase when online
+- **PWA**: service worker caches Supabase API responses (NetworkFirst, 24h TTL)
+- **`syncStatus`** badge in UI shows `online / offline / syncing`
+
+---
+
+## AI Architecture
+
+**`lib/ai.ts`** — `callAI(prompt, options)`
+- Routes to OpenRouter with configured model
+- **Circuit breaker**: opens after 3 consecutive failures, resets after 60s
+- **Fallback model**: `meta-llama/llama-3.1-8b-instruct:free` for degraded mode
+- **Server cache** (`lib/server-cache.ts`): 24h TTL, keyed by prompt hash — avoids duplicate AI calls for identical inputs
+
+**Default model**: `google/gemini-2.5-flash` (override via `OPENROUTER_MODEL` env var)
+
+---
+
+## Environment Variables
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=        # server-side only — never expose to browser
+
+# OpenRouter
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=google/gemini-2.5-flash
+OPENROUTER_FALLBACK_MODEL=meta-llama/llama-3.1-8b-instruct:free
+
+# Rate limiting (optional — falls back to in-memory)
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+
+# App
+NEXT_PUBLIC_APP_URL=
+
+# Internal pipeline (optional)
+PIPELINE_IP=
+```
+
+---
+
+## Local Setup
+
+```bash
+npm install
+cp .env.example .env.local   # fill in the vars above
+npm run dev                  # http://localhost:3000
+```
+
+**Supabase**: create a project, run the schema migrations, enable Storage bucket `scanned-papers`.
+
+**OpenRouter**: sign up at openrouter.ai, add credits, copy the API key.
+
+**Upstash**: optional — without it rate limiting uses an in-memory store that resets on redeploy.
+
+---
+
+## Deployment
+
+Deployed on Vercel. Push to `main` triggers a production build.
+
+```bash
+vercel --prod
+```
+
+Add all environment variables under Project → Settings → Environment Variables in the Vercel dashboard. Mark `SUPABASE_SERVICE_ROLE_KEY` as server-only so it is never sent to the browser.
