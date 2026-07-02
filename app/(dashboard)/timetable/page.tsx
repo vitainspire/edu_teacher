@@ -237,7 +237,7 @@ export default function TimetablePage() {
                             <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0`}
                               style={isNow
                                 ? { background: '#2563eb', color: '#fff' }
-                                : { background: '#ede9fe', color: '#6d28d9' }}>
+                                : { background: '#dbeafe', color: '#1d4ed8' }}>
                               {slot.periodNumber}
                             </div>
                           </div>
@@ -315,12 +315,5 @@ export default function TimetablePage() {
 }
 
 const CLASS_COLORS = [
-  { bg: '#ede9fe', text: '#6d28d9', border: '#c4b5fd' },
   { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' },
-  { bg: '#dcfce7', text: '#166534', border: '#86efac' },
-  { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
-  { bg: '#fce7f3', text: '#9d174d', border: '#f9a8d4' },
-  { bg: '#cffafe', text: '#164e63', border: '#67e8f9' },
-  { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' },
-  { bg: '#f0fdf4', text: '#14532d', border: '#86efac' },
 ]

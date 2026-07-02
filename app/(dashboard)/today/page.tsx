@@ -7,10 +7,7 @@ import {
   UserX, AlertTriangle, BarChart2, Sparkles,
 } from 'lucide-react'
 
-const CLASS_COLORS = [
-  '#2563eb', '#7c3aed', '#059669', '#d97706',
-  '#dc2626', '#0891b2', '#9333ea', '#16a34a',
-]
+const CLASS_COLORS = ['#2563eb']
 
 function relativeDate(dateStr: string): string {
   const d    = new Date(dateStr)

@@ -11,11 +11,7 @@ import ClassSelectionScreen from '@/components/classes/ClassSelectionScreen'
 import clsx from 'clsx'
 
 const CLASS_PALETTE = [
-  { gradient: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)', bar: 'bg-violet-500', light: 'bg-violet-50', text: 'text-violet-700', shadow: 'rgba(124,58,237,0.3)' },
-  { gradient: 'linear-gradient(135deg, #059669 0%, #34d399 100%)', bar: 'bg-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700', shadow: 'rgba(5,150,105,0.3)' },
   { gradient: 'linear-gradient(135deg, #2563eb 0%, #60a5fa 100%)', bar: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', shadow: 'rgba(37,99,235,0.3)' },
-  { gradient: 'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)', bar: 'bg-rose-500', light: 'bg-rose-50', text: 'text-rose-700', shadow: 'rgba(225,29,72,0.3)' },
-  { gradient: 'linear-gradient(135deg, #d97706 0%, #fbbf24 100%)', bar: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700', shadow: 'rgba(217,119,6,0.3)' },
 ]
 
 function formatRelativeDate(dateStr: string): string {
