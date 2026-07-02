@@ -153,9 +153,6 @@ export default function TimetablePage() {
                       <p className="font-black text-slate-800 text-base leading-none">
                         {getClassName(entry.classId)}
                       </p>
-                      {cls?.subject && (
-                        <p className="text-xs text-slate-400 font-medium mt-0.5">{cls.subject}</p>
-                      )}
                       {entry.label && (
                         <p className="text-xs font-medium mt-0.5" style={{ color: color.text }}>{entry.label}</p>
                       )}
