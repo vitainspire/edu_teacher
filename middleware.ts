@@ -6,6 +6,7 @@ import { createServerClient } from '@supabase/ssr'
 const PUBLIC_PREFIXES = [
   '/login',
   '/admin/login',
+  '/student/login',
   '/api/admin/login',
   '/api/admin/register',
   '/api/school/has-admin',
