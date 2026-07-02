@@ -67,7 +67,7 @@ export default function ClassesPage() {
     load()
   }
 
-  const CLASS_COLORS = ['#6366f1','#0891b2','#059669','#d97706','#e11d48']
+  const CLASS_COLORS = ['#2563eb']
 
   return (
     <div className="p-6 max-w-5xl mx-auto">

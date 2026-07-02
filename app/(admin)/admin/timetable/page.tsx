@@ -58,7 +58,7 @@ const DEFAULT_FORM: SetupForm = {
   ],
 }
 
-const CLASS_COLORS = ['#6366f1', '#0891b2', '#059669', '#d97706', '#e11d48', '#7c3aed']
+const CLASS_COLORS = ['#2563eb']
 
 export default function TimetablePage() {
   const { school } = useAdmin()
@@ -373,7 +373,7 @@ export default function TimetablePage() {
                       <p className="text-xs text-gray-400 mt-0.5">Grade {cls.grade} · Section {cls.section}</p>
                     </div>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: pct === 100 ? '#d1fae5' : pct > 0 ? '#ede9fe' : '#f1f5f9', color: pct === 100 ? '#065f46' : pct > 0 ? '#6d28d9' : '#94a3b8' }}>
+                      style={{ background: pct === 100 ? '#d1fae5' : pct > 0 ? '#dbeafe' : '#f1f5f9', color: pct === 100 ? '#065f46' : pct > 0 ? '#1d4ed8' : '#94a3b8' }}>
                       {pct}%
                     </span>
                   </div>
