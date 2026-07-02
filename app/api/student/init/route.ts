@@ -22,33 +22,47 @@ export async function GET(req: NextRequest) {
       .from('classes').select('*').eq('id', student.class_id).single()
     if (!cls) return NextResponse.json({ error: 'Class not found' }, { status: 404 })
 
-    // Find all classes with same grade + section + school
-    let classQuery = supabase.from('classes').select('*')
-      .eq('grade', cls.grade)
-    if (cls.section) classQuery = classQuery.eq('section', cls.section)
-    if (cls.school_id) {
-      classQuery = classQuery.eq('school_id', cls.school_id)
+    const tabs: Array<{ classId: string; studentId: string; subject: string; teacherId?: string }> = []
+
+    // Model A: Check if this class has teacher_class_assignments with subjects
+    // (new model: one class per grade+section, teachers assigned per subject)
+    const { data: classAssignments } = await supabase
+      .from('teacher_class_assignments')
+      .select('teacher_id, subject')
+      .eq('class_id', cls.id)
+
+    if (classAssignments && classAssignments.length > 0 && classAssignments.some((a: { teacher_id: string; subject: string }) => a.subject)) {
+      // New model: create one tab per teacher assignment
+      for (const a of classAssignments) {
+        const label = a.subject || 'Subject'
+        tabs.push({ classId: cls.id, studentId: student.id, subject: label, teacherId: a.teacher_id })
+      }
     } else {
-      classQuery = classQuery.eq('school_name', cls.school_name)
-    }
-    const { data: allClasses } = await classQuery
+      // Legacy model: find all classes with same grade+section+school (each class = a subject)
+      let classQuery = supabase.from('classes').select('*').eq('grade', cls.grade)
+      if (cls.section) classQuery = classQuery.eq('section', cls.section)
+      if (cls.school_id) {
+        classQuery = classQuery.eq('school_id', cls.school_id)
+      } else {
+        classQuery = classQuery.eq('school_name', cls.school_name)
+      }
+      const { data: allClasses } = await classQuery
 
-    const tabs: Array<{ classId: string; studentId: string; subject: string }> = []
-    for (const c of allClasses ?? []) {
-      const { data: st } = await supabase
-        .from('students').select('id')
-        .eq('class_id', c.id)
-        .eq('roll_number', student.roll_number)
-        .eq('is_active', true)
-        .single()
-      if (!st) continue
+      for (const c of allClasses ?? []) {
+        const { data: st } = await supabase
+          .from('students').select('id')
+          .eq('class_id', c.id)
+          .eq('roll_number', student.roll_number)
+          .eq('is_active', true)
+          .single()
+        if (!st) continue
 
-      // Try to get teacher's subject label
-      const { data: teacher } = await supabase
-        .from('teachers').select('subject').eq('id', c.teacher_id).single()
-      const label = teacher?.subject || c.name
+        const { data: teacher } = await supabase
+          .from('teachers').select('subject, id').eq('id', c.teacher_id).single()
+        const label = teacher?.subject || c.name
 
-      tabs.push({ classId: c.id, studentId: st.id, subject: label })
+        tabs.push({ classId: c.id, studentId: st.id, subject: label, teacherId: teacher?.id })
+      }
     }
 
     apiLog({ route: 'student/init', ip, userId: studentId, durationMs: Date.now() - t, fromCache: false, status: 'ok' })

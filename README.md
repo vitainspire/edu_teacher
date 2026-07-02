@@ -1,6 +1,6 @@
 # EduTeach — Technical Architecture
 
-AI-powered classroom management platform for teachers. Tracks attendance, marks, and syllabus while using LLMs to generate lesson plans, grade handwritten papers, and surface at-risk students.
+AI-powered classroom management platform for teachers. Tracks attendance, marks, and syllabus while using LLMs to generate lesson plans, grade handwritten papers, surface at-risk students, and give students a personalised progress view across all their subjects.
 
 ---
 
@@ -24,36 +24,56 @@ AI-powered classroom management platform for teachers. Tracks attendance, marks,
 
 ```
 app/
+├── (admin)/              # Admin portal — school management
+│   └── admin/
+│       ├── dashboard/    # School overview — student/teacher counts, recent activity
+│       ├── classes/
+│       │   └── [classId]/
+│       │       ├── students/   # Roster with Student ID badges + copy buttons
+│       │       ├── syllabus/   # Curriculum management
+│       │       └── assign/     # Assign teachers to class
+│       ├── teachers/     # Teacher list and management
+│       ├── scanners/     # Scanner device management
+│       └── timetable/    # School-wide timetable builder
+│
 ├── (dashboard)/          # Teacher portal — requires Supabase auth
 │   ├── home/             # Daily briefing, schedule, onboarding
 │   ├── classes/
 │   │   └── [classId]/    # Students, Attendance, Syllabus, Marks, Pulse, Understanding
-│   ├── students/[id]/    # Student profile — warnings, mastery, fingerprint, potential
+│   ├── students/
+│   │   └── [id]/         # Student profile — warnings, mastery, fingerprint, potential,
+│   │                     #   and All Subjects tab (attendance + marks across every subject)
 │   ├── tests/            # Tests + worksheet manager
 │   ├── today/            # Today's prep — AI lesson generation
 │   ├── alerts/           # At-risk warnings
 │   ├── doubts/           # Student-submitted questions
+│   ├── year-summary/     # Academic year report
+│   ├── timetable/        # Teacher timetable view
 │   └── settings/         # Academic year, term settings
 │
 ├── (scanner)/            # Scanner portal — cookie-based auth (no Supabase session)
 │   └── scanner/
 │       ├── connect/      # Join via teacher code
+│       ├── worksheet/    # Worksheet scanning
 │       └── [classId]/tests/[testId]/
 │           ├── scan/          # Camera → AI grade single paper
 │           ├── batch-scan/    # Bulk scan
 │           └── multi-scan/    # Multi-student batch grading
 │
-├── student/              # Student portal — roll number + class code auth
-│   ├── login/
+├── student/              # Student portal — Student ID auth
+│   ├── login/            # Single-field login (Student ID e.g. STABCD23)
 │   └── home/             # Badges, marks timeline, catch-up materials
 │
-└── api/                  # 38 API routes (see below)
+├── admin/login/          # Admin login page
+│
+└── api/                  # 50+ API routes (see below)
 
 lib/
 ├── context.tsx           # Global state (AppContext + useApp hook)
 ├── supabase.ts           # Supabase client (anon key — browser)
 ├── supabase-admin.ts     # Supabase admin client (service role — server only)
 ├── supabase-queries.ts   # 40+ typed query functions
+├── admin-queries.ts      # Admin-specific typed query functions
 ├── db.ts                 # Dexie IndexedDB schema (v17, 17 tables)
 ├── ai.ts                 # OpenRouter wrapper with circuit breaker
 ├── rate-limit.ts         # Upstash + in-memory rate limiting
@@ -68,7 +88,13 @@ lib/
 
 ---
 
-## Authentication — Three Portals
+## Authentication — Four Portals
+
+### Admin
+- Supabase email + password auth
+- Scoped to a single school (school_id stored in `admins` table)
+- `edu-role=admin` cookie set on login
+- All admin API routes verify via service role that the admin's `school_id` matches the requested school
 
 ### Teacher (dashboard)
 - Supabase email + password auth
@@ -83,15 +109,17 @@ lib/
 - API access controlled by IP-based rate limiting
 
 ### Student portal
-- Login: class code + roll number → validates against `classes` + `students` tables
+- Login: single **Student ID** (format `STABCD23` — `ST` prefix + 6 alphanumeric chars)
+- Generated automatically when an admin adds students via bulk import
 - Sets `edu-student-id` httpOnly cookie (30-day expiry)
-- Multi-subject: single login shows all subjects (matched by grade + section + school)
+- Multi-subject: one login shows all subjects (matched by grade + section + school)
 
 ### Middleware (`middleware.ts`)
 1. Public paths bypass auth — `/login`, `/api/student/*`, `/api/health`, static files
 2. Scanner role → redirect to `/scanner/connect` if no session
 3. Teacher role → verify Supabase JWT, redirect to `/login` if expired
 4. Student paths → check `edu-student-id` cookie
+5. Admin paths → check `edu-role=admin` cookie
 
 ---
 
@@ -100,11 +128,13 @@ lib/
 | Table | Purpose |
 |---|---|
 | `schools` | Multi-tenant isolation |
+| `admins` | School admin accounts (one admin per school) |
 | `teachers` | Teacher accounts, `teacher_code`, language preference |
-| `classes` | Class entities with `class_code` for student login |
-| `students` | Roster — roll number, pin, interests, goal |
+| `classes` | Class entities — grade, section, academic year |
+| `students` | Roster — `student_code` (unique login ID), roll number, interests, goal |
+| `teacher_class_assignments` | Explicit class-teacher mapping for multi-teacher schools |
 | `tests` | Test metadata — subject, topic, total marks |
-| `marks` | Scores — source: `manual / ai / override`, JSONB breakdown |
+| `marks` | Scores — source: `manual / ai_scanned / teacher_override`, JSONB breakdown |
 | `sessions` | Teaching sessions — date, topic, lesson snapshot |
 | `attendance` | Per-student per-session status: `present / absent / late` |
 | `syllabus_topics` | Curriculum topics with completion flag and order |
@@ -116,7 +146,19 @@ lib/
 | `topic_polls` | Understanding votes: `understood / partial / confused` |
 | `worksheets` | Printable worksheets with sections and answer key (JSONB) |
 | `worksheets_marks` | Marks from worksheet scanning |
-| `teacher_class_assignments` | Explicit class-teacher mapping for shared classes |
+| `school_timetable_periods` | Admin-set school-wide period schedule |
+| `school_schedules` | Bell schedule (periods, breaks, timings) |
+
+**`student_code` column** — added to `students`:
+```sql
+ALTER TABLE students ADD COLUMN IF NOT EXISTS student_code TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_code
+  ON students(student_code) WHERE student_code IS NOT NULL;
+-- Backfill existing students
+UPDATE students
+  SET student_code = 'ST' || upper(left(replace(id::text, '-', ''), 6))
+  WHERE student_code IS NULL;
+```
 
 **Storage bucket**: `scanned-papers` — uploaded paper images, organised as `scanner/{testId}/` or `worksheets/{worksheetId}/`
 
@@ -125,6 +167,25 @@ lib/
 ---
 
 ## API Routes
+
+### Admin
+| Route | What it does |
+|---|---|
+| `POST /api/admin/login` | Admin login → sets `edu-role=admin` cookie |
+| `POST /api/admin/register` | Create admin account linked to a school |
+| `GET /api/admin/me` | Current admin profile |
+| `GET /api/admin/schools/[schoolId]/overview` | School stats — class count, teacher count, student count |
+| `GET/POST /api/admin/schools/[schoolId]/classes` | List / create classes |
+| `GET/PATCH/DELETE /api/admin/schools/[schoolId]/classes/[classId]` | Class management |
+| `POST /api/admin/schools/[schoolId]/classes/[classId]/students/bulk` | Bulk import students → auto-generates `student_code` for each |
+| `GET /api/admin/schools/[schoolId]/classes/[classId]/students` | List students with codes |
+| `POST /api/admin/schools/[schoolId]/classes/[classId]/assign-teacher` | Assign teacher to class |
+| `GET/POST /api/admin/schools/[schoolId]/teachers` | List / invite teachers |
+| `GET/POST /api/admin/schools/[schoolId]/timetable` | School timetable |
+| `POST /api/admin/schools/[schoolId]/timetable/publish` | Publish timetable to all teachers |
+| `GET/POST /api/admin/schools/[schoolId]/schedule` | Bell schedule management |
+| `POST /api/admin/schedule-ai` | AI-generate a school schedule |
+| `GET /api/admin/schools/[schoolId]/scanners` | Scanner device list |
 
 ### AI Generation
 | Route | What it does |
@@ -142,14 +203,17 @@ lib/
 | `POST /api/test-analysis` | AI analysis of class test scores |
 | `POST /api/student-report` | Individual student AI report |
 | `POST /api/questions` | Question generation for a topic |
+| `POST /api/generate-answer-key` | Answer key from question set |
 
 ### Vision / Scanning
 | Route | What it does |
 |---|---|
 | `POST /api/grade-scan` | Grade single handwritten paper via vision |
 | `POST /api/grade-paper` | Grade paper against questions + model answer |
+| `POST /api/grade-image` | Grade a single image (flexible format) |
 | `POST /api/multi-grade-scan` | Batch grade multiple papers |
 | `POST /api/scanner-upload` | Upload scanned paper to Supabase Storage |
+| `POST /api/upload-scan` | Upload and trigger scan pipeline |
 
 ### Data
 | Route | What it does |
@@ -160,6 +224,8 @@ lib/
 | `POST /api/worksheet-marks` | Record worksheet marks |
 | `POST /api/scan-students` | List students for batch scanning |
 | `GET/POST/DELETE /api/worksheets` | Worksheet CRUD |
+| `GET /api/scanner/profile` | Scanner session profile |
+| `GET /api/teacher/school-data` | Teacher's school metadata |
 
 ### Analytics
 | Route | What it does |
@@ -168,11 +234,12 @@ lib/
 | `POST /api/peer-pair` | Suggest peer learning pairs |
 | `POST /api/potential` | Detect hidden potential signals (slow starters, spikes) |
 | `POST /api/understanding-check` | Query poll results for a topic |
+| `GET /api/teacher/student-overview/[studentId]` | All subjects for a student — attendance %, avg score, recent marks per subject (teacher view) |
 
 ### Student Portal
 | Route | What it does |
 |---|---|
-| `POST /api/student/login` | Authenticate via class code + roll number |
+| `POST /api/student/login` | Authenticate via **Student ID** (e.g. `STABCD23`) |
 | `GET /api/student/init` | Load student profile + all subject tabs |
 | `POST /api/student/tab-data` | Marks + mastery + attendance for one subject |
 | `POST /api/student/doubt` | Submit a question |
@@ -186,6 +253,41 @@ lib/
 ---
 
 ## Key Data Flows
+
+### Student ID Generation (Bulk Import)
+```
+Admin uploads CSV → POST /api/admin/schools/{schoolId}/classes/{classId}/students/bulk
+  → For each student row (sequential, not parallel — avoids race conditions):
+      genStudentCode() → "ST" + 6 chars from safe charset (no 0/O/I/1)
+      SELECT from students WHERE student_code = ? → retry up to 10x if collision
+  → bulkInsertStudents() → insert with student_code, class_id, roll_number
+  → Returns { inserted: N, students: [{ name, studentCode }] }
+
+Admin sees student codes on the class roster page (copy-to-clipboard per row).
+Teacher sees code on the student card in their class view.
+```
+
+### Student Login (Student Portal)
+```
+Student enters Student ID (e.g. "STABCD23") → POST /api/student/login
+  → SELECT * FROM students JOIN classes ON ... WHERE student_code = ? AND is_active = true
+  → Set edu-student-id httpOnly cookie = student.id
+  → GET /api/student/init: find all classes with same grade + section + school
+  → Match student by roll number across classes → one tab per subject
+  → Student switches subjects without re-login
+```
+
+### Teacher → Student All-Subjects View
+```
+Teacher clicks student in class → /students/[id] → "All Subjects" tab
+  → GET /api/teacher/student-overview/[studentId]
+  → Verify teacher auth + school isolation (teacher.school_id must match student's class)
+  → Build subject list — new model: teacher_class_assignments; legacy: grade+section siblings
+  → For each subject in parallel:
+      Attendance: count present/late rows ÷ total sessions
+      Tests: fetch test_ids for teacher+class → fetch marks → avg %, recent 5
+  → Returns { student, subjects: [{ subjectName, attendanceRate, avgScore, totalTests, recentMarks }] }
+```
 
 ### Smart Lesson Generation
 ```
@@ -215,17 +317,6 @@ On every marks/attendance save:
     sudden drop, no improvement after catchup
   → Warning levels: critical / watch / info
   → Surfaces on /alerts page and home briefing
-```
-
-### Student Multi-Subject Login
-```
-Student → class code + roll number → /api/student/login
-  → Validate class → validate student in class
-  → Set edu-student-id cookie
-  → /api/student/init: find all classes with same grade+section+school
-  → Match student by roll number across classes
-  → Return tabs[] — one per subject
-  → Student switches subjects without re-login
 ```
 
 ---
@@ -312,7 +403,7 @@ cp .env.example .env.local   # fill in the vars above
 npm run dev                  # http://localhost:3000
 ```
 
-**Supabase**: create a project, run the schema migrations, enable Storage bucket `scanned-papers`.
+**Supabase**: create a project, run the schema migrations, enable Storage bucket `scanned-papers`. Run the `student_code` migration above if upgrading from a prior version.
 
 **OpenRouter**: sign up at openrouter.ai, add credits, copy the API key.
 

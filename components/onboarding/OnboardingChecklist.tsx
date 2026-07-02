@@ -13,7 +13,8 @@ interface Props {
   students: Student[]
   syllabusTopics: SyllabusTopic[]
   timetableEntries: TimetableEntry[]
-  onCreateClass: () => void
+  onCreateClass?: () => void
+  hasAdmin?: boolean
 }
 
 interface Step {
@@ -34,6 +35,7 @@ export default function OnboardingChecklist({
   syllabusTopics,
   timetableEntries,
   onCreateClass,
+  hasAdmin,
 }: Props) {
   const router = useRouter()
   const [dismissed, setDismissed] = useState(false)
@@ -48,7 +50,7 @@ export default function OnboardingChecklist({
 
   const firstClassId = classes[0]?.id ?? ''
 
-  const steps: Step[] = [
+  const allSteps: Step[] = [
     {
       id: 'class',
       Icon: GraduationCap,
@@ -88,6 +90,13 @@ export default function OnboardingChecklist({
     },
   ]
 
+  // When admin manages the school, classes/students/timetable are handled by admin.
+  // Only show the syllabus step to the teacher.
+  const ADMIN_MANAGED_STEP_IDS = new Set(['class', 'students', 'timetable'])
+  const steps = hasAdmin
+    ? allSteps.filter(s => !ADMIN_MANAGED_STEP_IDS.has(s.id))
+    : allSteps
+
   const completedCount = steps.filter(s => s.done).length
   const allDone = completedCount === steps.length
   const activeIndex = steps.findIndex(s => !s.done)
@@ -105,13 +114,13 @@ export default function OnboardingChecklist({
 
   const handleStepAction = (step: Step) => {
     if (step.action === 'create-class') {
-      onCreateClass()
+      onCreateClass?.()
     } else if (step.href) {
       router.push(step.href)
     }
   }
 
-  if (!mounted || dismissed || allDone) return null
+  if (!mounted || dismissed || allDone || hasAdmin) return null
 
   return (
     <div className="rounded-3xl overflow-hidden animate-fade-up"

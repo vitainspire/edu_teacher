@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Plus, Users, GraduationCap, ChevronRight, Clock,
   BookOpen, Activity, School, PlayCircle,
@@ -34,6 +34,15 @@ export default function ClassesPage() {
   const router = useRouter()
   const { teacher, classes, students, assignments, getClassSyllabus, getClassSessions } = useApp()
   const [createOpen, setCreateOpen] = useState(false)
+  const [hasAdmin, setHasAdmin] = useState(false)
+
+  useEffect(() => {
+    if (!teacher?.schoolId) return
+    fetch(`/api/school/has-admin?schoolId=${teacher.schoolId}`)
+      .then(r => r.json())
+      .then(d => setHasAdmin(!!d.hasAdmin))
+      .catch(() => {})
+  }, [teacher?.schoolId])
 
   // "My classes" = classes this teacher created OR has an explicit assignment for
   // "School classes" = school classes with no assignment yet (shown in selection screen)
@@ -73,19 +82,21 @@ export default function ClassesPage() {
               <p className="text-blue-200/60 text-sm font-medium mt-1">{totalStudents} active students</p>
             )}
           </div>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 font-black px-4 py-2.5 rounded-2xl text-sm active:scale-95 transition-transform"
-            style={{
-              background: 'rgba(255,255,255,0.15)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: 'white',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-            }}
-          >
-            <Plus size={15} strokeWidth={2.5} /> New Class
-          </button>
+          {!hasAdmin && (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 font-black px-4 py-2.5 rounded-2xl text-sm active:scale-95 transition-transform"
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+              }}
+            >
+              <Plus size={15} strokeWidth={2.5} /> New Class
+            </button>
+          )}
         </div>
       </div>
 
@@ -101,20 +112,31 @@ export default function ClassesPage() {
               style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)' }}>
               <GraduationCap size={34} className="text-indigo-500" />
             </div>
-            <h3 className="font-black text-slate-800 text-xl">No classes yet</h3>
-            <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto leading-relaxed">
-              Create your first class to start tracking students, attendance, and progress.
-            </p>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="mt-6 inline-flex items-center gap-2 text-white font-black px-8 py-3.5 rounded-2xl text-sm active:scale-95 transition-transform"
-              style={{
-                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                boxShadow: '0 4px 16px rgba(79,70,229,0.4)',
-              }}
-            >
-              <Plus size={16} /> Create Class
-            </button>
+            {hasAdmin ? (
+              <>
+                <h3 className="font-black text-slate-800 text-xl">No classes assigned yet</h3>
+                <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto leading-relaxed">
+                  Your school admin will assign classes to you. Once assigned, they will appear here automatically.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="font-black text-slate-800 text-xl">No classes yet</h3>
+                <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto leading-relaxed">
+                  Create your first class to start tracking students, attendance, and progress.
+                </p>
+                <button
+                  onClick={() => setCreateOpen(true)}
+                  className="mt-6 inline-flex items-center gap-2 text-white font-black px-8 py-3.5 rounded-2xl text-sm active:scale-95 transition-transform"
+                  style={{
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                    boxShadow: '0 4px 16px rgba(79,70,229,0.4)',
+                  }}
+                >
+                  <Plus size={16} /> Create Class
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -284,13 +306,15 @@ export default function ClassesPage() {
               </div>
             )}
 
-            {/* Add another class */}
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-4 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400 font-bold text-sm active:scale-[0.98] transition-all hover:border-indigo-200 hover:text-indigo-400"
-            >
-              <Plus size={16} strokeWidth={2.5} /> Add Another Class
-            </button>
+            {/* Add another class — only when no admin manages the school */}
+            {!hasAdmin && (
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400 font-bold text-sm active:scale-[0.98] transition-all hover:border-indigo-200 hover:text-indigo-400"
+              >
+                <Plus size={16} strokeWidth={2.5} /> Add Another Class
+              </button>
+            )}
           </>
         )}
       </div>

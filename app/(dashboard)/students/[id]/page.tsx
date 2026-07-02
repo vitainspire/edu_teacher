@@ -5,6 +5,7 @@ import {
   ArrowLeft, Sparkles, AlertTriangle, Fingerprint,
   RefreshCw, FileText, CheckCircle2, BookX, Calendar,
   ClipboardList, Trash2, Plus, Mic, MicOff, ScanLine,
+  LayoutGrid, TrendingUp, Users2,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import LearningFingerprint from '@/components/fingerprint/LearningFingerprint'
@@ -47,7 +48,21 @@ export default function StudentDetailPage() {
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [attendance, sessions, id])
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'missed' | 'fingerprint' | 'recovery' | 'log' | 'report'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'missed' | 'fingerprint' | 'recovery' | 'log' | 'report' | 'allsubjects'>('overview')
+
+  // Cross-subject overview state
+  interface SubjectOverview {
+    classId: string
+    subjectName: string
+    teacherName: string
+    attendanceRate: number
+    totalSessions: number
+    avgScore: number
+    totalTests: number
+    recentMarks: Array<{ topic: string; score: number; totalMarks: number; date: string }>
+  }
+  const [subjectOverview, setSubjectOverview] = useState<SubjectOverview[] | null>(null)
+  const [subjectOverviewLoading, setSubjectOverviewLoading] = useState(false)
   const [recoveryAttempts, setRecoveryAttempts] = useState<RecoveryAttempt[]>([])
   const [interventionNotes, setInterventionNotes] = useState<InterventionNote[]>([])
   const [noteText, setNoteText] = useState('')
@@ -247,8 +262,21 @@ export default function StudentDetailPage() {
     sbq.upsertRecoveryAttempt(attempt).catch(console.error)
   }
 
+  const loadSubjectOverview = async () => {
+    if (subjectOverview || subjectOverviewLoading) return
+    setSubjectOverviewLoading(true)
+    try {
+      const res = await fetch(`/api/teacher/student-overview/${id}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setSubjectOverview(data.subjects ?? [])
+    } catch { /* no-op */ }
+    finally { setSubjectOverviewLoading(false) }
+  }
+
   const TABS = [
     { key: 'overview',     label: 'Overview' },
+    { key: 'allsubjects',  label: 'All Subjects' },
     { key: 'missed',       label: `Missed${missedTopics.length > 0 ? ` (${missedTopics.length})` : ''}` },
     { key: 'fingerprint',  label: 'Learning Profile' },
     { key: 'recovery',     label: 'Extra Help' },
@@ -302,7 +330,10 @@ export default function StudentDetailPage() {
           {TABS.map((t) => (
             <button
               key={t.key}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => {
+                setActiveTab(t.key)
+                if (t.key === 'allsubjects') loadSubjectOverview()
+              }}
               className={`shrink-0 px-4 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
                 activeTab === t.key
                   ? 'border-indigo-600 text-indigo-600'
@@ -400,6 +431,106 @@ export default function StudentDetailPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* ALL SUBJECTS */}
+        {activeTab === 'allsubjects' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <LayoutGrid size={15} className="text-indigo-600" />
+              </div>
+              <div>
+                <p className="font-bold text-slate-800">All Subjects</p>
+                <p className="text-xs text-slate-400">Cross-subject view for {student.name.split(' ')[0]}</p>
+              </div>
+            </div>
+
+            {subjectOverviewLoading && (
+              <div className="card text-center py-10">
+                <RefreshCw size={22} className="text-indigo-400 mx-auto mb-3 animate-spin" />
+                <p className="text-sm text-slate-500">Loading subject data…</p>
+              </div>
+            )}
+
+            {!subjectOverviewLoading && subjectOverview && subjectOverview.length === 0 && (
+              <div className="card text-center py-10">
+                <Users2 size={28} className="text-slate-300 mx-auto mb-3" />
+                <p className="font-semibold text-slate-700">No other subjects found</p>
+                <p className="text-xs text-slate-400 mt-1">This student appears in only one class.</p>
+              </div>
+            )}
+
+            {!subjectOverviewLoading && subjectOverview && subjectOverview.map((s, idx) => {
+              const attColor = s.attendanceRate >= 0.9 ? 'text-emerald-600' : s.attendanceRate >= 0.75 ? 'text-amber-600' : 'text-red-500'
+              const scoreColor = s.avgScore >= 0.75 ? 'text-emerald-600' : s.avgScore >= 0.5 ? 'text-amber-600' : 'text-red-500'
+              const SUBJ_COLORS = [
+                'linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)',
+                'linear-gradient(135deg,#059669 0%,#34d399 100%)',
+                'linear-gradient(135deg,#2563eb 0%,#60a5fa 100%)',
+                'linear-gradient(135deg,#d97706 0%,#fbbf24 100%)',
+                'linear-gradient(135deg,#e11d48 0%,#fb7185 100%)',
+                'linear-gradient(135deg,#0891b2 0%,#22d3ee 100%)',
+              ]
+              return (
+                <div key={s.classId} className="card space-y-3">
+                  {/* Subject header */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0"
+                      style={{ background: SUBJ_COLORS[idx % SUBJ_COLORS.length] }}>
+                      {s.subjectName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 text-sm">{s.subjectName}</p>
+                      <p className="text-xs text-slate-400">{s.teacherName}</p>
+                    </div>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
+                      <p className={`text-lg font-black ${attColor}`}>
+                        {s.totalSessions > 0 ? `${Math.round(s.attendanceRate * 100)}%` : '—'}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Attendance</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
+                      <p className={`text-lg font-black ${s.totalTests > 0 ? scoreColor : 'text-slate-300'}`}>
+                        {s.totalTests > 0 ? `${Math.round(s.avgScore * 100)}%` : '—'}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Avg Score</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
+                      <p className="text-lg font-black text-slate-800">{s.totalTests}</p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Tests</p>
+                    </div>
+                  </div>
+
+                  {/* Recent marks */}
+                  {s.recentMarks.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Recent Tests</p>
+                      {s.recentMarks.slice(0, 3).map((m, mi) => {
+                        const pct = m.score / m.totalMarks
+                        const bar = pct >= 0.75 ? 'bg-emerald-500' : pct >= 0.5 ? 'bg-amber-400' : 'bg-red-400'
+                        return (
+                          <div key={mi} className="flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-700 truncate">{m.topic}</p>
+                              <div className="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                <div className={`h-1.5 rounded-full ${bar}`} style={{ width: `${Math.round(pct * 100)}%` }} />
+                              </div>
+                            </div>
+                            <p className="text-xs font-bold text-slate-600 shrink-0">{m.score}/{m.totalMarks}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
 
         {/* MISSED TOPICS */}

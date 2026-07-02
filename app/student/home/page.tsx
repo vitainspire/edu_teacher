@@ -85,6 +85,7 @@ function computeAllBadges(data: SubjectData): (BadgeDef & { earned: boolean })[]
 interface SubjectTab {
   classId: string
   studentId: string
+  teacherId?: string
   label: string
   color: string
 }
@@ -314,8 +315,9 @@ export default function StudentHomePage() {
       const data = await res.json()
       setStudent(data.student); setCls(data.primaryClass)
       const tabs: SubjectTab[] = data.tabs.map(
-        (t: { classId: string; studentId: string; subject: string }, i: number) => ({
+        (t: { classId: string; studentId: string; subject: string; teacherId?: string }, i: number) => ({
           classId: t.classId, studentId: t.studentId,
+          teacherId: t.teacherId,
           label: t.subject, color: TAB_COLORS[i % TAB_COLORS.length],
         })
       )
@@ -329,7 +331,9 @@ export default function StudentHomePage() {
     setDataLoading(true)
     setLoadError(false)
     try {
-      const res = await fetch(`/api/student/tab-data?classId=${tab.classId}&studentId=${tab.studentId}`)
+      const params = new URLSearchParams({ classId: tab.classId, studentId: tab.studentId })
+      if (tab.teacherId) params.set('teacherId', tab.teacherId)
+      const res = await fetch(`/api/student/tab-data?${params}`)
       if (!res.ok) { setLoadError(true); return }
       setSubjectData(buildSubjectData(await res.json()))
     } catch {

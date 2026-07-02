@@ -13,8 +13,9 @@ export function LogoutButton() {
     document.cookie = "edu-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict";
     document.cookie = "edu-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict";
     // Clear scanner localStorage
-    ["scanner_class_id","scanner_class_name","scanner_class_grade","scanner_class_section",
-      "scanner_teacher_id","scanner_school_name","scanner_teacher_name"].forEach(k => localStorage.removeItem(k));
+    ["scanner_school_id","scanner_school_name","scanner_class_id","scanner_class_name",
+      "scanner_class_grade","scanner_class_section","scanner_teacher_id","scanner_teacher_name",
+      "scanner_staff_name"].forEach(k => localStorage.removeItem(k));
     router.push("/login");
     router.refresh();
   }

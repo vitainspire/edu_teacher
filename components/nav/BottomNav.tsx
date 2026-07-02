@@ -1,17 +1,17 @@
 'use client'
 import { useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LayoutGrid, Bell, Settings2, BookOpen } from 'lucide-react'
+import { Home, LayoutGrid, Bell, Settings2, CalendarDays } from 'lucide-react'
 import clsx from 'clsx'
 import { useApp } from '@/lib/context'
 import { computeHomeAlerts } from '@/lib/logic/home-alerts'
 
 const NAV_ITEMS = [
-  { href: '/home',     label: 'Home',     Icon: Home },
-  { href: '/today',    label: 'Today',    Icon: BookOpen },
-  { href: '/classes',  label: 'Classes',  Icon: LayoutGrid },
-  { href: '/alerts',   label: 'Alerts',   Icon: Bell },
-  { href: '/settings', label: 'Settings', Icon: Settings2 },
+  { href: '/home',      label: 'Home',     Icon: Home },
+  { href: '/timetable', label: 'Today',    Icon: CalendarDays },
+  { href: '/classes',   label: 'Classes',  Icon: LayoutGrid },
+  { href: '/alerts',    label: 'Alerts',   Icon: Bell },
+  { href: '/settings',  label: 'Settings', Icon: Settings2 },
 ]
 
 export default function BottomNav() {

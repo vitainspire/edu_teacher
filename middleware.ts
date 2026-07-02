@@ -5,7 +5,10 @@ import { createServerClient } from '@supabase/ssr'
 // Paths that are always public — no auth required
 const PUBLIC_PREFIXES = [
   '/login',
-  '/student',
+  '/admin/login',
+  '/api/admin/login',
+  '/api/admin/register',
+  '/api/school/has-admin',
   '/api/student',
   '/favicon.ico',
   '/sw.js',
@@ -48,7 +51,7 @@ export async function middleware(req: NextRequest) {
   // Root redirect
   if (pathname === '/') {
     const role = req.cookies.get('edu-role')?.value
-    const dest = role === 'scanner' ? '/scanner/connect' : '/home'
+    const dest = role === 'scanner' ? '/scanner/connect' : role === 'admin' ? '/admin/dashboard' : '/home'
     return NextResponse.redirect(new URL(dest, req.url))
   }
 
@@ -84,8 +87,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  // Scanner staff cannot access teacher routes
-  if (!pathname.startsWith('/scanner') && !pathname.startsWith('/api/')) {
+  // Scanner staff cannot access teacher or admin routes
+  if (!pathname.startsWith('/scanner') && !pathname.startsWith('/admin') && !pathname.startsWith('/api/')) {
     const role = req.cookies.get('edu-role')?.value
     if (role === 'scanner') {
       return NextResponse.redirect(new URL('/scanner/connect', req.url))

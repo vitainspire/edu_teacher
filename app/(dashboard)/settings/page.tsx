@@ -1,33 +1,18 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Save, Check, Calendar, BookOpen, Clock, Plus, Trash2, HelpCircle, Copy } from 'lucide-react'
+import { ArrowLeft, Check, BookOpen, Clock, Trash2, HelpCircle, Copy } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import FeatureTour from '@/components/onboarding/FeatureTour'
 import FlowGuide from '@/components/onboarding/FlowGuide'
-import clsx from 'clsx'
 
 const DAY_LABELS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-const TERMS = ['Term 1', 'Term 2', 'Term 3']
-
 export default function SettingsPage() {
-  const { teacher, classes, updateTeacherSettings, timetableEntries, addTimetableEntry, removeTimetableEntry } = useApp()
+  const { teacher, classes, timetableEntries, removeTimetableEntry } = useApp()
   const router = useRouter()
 
-  const [yearStart, setYearStart]   = useState(teacher?.academicYearStart ?? '')
-  const [term, setTerm]             = useState(teacher?.currentTerm ?? 'Term 1')
-  const [saving, setSaving]         = useState(false)
-  const [saved, setSaved]           = useState(false)
   const [teacherCodeCopied, setTeacherCodeCopied] = useState(false)
-
-  // Timetable add-form state
-  const [ttDay, setTtDay]         = useState(1)
-  const [ttPeriod, setTtPeriod]   = useState('1')
-  const [ttStart, setTtStart]     = useState('09:00')
-  const [ttEnd, setTtEnd]         = useState('09:45')
-  const [ttClassId, setTtClassId] = useState(classes[0]?.id ?? '')
-  const [ttAdding, setTtAdding]   = useState(false)
   const [showTour, setShowTour]         = useState(false)
   const [showFlowGuide, setShowFlowGuide] = useState(false)
   const [showGuideBtn, setShowGuideBtn] = useState(true)
@@ -43,37 +28,6 @@ export default function SettingsPage() {
     if (guideBtnKey) localStorage.setItem(guideBtnKey, String(val))
   }
 
-  const handleAddEntry = async () => {
-    if (!ttClassId) return
-    setTtAdding(true)
-    await addTimetableEntry({
-      classId: ttClassId,
-      dayOfWeek: ttDay,
-      periodNumber: parseInt(ttPeriod) || 1,
-      startTime: ttStart,
-      endTime: ttEnd,
-    })
-    setTtAdding(false)
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    await updateTeacherSettings({ academicYearStart: yearStart || undefined, currentTerm: term })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  // Derive week number from academicYearStart
-  const currentWeek = (() => {
-    if (!yearStart) return null
-    const start = new Date(yearStart + 'T00:00:00')
-    const now   = new Date()
-    const diff  = now.getTime() - start.getTime()
-    if (diff < 0) return null
-    return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1
-  })()
-
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
       {/* Header */}
@@ -86,72 +40,7 @@ export default function SettingsPage() {
         <h2 className="text-lg font-black text-slate-900">Settings</h2>
       </div>
 
-      <div className="px-4 py-5 space-y-4">
-
-        {/* Academic Year */}
-        <div className="bg-white rounded-3xl p-5 space-y-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-2xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' }}>
-              <Calendar size={16} className="text-blue-600" />
-            </div>
-            <p className="font-black text-slate-800">Academic Year</p>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">
-              Year Start Date
-            </label>
-            <input
-              type="date"
-              value={yearStart}
-              onChange={e => setYearStart(e.target.value)}
-              className="w-full border-2 border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-            />
-            {currentWeek !== null && (
-              <p className="text-xs text-blue-600 font-semibold mt-1.5">
-                Currently Week {currentWeek} of the academic year
-              </p>
-            )}
-            {!yearStart && (
-              <p className="text-xs text-slate-400 mt-1.5">
-                Set this so the app can track pacing and show progress over time.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Current Term */}
-        <div className="bg-white rounded-3xl p-5 space-y-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-2xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' }}>
-              <BookOpen size={16} className="text-violet-600" />
-            </div>
-            <p className="font-black text-slate-800">Current Term</p>
-          </div>
-
-          <div className="flex gap-3">
-            {TERMS.map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTerm(t)}
-                className={clsx(
-                  'flex-1 py-3 rounded-2xl font-bold text-sm border-2 transition-all',
-                  term === t
-                    ? 'bg-violet-700 border-violet-700 text-white'
-                    : 'bg-white border-slate-200 text-slate-600',
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-slate-400">
-            New tests will be tagged with the current term automatically.
-          </p>
-        </div>
+      <div className="px-4 py-5 space-y-4 pb-28 md:pb-8">
 
         {/* Teacher Info (read-only) */}
         <div className="bg-white rounded-3xl p-5 space-y-3" style={{ boxShadow: 'var(--shadow-card)' }}>
@@ -260,86 +149,10 @@ export default function SettingsPage() {
               })}
             </div>
           ) : (
-            <p className="text-xs text-slate-400 text-center py-2">No periods added yet.</p>
+            <p className="text-xs text-slate-400 text-center py-2">
+              No timetable set. Your school admin manages the timetable.
+            </p>
           )}
-
-          {/* Add entry form */}
-          <div className="border-t border-slate-100 pt-4 space-y-3">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Add Period</p>
-
-            <div className="grid grid-cols-3 gap-2">
-              {/* Day */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Day</label>
-                <select
-                  value={ttDay}
-                  onChange={e => setTtDay(Number(e.target.value))}
-                  className="w-full border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-                >
-                  {[1, 2, 3, 4, 5, 6].map(d => (
-                    <option key={d} value={d}>{DAY_LABELS[d]}</option>
-                  ))}
-                </select>
-              </div>
-              {/* Period # */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Period</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={9}
-                  value={ttPeriod}
-                  onChange={e => setTtPeriod(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-                />
-              </div>
-              {/* Class */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Class</label>
-                <select
-                  value={ttClassId}
-                  onChange={e => setTtClassId(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-                >
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Start</label>
-                <input
-                  type="time"
-                  value={ttStart}
-                  onChange={e => setTtStart(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">End</label>
-                <input
-                  type="time"
-                  value={ttEnd}
-                  onChange={e => setTtEnd(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleAddEntry}
-              disabled={ttAdding || !ttClassId}
-              className="w-full py-2.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all active:scale-95"
-              style={{ background: 'linear-gradient(135deg, #1d4ed8, #2563eb)' }}
-            >
-              <Plus size={15} />
-              {ttAdding ? 'Adding…' : 'Add Period'}
-            </button>
-          </div>
         </div>
 
         {/* App Guide */}
@@ -396,18 +209,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-4 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all active:scale-95 text-white"
-          style={saved
-            ? { background: 'linear-gradient(135deg, #059669 0%, #34d399 100%)', boxShadow: '0 4px 16px rgba(5,150,105,0.4)' }
-            : { background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)', boxShadow: '0 4px 16px rgba(79,70,229,0.4)' }
-          }
-        >
-          {saved ? <><Check size={18} /> Saved!</> : saving ? 'Saving…' : <><Save size={18} /> Save Settings</>}
-        </button>
       </div>
 
       {teacher && (

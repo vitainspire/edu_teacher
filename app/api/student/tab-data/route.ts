@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const classId   = searchParams.get('classId')
     const studentId = searchParams.get('studentId')
+    const teacherId = searchParams.get('teacherId') // optional — scopes data to a specific teacher
 
     if (!classId || !studentId) {
       apiLog({ route: 'student/tab-data', ip, userId: cookieStudentId, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
@@ -22,6 +23,16 @@ export async function GET(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+
+    // When teacherId is provided, filter teacher-owned data (sessions/syllabus/tests) by that teacher
+    let testsQ = supabase.from('tests').select('*').eq('class_id', classId)
+    let sessionsQ = supabase.from('sessions').select('*').eq('class_id', classId)
+    let syllabusQ = supabase.from('syllabus_topics').select('*').eq('class_id', classId).order('order_index')
+    if (teacherId) {
+      testsQ = testsQ.eq('teacher_id', teacherId)
+      sessionsQ = sessionsQ.eq('teacher_id', teacherId)
+      syllabusQ = syllabusQ.eq('teacher_id', teacherId)
+    }
 
     const [
       attendanceRes,
@@ -37,11 +48,11 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       supabase.from('attendance').select('*').eq('student_id', studentId),
       supabase.from('marks').select('*').eq('student_id', studentId),
-      supabase.from('tests').select('*').eq('class_id', classId),
+      testsQ,
       supabase.from('student_topic_mastery').select('*').eq('student_id', studentId),
       supabase.from('catchup_materials').select('*').eq('student_id', studentId),
-      supabase.from('sessions').select('*').eq('class_id', classId),
-      supabase.from('syllabus_topics').select('*').eq('class_id', classId).order('order_index'),
+      sessionsQ,
+      syllabusQ,
       supabase.from('timetable').select('*').eq('class_id', classId),
       supabase.from('student_doubts').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
       supabase.from('topic_polls').select('*').eq('student_id', studentId).eq('class_id', classId),

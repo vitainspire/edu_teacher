@@ -54,7 +54,7 @@ function fmt(t: string) {
 }
 
 export default function TodayPage() {
-  const { teacher, classes, getTodaySchedule, getClassSyllabus, getBriefingData } = useApp()
+  const { teacher, classes, getTodaySchedule, getClassSyllabus, getTopicSubTopics, getBriefingData } = useApp()
 
   const briefingMap = useMemo(() => {
     const map: Record<string, ReturnType<typeof getBriefingData>[number]> = {}
@@ -69,6 +69,7 @@ export default function TodayPage() {
     classId: string; className: string; grade: string
     section: string; period: number | null
     start: string | null; end: string | null; color: string
+    label: string | null
   }
 
   const cards: Card[] = hasTimetable
@@ -85,8 +86,10 @@ export default function TodayPage() {
             start: e.startTime,
             end: e.endTime,
             color: CLASS_COLORS[i % CLASS_COLORS.length],
+            label: e.label ?? null,
           }
         })
+        .filter((card, idx, arr) => arr.findIndex(c => c.classId === card.classId) === idx)
     : classes.map((cls, i) => ({
         classId: cls.id,
         className: cls.name,
@@ -94,13 +97,16 @@ export default function TodayPage() {
         section: cls.section ?? '',
         period: null, start: null, end: null,
         color: CLASS_COLORS[i % CLASS_COLORS.length],
+        label: null,
       }))
 
-  const [topics,    setTopics]    = useState<Record<string, string>>({})
-  const [subtopics, setSubtopics] = useState<Record<string, string>>({})
-  const [states,    setStates]    = useState<Record<string, GenState>>({})
-  const [results,   setResults]   = useState<Record<string, SmartResult>>({})
-  const [expanded,  setExpanded]  = useState<Record<string, boolean>>({})
+  const [topics,     setTopics]     = useState<Record<string, string>>({})
+  const [topicMode,  setTopicMode]  = useState<Record<string, 'dropdown' | 'custom'>>({})
+  const [subtopics,  setSubtopics]  = useState<Record<string, string>>({})
+  const [subMode,    setSubMode]    = useState<Record<string, 'dropdown' | 'custom'>>({})
+  const [states,     setStates]     = useState<Record<string, GenState>>({})
+  const [results,    setResults]    = useState<Record<string, SmartResult>>({})
+  const [expanded,   setExpanded]   = useState<Record<string, boolean>>({})
 
   const getNextTopic = useCallback((classId: string) => {
     const b = briefingMap[classId]
@@ -186,8 +192,8 @@ export default function TodayPage() {
               style={{ background: '#ede9fe' }}>
               <BookOpen size={28} className="text-violet-600" />
             </div>
-            <p className="text-slate-700 font-bold text-lg">No classes yet</p>
-            <p className="text-slate-400 text-sm mt-1">Add classes in the Classes tab to get started.</p>
+            <p className="text-slate-700 font-bold text-lg">No classes scheduled today</p>
+            <p className="text-slate-400 text-sm mt-1">Your timetable will appear here once your admin sets it up.</p>
           </div>
         )}
 
@@ -213,8 +219,9 @@ export default function TodayPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-slate-900 text-base leading-tight">
-                      {card.className}{card.section ? ` · ${card.section}` : ''}
+                      {card.label ?? card.className}{card.section ? ` · ${card.section}` : ''}
                     </p>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">{card.className}</p>
                     {card.start && (
                       <div className="flex items-center gap-1 mt-0.5">
                         <Clock size={11} className="text-slate-400" />
@@ -293,37 +300,184 @@ export default function TodayPage() {
 
                 {/* Topic + Subtopic inputs */}
                 <div className="mb-3 space-y-2">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">
-                      Today&apos;s Topic
-                    </label>
-                    <input
-                      type="text"
-                      value={topic}
-                      onChange={e => setTopics(p => ({ ...p, [card.classId]: e.target.value }))}
-                      placeholder="What are you teaching today?"
-                      className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
-                      style={{ background: '#f8fafc' }}
-                    />
-                    {!topic && (
-                      <p className="text-[11px] text-amber-500 font-medium mt-1 ml-1">
-                        No syllabus topic found — type a topic above
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">
-                      Subtopic <span className="font-medium normal-case text-slate-400">(optional — focus AI on a specific part)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={subtopics[card.classId] ?? ''}
-                      onChange={e => setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))}
-                      placeholder={`e.g. "line symmetry", "rotational symmetry"…`}
-                      className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
-                      style={{ background: '#f8fafc' }}
-                    />
-                  </div>
+                  {/* ── Today's Topic — dropdown or custom ── */}
+                  {(() => {
+                    const syllabus     = getClassSyllabus(card.classId)
+                    const incomplete   = syllabus.filter(t => !t.isCompleted)
+                    const completed    = syllabus.filter(t =>  t.isCompleted)
+                    const hasSyllabus  = syllabus.length > 0
+                    const tMode        = topicMode[card.classId] ?? 'dropdown'
+                    const isCustomTopic = tMode === 'custom'
+
+                    // value shown in the dropdown (pre-select the auto-detected next topic)
+                    const dropdownVal  = topics[card.classId] !== undefined
+                      ? topics[card.classId]
+                      : getNextTopic(card.classId)
+
+                    function pickTopic(val: string) {
+                      if (val === '__custom__') {
+                        setTopicMode(p => ({ ...p, [card.classId]: 'custom' }))
+                        setTopics(p => ({ ...p, [card.classId]: '' }))
+                      } else {
+                        setTopicMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                        setTopics(p => ({ ...p, [card.classId]: val }))
+                      }
+                      // reset subtopic whenever topic changes
+                      setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                      setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                    }
+
+                    return (
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                          <span>Today&apos;s Topic</span>
+                          {isCustomTopic && hasSyllabus && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTopicMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                                setTopics(p => ({ ...p, [card.classId]: getNextTopic(card.classId) }))
+                                setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                                setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                              }}
+                              className="text-[10px] font-bold text-violet-500 normal-case tracking-normal"
+                            >
+                              ← Back to syllabus
+                            </button>
+                          )}
+                        </label>
+
+                        {hasSyllabus && !isCustomTopic ? (
+                          <div className="relative">
+                            <select
+                              value={dropdownVal}
+                              onChange={e => pickTopic(e.target.value)}
+                              className="w-full appearance-none px-4 py-2.5 pr-9 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                              style={{ background: '#f8fafc' }}
+                            >
+                              <option value="" disabled>— pick a topic —</option>
+                              {incomplete.length > 0 && (
+                                <optgroup label="Pending">
+                                  {incomplete.map(t => (
+                                    <option key={t.id} value={t.topic}>{t.topic}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {completed.length > 0 && (
+                                <optgroup label="Completed ✓">
+                                  {completed.map(t => (
+                                    <option key={t.id} value={t.topic}>{t.topic}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <option value="__custom__">✏️  Custom topic…</option>
+                            </select>
+                            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
+                          </div>
+                        ) : (
+                          <input
+                            autoFocus={isCustomTopic}
+                            type="text"
+                            value={topic}
+                            onChange={e => setTopics(p => ({ ...p, [card.classId]: e.target.value }))}
+                            placeholder="What are you teaching today?"
+                            className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                            style={{ background: '#f8fafc' }}
+                          />
+                        )}
+
+                        {!topic && !hasSyllabus && (
+                          <p className="text-[11px] text-amber-500 font-medium mt-1 ml-1">
+                            No syllabus added yet — type a topic above
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Subtopic — dropdown of saved sub-topics + custom freetext */}
+                  {(() => {
+                    const syllabus    = getClassSyllabus(card.classId)
+                    const topicEntry  = syllabus.find(t => t.topic === topic)
+                    const subs        = topicEntry ? getTopicSubTopics(topicEntry.id) : []
+                    const mode        = subMode[card.classId] ?? 'dropdown'
+                    const isCustom    = mode === 'custom'
+                    const currentVal  = subtopics[card.classId] ?? ''
+
+                    return (
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                          <span>
+                            Subtopic{' '}
+                            <span className="font-medium normal-case text-slate-400">(optional)</span>
+                          </span>
+                          {isCustom && subs.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                                setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                              }}
+                              className="text-[10px] font-bold text-violet-500 normal-case tracking-normal"
+                            >
+                              ← Back to list
+                            </button>
+                          )}
+                        </label>
+
+                        {subs.length > 0 && !isCustom ? (
+                          /* ── Dropdown with saved sub-topics ── */
+                          <div className="relative">
+                            <select
+                              value={currentVal}
+                              onChange={e => {
+                                if (e.target.value === '__custom__') {
+                                  setSubMode(p => ({ ...p, [card.classId]: 'custom' }))
+                                  setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                                } else {
+                                  setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))
+                                }
+                              }}
+                              className="w-full appearance-none px-4 py-2.5 pr-9 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                              style={{ background: '#f8fafc' }}
+                            >
+                              <option value="">— pick a subtopic (optional) —</option>
+                              {subs.map(s => (
+                                <option key={s.id} value={s.name}>{s.name}</option>
+                              ))}
+                              <option value="__custom__">✏️  Custom subtopic…</option>
+                            </select>
+                            {/* chevron icon */}
+                            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </span>
+                          </div>
+                        ) : (
+                          /* ── Free-text input (no sub-topics saved, or custom mode) ── */
+                          <input
+                            autoFocus={isCustom}
+                            type="text"
+                            value={currentVal}
+                            onChange={e => setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))}
+                            placeholder={
+                              isCustom
+                                ? 'Type your subtopic…'
+                                : `e.g. "line symmetry", "rotational symmetry"…`
+                            }
+                            className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                            style={{ background: '#f8fafc' }}
+                          />
+                        )}
+                      </div>
+                    )
+                  })()}
+
                 </div>
 
                 {/* Generate button */}

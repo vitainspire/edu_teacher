@@ -170,10 +170,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadFromSupabase = useCallback(async (teacherId: string, schoolId?: string, schoolName?: string) => {
     try {
-      const cls = await sbq.fetchClasses(teacherId, schoolId, schoolName)
-      const classIds = cls.map(c => c.id)
+      // Fetch own Supabase classes AND school-assigned data via API in parallel.
+      // The API route uses service-role to bypass RLS on admin-managed tables
+      // (teacher_class_assignments / classes / students stored under the admin's
+      //  teacher_id don't pass RLS checks with the anon client).
+      const [cls, schoolData] = await Promise.all([
+        sbq.fetchClasses(teacherId, schoolId, schoolName),
+        schoolId
+          ? fetch('/api/teacher/school-data')
+              .then(r => r.ok ? r.json() : { classes: [], students: [], timetable: [], assignments: [] })
+              .catch(() => ({ classes: [], students: [], timetable: [], assignments: [] }))
+          : Promise.resolve({ classes: [], students: [], timetable: [], assignments: [] }),
+      ])
 
-      const [syl, ses, s, t, m, ma, att, sub, tt, cu, asgn, ws] = await Promise.all([
+      // Merge admin-assigned classes (admin-owned classes have a different teacher_id
+      // so they may not appear in cls due to RLS; schoolData fills the gap)
+      const ownClassIds = new Set(cls.map((c: Class) => c.id))
+      const allClasses  = [
+        ...cls,
+        ...(schoolData.classes as Class[] ?? []).filter((c: Class) => !ownClassIds.has(c.id)),
+      ]
+      const classIds = allClasses.map(c => c.id)
+
+      const [syl, ses, s, t, m, ma, att, sub, tt, cu, sbAsgn, ws] = await Promise.all([
         sbq.fetchSyllabusTopics(teacherId, classIds),
         sbq.fetchSessions(teacherId),
         sbq.fetchStudentsByClasses(classIds),
@@ -189,7 +208,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ])
 
       // Backfill classCode for classes that predate the feature
-      const backfilled = cls.map(c => {
+      const backfilled = allClasses.map(c => {
         if (c.classCode) return c
         const classCode = genCode()
         const updated = { ...c, classCode }
@@ -203,8 +222,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       for (const mk of sortedMarks) latestByKey.set(`${mk.testId}|${mk.studentId}`, mk)
       const dedupedMarks = [...latestByKey.values()]
 
+      // Merge admin's students (admin-created students have a different teacher_id;
+      // if RLS blocks fetchStudentsByClasses for those rows, schoolData fills the gap)
+      const ownStudentIds = new Set(s.map((st: Student) => st.id))
+      const allStudents = [
+        ...s,
+        ...(schoolData.students as Student[] ?? []).filter((st: Student) => !ownStudentIds.has(st.id)),
+      ]
+
+      // Merge timetable entries.
+      // Two tables may contain overlapping data for the same period:
+      //   school_timetable_periods (live, from API bridge, IDs prefixed "stp-")
+      //   timetable (published snapshot, from anon client, raw UUIDs)
+      // Dedup by slot key (classId|dayOfWeek|periodNumber), not by id, and
+      // prefer the live admin entries so published snapshots never create duplicates.
+      const ttSlotKey = (e: TimetableEntry) => `${e.classId}|${e.dayOfWeek}|${e.periodNumber}`
+      const apiTt     = (schoolData.timetable as TimetableEntry[] ?? [])
+      const apiSlots  = new Set(apiTt.map(ttSlotKey))
+      const allTt = [
+        ...apiTt,
+        ...tt.filter((e: TimetableEntry) => !apiSlots.has(ttSlotKey(e))),
+      ]
+
+      // Prefer API assignments (bypass RLS) when Supabase returns empty
+      const mergedAssignments = (schoolData.assignments as TeacherClassAssignment[])?.length
+        ? (schoolData.assignments as TeacherClassAssignment[])
+        : sbAsgn
+
       setClasses(backfilled)
-      setStudents(s)
+      setStudents(allStudents)
       setTests(t)
       setMarks(dedupedMarks)
       setMastery(ma)
@@ -212,9 +258,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSyllabusTopics(syl)
       setSessions(ses)
       setSyllabusSubTopics(sub)
-      setTimetableEntries(tt)
+      setTimetableEntries(allTt)
       setCatchupMaterials(cu)
-      setAssignments(asgn)
+      setAssignments(mergedAssignments)
       setWorksheets(ws)
     } catch (err) {
       console.error('loadFromSupabase failed:', err)

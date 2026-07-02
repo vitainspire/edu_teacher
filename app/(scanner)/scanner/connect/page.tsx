@@ -57,8 +57,8 @@ function formatDate(iso: string) {
 export default function ConnectPage() {
   const router = useRouter();
 
-  const [teacherId, setTeacherId] = useState<string | null>(null);
-  const [teacherName, setTeacherName] = useState("");
+  const [schoolId, setSchoolId]     = useState<string | null>(null);
+  const [schoolName, setSchoolName] = useState("");
 
   const [code, setCode] = useState("");
   const [codeLoading, setCodeLoading] = useState(false);
@@ -69,68 +69,70 @@ export default function ConnectPage() {
   const [testsLoading, setTestsLoading] = useState(false);
   const [testsError, setTestsError]     = useState<string | null>(null);
 
-  const loadAll = useCallback(async (tId: string) => {
+  const loadAll = useCallback(async (sId: string) => {
     setTestsLoading(true);
     setTestsError(null);
 
-    const [testsRes, wsRes, classesRes] = await Promise.all([
+    // 1. All classes for this school
+    const { data: classesData, error: classesErr } = await supabase
+      .from("classes")
+      .select("id, name, grade, section")
+      .eq("school_id", sId);
+
+    if (classesErr) { setTestsError(classesErr.message); setTestsLoading(false); return; }
+
+    const classes = (classesData ?? []) as ClassRow[];
+    const classIds = classes.map(c => c.id);
+    const classMap = new Map<string, ClassRow>(classes.map(c => [c.id, c]));
+
+    if (classIds.length === 0) {
+      setTestGroups([]);
+      setWorksheetGroups([]);
+      setTestsLoading(false);
+      return;
+    }
+
+    // 2. Tests + worksheets + student counts in parallel
+    const [testsRes, wsRes] = await Promise.all([
       supabase
         .from("tests")
         .select("id, topic, total_marks, conducted_on, class_id, subject, term")
-        .eq("teacher_id", tId)
+        .in("class_id", classIds)
         .order("conducted_on", { ascending: false }),
       supabase
         .from("worksheets")
         .select("id, topic, total_marks, subject, class_id, created_at")
-        .eq("teacher_id", tId)
+        .in("class_id", classIds)
         .order("created_at", { ascending: false }),
-      supabase
-        .from("classes")
-        .select("id, name, grade, section")
-        .eq("teacher_id", tId),
     ]);
 
     if (testsRes.error) { setTestsError(testsRes.error.message); setTestsLoading(false); return; }
 
     const rawTests = (testsRes.data ?? []) as Omit<TestRow, "scanned" | "total">[];
     const rawWs    = (wsRes.data ?? []) as Omit<WorksheetRow, "scanned" | "total">[];
-    const classes  = (classesRes.data ?? []) as ClassRow[];
-
-    const classMap = new Map<string, ClassRow>();
-    for (const c of classes) classMap.set(c.id, c);
-
-    // All unique class IDs across tests + worksheets
-    const allClassIds = [
-      ...new Set([
-        ...rawTests.map(t => t.class_id),
-        ...rawWs.map(w => w.class_id),
-      ].filter(Boolean) as string[])
-    ];
 
     // Student counts per class
     const studentMap = new Map<string, number>();
-    if (allClassIds.length > 0) {
-      const { data } = await supabase
-        .from("students")
-        .select("id, class_id")
-        .in("class_id", allClassIds)
-        .eq("is_active", true);
-      for (const s of (data ?? []) as { id: string; class_id: string }[])
-        studentMap.set(s.class_id, (studentMap.get(s.class_id) ?? 0) + 1);
-    }
+    const { data: stuData } = await supabase
+      .from("students")
+      .select("id, class_id")
+      .in("class_id", classIds)
+      .eq("is_active", true);
+    for (const s of (stuData ?? []) as { id: string; class_id: string }[])
+      studentMap.set(s.class_id, (studentMap.get(s.class_id) ?? 0) + 1);
 
     // Marks counts per test
-    const testIds = rawTests.map(t => t.id);
     const marksMap = new Map<string, number>();
+    const testIds = rawTests.map(t => t.id);
     if (testIds.length > 0) {
       const { data } = await supabase.from("marks").select("test_id").in("test_id", testIds);
       for (const m of (data ?? []) as { test_id: string }[])
         marksMap.set(m.test_id, (marksMap.get(m.test_id) ?? 0) + 1);
     }
 
-    // Worksheet marks counts per worksheet
-    const wsIds = rawWs.map(w => w.id);
+    // Worksheet marks counts
     const wsMarksMap = new Map<string, number>();
+    const wsIds = rawWs.map(w => w.id);
     if (wsIds.length > 0) {
       const { data } = await supabase
         .from("worksheet_marks")
@@ -172,11 +174,11 @@ export default function ConnectPage() {
   }, []);
 
   useEffect(() => {
-    const tId = localStorage.getItem("scanner_teacher_id");
-    if (tId) {
-      setTeacherId(tId);
-      setTeacherName(localStorage.getItem("scanner_teacher_name") ?? "");
-      void loadAll(tId);
+    const sId = localStorage.getItem("scanner_school_id");
+    if (sId) {
+      setSchoolId(sId);
+      setSchoolName(localStorage.getItem("scanner_school_name") ?? "");
+      void loadAll(sId);
     }
   }, [loadAll]);
 
@@ -188,39 +190,37 @@ export default function ConnectPage() {
     setCodeLoading(true);
 
     const { data, error: dbError } = await supabase
-      .from("teachers")
-      .select("id, name, school_name")
-      .eq("teacher_code", trimmed.toUpperCase())
+      .from("schools")
+      .select("id, name")
+      .eq("join_code", trimmed.toUpperCase())
       .single();
 
     if (dbError || !data) {
-      setCodeError("Teacher code not found. Please check with your teacher.");
+      setCodeError("School code not found. Ask your school admin for the correct code.");
       setCodeLoading(false);
       return;
     }
 
-    const t = data as { id: string; name: string; school_name: string | null };
-    localStorage.setItem("scanner_teacher_id", t.id);
-    localStorage.setItem("scanner_teacher_name", t.name ?? "");
-    localStorage.setItem("scanner_school_name", t.school_name ?? "");
-    setTeacherId(t.id);
-    setTeacherName(t.name ?? "");
+    const s = data as { id: string; name: string };
+    localStorage.setItem("scanner_school_id", s.id);
+    localStorage.setItem("scanner_school_name", s.name ?? "");
+    setSchoolId(s.id);
+    setSchoolName(s.name ?? "");
     setCodeLoading(false);
-    void loadAll(t.id);
+    void loadAll(s.id);
   }
 
   function disconnect() {
-    localStorage.removeItem("scanner_teacher_id");
-    localStorage.removeItem("scanner_teacher_name");
+    localStorage.removeItem("scanner_school_id");
     localStorage.removeItem("scanner_school_name");
-    setTeacherId(null);
+    setSchoolId(null);
     setTestGroups([]);
     setWorksheetGroups([]);
     setCode("");
   }
 
   // ── Connected: show tests + worksheets ─────────────────────────────────────
-  if (teacherId) {
+  if (schoolId) {
     const totalTests   = testGroups.reduce((s, g) => s + g.tests.length, 0);
     const totalScanned = testGroups.reduce((s, g) => s + g.tests.reduce((ss, t) => ss + t.scanned, 0), 0);
     const totalWs      = worksheetGroups.reduce((s, g) => s + g.worksheets.length, 0);
@@ -232,10 +232,8 @@ export default function ConnectPage() {
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black tracking-[0.2em] uppercase text-indigo-500 mb-0.5">
-                {localStorage.getItem("scanner_school_name") || "School"}
-              </p>
-              <h1 className="text-xl font-black text-gray-900 leading-tight">{teacherName || "Teacher"}</h1>
+              <p className="text-[10px] font-black tracking-[0.2em] uppercase text-indigo-500 mb-0.5">School Scanner</p>
+              <h1 className="text-xl font-black text-gray-900 leading-tight">{schoolName || "School"}</h1>
               {!testsLoading && (totalTests > 0 || totalWs > 0) && (
                 <p className="text-xs text-gray-400 mt-0.5">
                   {totalTests} test{totalTests !== 1 ? "s" : ""}
@@ -246,7 +244,7 @@ export default function ConnectPage() {
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <button
-                onClick={() => void loadAll(teacherId)}
+                onClick={() => void loadAll(schoolId)}
                 disabled={testsLoading}
                 className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-40"
                 title="Refresh"
@@ -276,7 +274,7 @@ export default function ConnectPage() {
                 <BookOpen size={28} className="text-indigo-300" />
               </div>
               <p className="text-gray-500 font-bold text-sm">No tests or worksheets yet</p>
-              <p className="text-xs text-gray-400 mt-1">The teacher hasn&apos;t created any content yet.</p>
+              <p className="text-xs text-gray-400 mt-1">Teachers haven&apos;t created any content yet.</p>
             </div>
           ) : (
             <div className="space-y-8">
@@ -470,7 +468,7 @@ export default function ConnectPage() {
     );
   }
 
-  // ── Not connected: enter the teacher code ───────────────────────────────────
+  // ── Not connected: enter the school code ───────────────────────────────────
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-3.5rem)] pb-safe">
       <div className="w-full max-w-sm space-y-8 px-4">
@@ -479,15 +477,15 @@ export default function ConnectPage() {
             <BookOpen size={36} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-gray-900">Enter Teacher Code</h1>
-            <p className="text-sm text-gray-400 mt-1.5">Ask your teacher for their 6-letter scanner code</p>
+            <h1 className="text-2xl font-black text-gray-900">Enter School Code</h1>
+            <p className="text-sm text-gray-400 mt-1.5">Ask your school admin for the school join code</p>
           </div>
         </div>
 
         <form onSubmit={handleCodeConnect} className="space-y-3">
           <input
             type="text"
-            placeholder="E.G. K7M2P9"
+            placeholder="E.G. SCH-K7M2"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             required

@@ -106,17 +106,36 @@ export async function deleteClass(id: string) {
 }
 
 export async function fetchClasses(teacherId: string, _schoolId?: string, _schoolName?: string): Promise<Class[]> {
-  const { data, error } = await supabase
-    .from('classes').select('*').order('created_at')
-    .eq('teacher_id', teacherId)
-  if (error) throw error
-  return (data ?? []).map(r => ({
-    id: r.id, teacherId: r.teacher_id, schoolName: r.school_name ?? '',
-    schoolId: r.school_id ?? undefined,
-    name: r.name, grade: r.grade, section: r.section ?? '',
-    academicYear: r.academic_year ?? '', createdAt: r.created_at ?? '',
-    classCode: r.class_code ?? undefined,
-  }))
+  const mapRow = (r: Record<string, unknown>) => ({
+    id: r.id as string, teacherId: r.teacher_id as string, schoolName: (r.school_name as string) ?? '',
+    schoolId: (r.school_id as string) ?? undefined,
+    name: r.name as string, grade: r.grade as string, section: (r.section as string) ?? '',
+    academicYear: (r.academic_year as string) ?? '', createdAt: (r.created_at as string) ?? '',
+    classCode: (r.class_code as string) ?? undefined,
+  })
+
+  // Fetch own classes and assignments in parallel
+  const [ownResult, assignResult] = await Promise.all([
+    supabase.from('classes').select('*').order('created_at').eq('teacher_id', teacherId),
+    supabase.from('teacher_class_assignments').select('class_id').eq('teacher_id', teacherId),
+  ])
+  if (ownResult.error) throw ownResult.error
+
+  const ownRows = ownResult.data ?? []
+  const ownIds = new Set(ownRows.map((r: Record<string, unknown>) => r.id as string))
+
+  // Admin-assigned classes not already owned
+  const extraIds = (assignResult.data ?? [])
+    .map((a: Record<string, unknown>) => a.class_id as string)
+    .filter((id: string) => !ownIds.has(id))
+
+  let extraRows: Record<string, unknown>[] = []
+  if (extraIds.length > 0) {
+    const { data } = await supabase.from('classes').select('*').in('id', extraIds).order('created_at')
+    extraRows = data ?? []
+  }
+
+  return [...ownRows, ...extraRows].map(mapRow)
 }
 
 // ─── Syllabus Topics ──────────────────────────────────────────────────────────
@@ -203,6 +222,7 @@ export async function fetchStudents(teacherId: string): Promise<Student[]> {
     name: r.name, rollNumber: r.roll_number, isActive: r.is_active,
     interests: r.interests ?? [], goal: r.goal ?? '',
     pin: r.pin ?? undefined,
+    studentCode: r.student_code ?? undefined,
   }))
 }
 
@@ -216,6 +236,7 @@ export async function fetchStudentsByClasses(classIds: string[]): Promise<Studen
     name: r.name, rollNumber: r.roll_number, isActive: r.is_active,
     interests: r.interests ?? [], goal: r.goal ?? '',
     pin: r.pin ?? undefined,
+    studentCode: r.student_code ?? undefined,
   }))
 }
 
@@ -404,6 +425,7 @@ export async function upsertTimetableEntry(e: TimetableEntry) {
       id: e.id, teacher_id: e.teacherId, class_id: e.classId,
       day_of_week: e.dayOfWeek, period_number: e.periodNumber,
       start_time: e.startTime, end_time: e.endTime,
+      label: e.label ?? null,
     })
     if (error) throw error
   } catch { /* table may not exist yet */ }
@@ -417,6 +439,7 @@ export async function fetchTimetableEntries(teacherId: string): Promise<Timetabl
       id: r.id, teacherId: r.teacher_id, classId: r.class_id,
       dayOfWeek: r.day_of_week, periodNumber: r.period_number,
       startTime: r.start_time, endTime: r.end_time,
+      label: r.label ?? undefined,
     }))
   } catch { return [] }
 }
@@ -512,7 +535,8 @@ export async function deleteIntervention(id: string) {
 export async function upsertAssignment(a: TeacherClassAssignment) {
   try {
     const { error } = await supabase.from('teacher_class_assignments').upsert({
-      id: a.id, teacher_id: a.teacherId, class_id: a.classId, created_at: a.createdAt,
+      id: a.id, teacher_id: a.teacherId, class_id: a.classId,
+      subject: a.subject ?? null, created_at: a.createdAt,
     }, { onConflict: 'teacher_id,class_id' })
     if (error) throw error
   } catch { /* ignore if table not yet created */ }
@@ -531,7 +555,8 @@ export async function fetchAssignments(teacherId: string): Promise<TeacherClassA
       .from('teacher_class_assignments').select('*').eq('teacher_id', teacherId)
     if (error) return []
     return (data ?? []).map(r => ({
-      id: r.id, teacherId: r.teacher_id, classId: r.class_id, createdAt: r.created_at ?? '',
+      id: r.id, teacherId: r.teacher_id, classId: r.class_id,
+      subject: r.subject ?? undefined, createdAt: r.created_at ?? '',
     }))
   } catch { return [] }
 }

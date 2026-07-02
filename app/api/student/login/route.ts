@@ -6,48 +6,36 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()
   try {
-    const { classCode, rollNumber } = await req.json()
-    if (!classCode?.trim() || !rollNumber?.trim()) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+    const { studentCode } = await req.json()
+    if (!studentCode?.trim()) {
+      return NextResponse.json({ error: 'Please enter your Student ID.' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
 
-    const { data: cls } = await supabase
-      .from('classes')
-      .select('*')
-      .ilike('class_code', classCode.trim())
-      .single()
-
-    if (!cls) {
-      return NextResponse.json(
-        { error: 'Class code not found. Ask your teacher for the correct code.' },
-        { status: 404 },
-      )
-    }
-
     const { data: student } = await supabase
       .from('students')
-      .select('*')
-      .eq('class_id', cls.id)
-      .eq('roll_number', rollNumber.trim())
+      .select('*, classes(*)')
+      .eq('student_code', studentCode.trim().toUpperCase())
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
 
     if (!student) {
       return NextResponse.json(
-        { error: 'Roll number not found in this class.' },
+        { error: 'Student ID not found. Ask your teacher or school admin for your Student ID.' },
         { status: 404 },
       )
     }
 
+    const cls = student.classes
+
     const session = {
       studentId: student.id,
-      classId: cls.id,
+      classId: student.class_id,
       studentName: student.name,
-      grade: cls.grade,
-      section: cls.section ?? '',
-      subject: cls.name,
+      grade: cls?.grade ?? '',
+      section: cls?.section ?? '',
+      subject: cls?.name ?? '',
     }
 
     apiLog({ route: 'student/login', ip, userId: student.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })

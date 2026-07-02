@@ -42,6 +42,7 @@ export default function HomePage() {
   const [dateStr, setDateStr]       = useState('')
   const [showTour, setShowTour]         = useState(false)
   const [showGuideBtn, setShowGuideBtn] = useState(false)
+  const [hasAdmin, setHasAdmin]         = useState(false)
 
   // All 4 setup steps complete
   const allSetupDone =
@@ -63,6 +64,15 @@ export default function HomePage() {
     const hiddenKey = `eduteach_show_guide_btn_${teacher.id}`
     setShowGuideBtn(localStorage.getItem(hiddenKey) !== 'false')
   }, [teacher])
+
+  // Check if school has an admin (hides class-creation controls for teachers)
+  useEffect(() => {
+    if (!teacher?.schoolId) return
+    fetch(`/api/school/has-admin?schoolId=${teacher.schoolId}`)
+      .then(r => r.json())
+      .then(d => setHasAdmin(!!d.hasAdmin))
+      .catch(() => {})
+  }, [teacher?.schoolId])
 
   // Auto-trigger tour the first time all 4 setup steps are done
   useEffect(() => {
@@ -155,7 +165,8 @@ export default function HomePage() {
             students={students}
             syllabusTopics={syllabusTopics}
             timetableEntries={timetableEntries}
-            onCreateClass={() => setCreateOpen(true)}
+            onCreateClass={hasAdmin ? undefined : () => setCreateOpen(true)}
+            hasAdmin={hasAdmin}
           />
         )}
 
@@ -181,18 +192,23 @@ export default function HomePage() {
           <div className="flex items-center gap-3 mb-3 px-1">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Your Classes</span>
             <div className="h-px flex-1 bg-slate-200" />
-            <button onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-1 text-[11px] font-bold text-blue-600 shrink-0">
-              <Plus size={11} strokeWidth={3} /> Add class
-            </button>
+            {hasAdmin ? (
+              <span className="text-[11px] text-slate-400 shrink-0 italic">Managed by admin</span>
+            ) : (
+              <button onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 shrink-0">
+                <Plus size={11} strokeWidth={3} /> Add class
+              </button>
+            )}
           </div>
 
           {myClasses.length === 0 ? (
-            <EmptyClasses onCreate={() => setCreateOpen(true)} />
+            <EmptyClasses onCreate={hasAdmin ? undefined : () => setCreateOpen(true)} />
           ) : (
             <div className="space-y-3">
 
               {/* Register-style class table */}
+              <ErrorBoundary label="class list">
               <div className="bg-white overflow-hidden rounded-2xl" style={{ border: '1.5px solid #e2e8f0' }}>
                 {myClasses.map((cls, idx) => {
                   const color      = CLASS_COLORS[idx % CLASS_COLORS.length]
@@ -240,8 +256,9 @@ export default function HomePage() {
                   )
                 })}
               </div>
+              </ErrorBoundary>
 
-              {/* Quick links â€” single toolbar */}
+              {/* Quick links — single toolbar */}
               <div className="bg-white rounded-2xl overflow-hidden flex divide-x divide-slate-100"
                 style={{ border: '1.5px solid #e2e8f0' }}>
                 {[
@@ -289,22 +306,33 @@ export default function HomePage() {
   )
 }
 
-function EmptyClasses({ onCreate }: { onCreate: () => void }) {
+function EmptyClasses({ onCreate }: { onCreate?: () => void }) {
   return (
     <div className="bg-white rounded-2xl px-6 py-14 text-center" style={{ border: '1.5px solid #e2e8f0' }}>
       <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
         style={{ background: '#eff6ff' }}>
         <GraduationCap size={28} className="text-blue-600" />
       </div>
-      <h3 className="font-bold text-slate-800 text-lg">Start your first class</h3>
-      <p className="text-sm text-slate-500 mt-2 leading-relaxed max-w-xs mx-auto">
-        Add a class, enroll students, and let AI help you teach smarter every day.
-      </p>
-      <button onClick={onCreate}
-        className="mt-6 inline-flex items-center gap-2 text-white font-bold px-8 py-3 rounded-xl text-sm active:scale-95 transition-transform"
-        style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' }}>
-        <Plus size={15} strokeWidth={2.5} /> Create Class
-      </button>
+      {onCreate ? (
+        <>
+          <h3 className="font-bold text-slate-800 text-lg">Start your first class</h3>
+          <p className="text-sm text-slate-500 mt-2 leading-relaxed max-w-xs mx-auto">
+            Add a class, enroll students, and let AI help you teach smarter every day.
+          </p>
+          <button onClick={onCreate}
+            className="mt-6 inline-flex items-center gap-2 text-white font-bold px-8 py-3 rounded-xl text-sm active:scale-95 transition-transform"
+            style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' }}>
+            <Plus size={15} strokeWidth={2.5} /> Create Class
+          </button>
+        </>
+      ) : (
+        <>
+          <h3 className="font-bold text-slate-800 text-lg">No classes yet</h3>
+          <p className="text-sm text-slate-500 mt-2 leading-relaxed max-w-xs mx-auto">
+            Classes are managed by your school admin. Once assigned, they will appear here.
+          </p>
+        </>
+      )}
     </div>
   )
 }

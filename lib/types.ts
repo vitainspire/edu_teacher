@@ -43,7 +43,8 @@ export interface Student {
   isActive: boolean
   interests: string[]
   goal: string
-  pin?: string   // 4-digit PIN for student portal login
+  pin?: string
+  studentCode?: string
 }
 
 export type QuestionType = 'mcq' | 'fill-in-blank' | 'short-answer' | 'long-answer'
@@ -280,6 +281,7 @@ export interface TimetableEntry {
   periodNumber: number
   startTime: string   // "09:00"
   endTime: string     // "09:45"
+  label?: string      // subject label from admin timetable
 }
 
 export interface LessonPrep {
@@ -302,6 +304,7 @@ export interface TeacherClassAssignment {
   id: string
   teacherId: string
   classId: string
+  subject?: string
   createdAt: string
 }
 
@@ -370,5 +373,42 @@ export interface CatchupMaterial {
   focusNote: string
   status: 'approved' | 'given' | 'done'
   reason?: 'absent' | 'low-score'
+  createdAt: string
+}
+
+export interface ScheduleSlot {
+  type: 'period' | 'break'
+  periodNumber?: number
+  label: string       // "Period 1", "Short Break", "Lunch Break"
+  startTime: string   // "09:00"
+  endTime: string     // "09:45"
+}
+
+export interface SchoolSchedule {
+  id: string
+  schoolId: string
+  slots: ScheduleSlot[]
+  createdAt: string
+}
+
+export interface Admin {
+  id: string
+  userId: string
+  name: string
+  email: string
+  schoolId: string
+  createdAt: string
+}
+
+export interface SchoolTimetablePeriod {
+  id: string
+  schoolId: string
+  dayOfWeek: number
+  periodNumber: number
+  startTime: string
+  endTime: string
+  classId: string
+  teacherId?: string
+  label?: string
   createdAt: string
 }

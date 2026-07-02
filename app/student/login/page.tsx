@@ -1,19 +1,18 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BookOpen, LogIn } from 'lucide-react'
+import { BookOpen, LogIn, Hash } from 'lucide-react'
 
 export default function StudentLoginPage() {
   const router = useRouter()
-  const [classCode, setClassCode]   = useState('')
-  const [rollNumber, setRollNumber] = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
+  const [studentCode, setStudentCode] = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
 
   const handleLogin = async () => {
     setError('')
-    if (!classCode.trim() || !rollNumber.trim()) {
-      setError('Please enter your class code and roll number.')
+    if (!studentCode.trim()) {
+      setError('Please enter your Student ID.')
       return
     }
     setLoading(true)
@@ -21,7 +20,7 @@ export default function StudentLoginPage() {
       const res = await fetch('/api/student/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ classCode: classCode.trim(), rollNumber: rollNumber.trim() }),
+        body: JSON.stringify({ studentCode: studentCode.trim().toUpperCase() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -56,7 +55,7 @@ export default function StudentLoginPage() {
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-7 space-y-5">
         <div>
           <h1 className="text-2xl font-black text-slate-800">Welcome!</h1>
-          <p className="text-sm text-slate-400 mt-1">Enter your class code and roll number to continue</p>
+          <p className="text-sm text-slate-400 mt-1">Enter your Student ID to continue</p>
         </div>
 
         {error && (
@@ -65,36 +64,23 @@ export default function StudentLoginPage() {
           </div>
         )}
 
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">
-              Class Code
-            </label>
+        <div>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">
+            Student ID
+          </label>
+          <div className="relative">
+            <Hash size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              value={classCode}
-              onChange={e => setClassCode(e.target.value.toUpperCase())}
+              value={studentCode}
+              onChange={e => setStudentCode(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="e.g. ABC123"
-              maxLength={8}
-              className="w-full border-2 border-slate-200 rounded-2xl px-4 py-3 text-slate-800 font-bold text-lg tracking-widest uppercase focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            <p className="text-xs text-slate-400 mt-1">Ask your teacher for this code</p>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">
-              Roll Number
-            </label>
-            <input
-              type="text"
-              value={rollNumber}
-              onChange={e => setRollNumber(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="e.g. 01"
-              className="w-full border-2 border-slate-200 rounded-2xl px-4 py-3 text-slate-800 font-bold text-lg focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="e.g. STABCD23"
+              maxLength={10}
+              className="w-full border-2 border-slate-200 rounded-2xl pl-11 pr-4 py-3.5 text-slate-800 font-black text-xl tracking-[0.2em] uppercase focus:outline-none focus:border-blue-500 transition-colors"
             />
           </div>
+          <p className="text-xs text-slate-400 mt-1.5">Ask your teacher or school admin for this ID</p>
         </div>
 
         <button
