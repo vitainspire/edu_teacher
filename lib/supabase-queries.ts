@@ -70,7 +70,7 @@ export async function upsertTeacher(t: Teacher) {
 }
 
 export async function fetchTeacher(userId: string): Promise<Teacher | null> {
-  const { data, error } = await supabase.from('teachers').select('*').eq('id', userId).single()
+  const { data, error } = await supabase.from('teachers').select('*').eq('user_id', userId).maybeSingle()
   if (error || !data) return null
   return {
     id: data.id,
