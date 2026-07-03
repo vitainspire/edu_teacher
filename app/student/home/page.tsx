@@ -275,7 +275,6 @@ export default function StudentHomePage() {
   })
   const [showExpl,      setShowExpl]      = useState(false)
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set())
-  const [sidebarView,   setSidebarView]   = useState<'subjects' | 'badges'>('subjects')
   const [errorMsg,      setErrorMsg]      = useState<string | null>(null)
   const [loadError,     setLoadError]     = useState(false)
   const [showInterests, setShowInterests] = useState(false)
@@ -533,167 +532,85 @@ export default function StudentHomePage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#f1f5f9', fontFamily: 'var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#eff6ff', fontFamily: 'var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
 
-      {/* ════ SIDEBAR ════ */}
-      <aside style={{ width: 240, flexShrink: 0, background: '#fff', borderRight: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* ════ TOP BAR ════ */}
+      <header style={{ background: '#fff', borderBottom: '2px solid #e0ecff', display: 'flex', alignItems: 'center', padding: '0 28px', height: 68, flexShrink: 0, gap: 20, boxShadow: '0 2px 12px rgba(37,99,235,0.07)' }}>
 
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 18px 16px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 11, background: 'linear-gradient(135deg, #07153a 0%, #1d4ed8 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <GraduationCap size={18} color="#fff" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 12, background: 'linear-gradient(135deg, #07153a 0%, #1d4ed8 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <GraduationCap size={20} color="#fff" />
           </div>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 900, color: '#0f172a', letterSpacing: '-.3px', lineHeight: 1 }}>EduTeach</p>
-            <p style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginTop: 3 }}>Student Portal</p>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>EduTeach</p>
+            <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>Student Portal</p>
           </div>
         </div>
 
-        {/* Tab switcher: Subjects | Badges */}
-        <div style={{ display: 'flex', margin: '12px 12px 0', background: '#f1f5f9', borderRadius: 12, padding: 3, flexShrink: 0 }}>
-          {(['subjects', 'badges'] as const).map(tab => {
-            const isAct = sidebarView === tab
-            const earnedCount = allBadges.filter(b => b.earned).length
+        <div style={{ width: 1, height: 32, background: '#e2e8f0', flexShrink: 0 }} />
+
+        {/* Subject tabs */}
+        <div style={{ flex: 1, display: 'flex', gap: 8, overflowX: 'auto', padding: '2px 0' }}>
+          {subjects.map((sub, idx) => {
+            const isAct = idx === activeIdx
             return (
-              <button key={tab} onClick={() => setSidebarView(tab)}
-                style={{ flex: 1, padding: '7px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700, transition: 'all .15s', background: isAct ? '#fff' : 'transparent', color: isAct ? '#1e293b' : '#94a3b8', boxShadow: isAct ? '0 1px 4px rgba(15,23,42,0.10)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                {tab === 'subjects' ? 'Subjects' : (
-                  <>
-                    Badges
-                    {earnedCount > 0 && <span style={{ minWidth: 16, height: 16, borderRadius: 8, background: '#2563eb', color: '#fff', fontSize: 9, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{earnedCount}</span>}
-                  </>
-                )}
+              <button key={sub.classId} onClick={() => handleSelect(idx)}
+                style={{ flexShrink: 0, padding: '8px 20px', borderRadius: 24, border: isAct ? 'none' : '2px solid #e2e8f0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, transition: 'all .15s', background: isAct ? 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' : '#f8fafc', color: isAct ? '#fff' : '#64748b', boxShadow: isAct ? '0 2px 10px rgba(37,99,235,0.25)' : 'none', display: 'flex', alignItems: 'center', gap: 7 }}>
+                {sub.label}
+                {isAct && dataLoading && <Loader2 size={12} className="animate-spin" style={{ color: 'rgba(255,255,255,.7)' }} />}
               </button>
             )
           })}
         </div>
 
-        {/* Scrollable body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px 0' }}>
-
-          {/* ─ SUBJECTS VIEW ─ */}
-          {sidebarView === 'subjects' && (
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {subjects.map((sub, idx) => {
-                const isAct = idx === activeIdx
-                return (
-                  <button key={sub.classId} onClick={() => handleSelect(idx)}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 14, border: 'none', cursor: 'pointer', transition: 'all .15s', textAlign: 'left', ...(isAct ? { background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', boxShadow: '0 2px 12px rgba(37,99,235,0.28)' } : { background: 'transparent' }) }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: isAct ? 'rgba(255,255,255,.75)' : sub.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, fontWeight: isAct ? 800 : 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isAct ? '#fff' : '#64748b' }}>
-                      {sub.label}
-                    </span>
-                    {isAct && dataLoading && <Loader2 size={12} className="animate-spin" style={{ color: 'rgba(255,255,255,.7)', flexShrink: 0 }} />}
-                  </button>
-                )
-              })}
-            </nav>
-          )}
-
-          {/* ─ BADGES VIEW ─ */}
-          {sidebarView === 'badges' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 8 }}>
-              {/* Earned count banner */}
-              {(() => {
-                const earned = allBadges.filter(b => b.earned).length
-                const total  = allBadges.length
-                return (
-                  <div style={{ padding: '12px 14px', borderRadius: 14, background: earned > 0 ? 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' : '#f8fafc', marginBottom: 6, textAlign: 'center' }}>
-                    <p style={{ fontSize: 28, fontWeight: 900, color: earned > 0 ? '#fff' : '#94a3b8', lineHeight: 1 }}>{earned}<span style={{ fontSize: 14, fontWeight: 600 }}>/{total}</span></p>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: earned > 0 ? 'rgba(255,255,255,.8)' : '#cbd5e1', marginTop: 4 }}>
-                      {earned === total ? 'All badges earned! 🎉' : earned === 0 ? 'Start earning badges!' : 'Badges earned'}
-                    </p>
-                    {earned > 0 && earned < total && (
-                      <div style={{ marginTop: 8, height: 4, background: 'rgba(255,255,255,.25)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', background: '#fff', borderRadius: 2, width: `${Math.round((earned / total) * 100)}%` }} />
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
-
-              {/* Earned badges */}
-              {allBadges.filter(b => b.earned).length > 0 && (
-                <>
-                  <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#059669', padding: '4px 4px 2px' }}>✓ Earned</p>
-                  {allBadges.filter(b => b.earned).map(b => (
-                    <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 14, background: b.bg, border: `1.5px solid ${b.border}` }}>
-                      <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{b.icon}</span>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ fontSize: 12.5, fontWeight: 800, color: b.color, lineHeight: 1 }}>{b.name}</p>
-                        <p style={{ fontSize: 10.5, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>{b.description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {/* Locked badges */}
-              {allBadges.filter(b => !b.earned).length > 0 && (
-                <>
-                  <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#94a3b8', padding: '8px 4px 2px' }}>🔒 Locked</p>
-                  {allBadges.filter(b => !b.earned).map(b => (
-                    <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 14, background: '#f8fafc', border: '1.5px solid #e2e8f0', opacity: 0.85 }}>
-                      <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0, filter: 'grayscale(1)', opacity: 0.4 }}>{b.icon}</span>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', lineHeight: 1 }}>{b.name}</p>
-                        <p style={{ fontSize: 10, color: '#cbd5e1', marginTop: 3, lineHeight: 1.4 }}>{b.hint}</p>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* User profile + sign out */}
-        <div style={{ padding: '12px 10px 14px', borderTop: '1px solid #f1f5f9', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 4px', marginBottom: 8 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
-              {(student.name?.trim()?.[0] ?? '?').toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{student.name}</p>
-              <p style={{ fontSize: 10, fontWeight: 500, color: '#94a3b8', marginTop: 3 }}>
-                Roll #{student.rollNumber} · Gr {cls.grade}{cls.section ? cls.section : ''}
-              </p>
-            </div>
-          </div>
+        {/* Profile area */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <button onClick={openInterestsEditor}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#64748b', fontFamily: 'inherit', marginBottom: 2 }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f0f9ff'; (e.currentTarget as HTMLButtonElement).style.color = '#2563eb' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
-            <Pencil size={13} />
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 20, border: '2px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#64748b', fontFamily: 'inherit' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2563eb'; (e.currentTarget as HTMLButtonElement).style.color = '#2563eb' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
+            <Pencil size={12} />
             My Interests
             {student?.interests && student.interests.length > 0
-              ? <span style={{ marginLeft: 'auto', fontSize: 10, background: '#eff6ff', color: '#2563eb', borderRadius: 8, padding: '2px 7px', fontWeight: 800 }}>{student.interests.length}</span>
-              : <span style={{ marginLeft: 'auto', fontSize: 10, color: '#fbbf24', fontWeight: 700 }}>Set now</span>
+              ? <span style={{ background: '#eff6ff', color: '#2563eb', borderRadius: 10, padding: '1px 7px', fontSize: 10.5, fontWeight: 900 }}>{student.interests.length}</span>
+              : <span style={{ fontSize: 10.5, color: '#f59e0b', fontWeight: 700 }}>Set!</span>
             }
           </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
+              {(student.name?.trim()?.[0] ?? '?').toUpperCase()}
+            </div>
+            <div>
+              <p style={{ fontSize: 13.5, fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>{student.name}</p>
+              <p style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 2 }}>Roll #{student.rollNumber} · Gr {cls.grade}{cls.section ?? ''}</p>
+            </div>
+          </div>
+
           <button onClick={handleLogout}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#94a3b8', fontFamily: 'inherit' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#94a3b8', fontFamily: 'inherit' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#fca5a5' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0' }}>
             <LogOut size={13} /> Sign out
           </button>
         </div>
-      </aside>
+      </header>
 
-      {/* ════ MAIN ════ */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* ════ MAIN CONTENT ════ */}
+      <div ref={contentPaneRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '28px 36px 60px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
 
-        {/* Topbar */}
-        <div style={{ height: 60, background: '#fff', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', padding: '0 28px', gap: 12, flexShrink: 0, boxShadow: '0 1px 0 #f1f5f9' }}>
-          <h1 style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', letterSpacing: '-.3px' }}>{active?.label ?? '…'}</h1>
-          <span style={{ color: '#e2e8f0', fontSize: 18 }}>·</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>Grade {cls.grade}{cls.section ? ` · Section ${cls.section}` : ''}</span>
-          <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500, color: '#94a3b8' }}>{dateStr}</span>
+        {/* Welcome row */}
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>{dateStr}</p>
+          <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 }}>
+            Hello, {student.name?.split(' ')[0]}! 👋
+          </h1>
+          <p style={{ fontSize: 15, color: '#64748b', marginTop: 4 }}>
+            Here&apos;s how you&apos;re doing in <span style={{ fontWeight: 800, color: '#2563eb' }}>{active?.label}</span>
+          </p>
         </div>
-
-        {/* Scrollable content */}
-        <div ref={contentPaneRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '24px 28px 48px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* ── Error toast ── */}
           {errorMsg && (
@@ -707,46 +624,81 @@ export default function StudentHomePage() {
 
           {dataLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="animate-pulse" style={{ height: 48, borderRadius: 16, background: '#e2e8f0' }} />
-              <div className="animate-pulse" style={{ height: 160, borderRadius: 24, background: '#e2e8f0' }} />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                {[1,2,3].map(i => <div key={i} className="animate-pulse" style={{ height: 156, borderRadius: 24, background: '#e2e8f0' }} />)}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                {[1,2,3,4].map(i => <div key={i} className="animate-pulse" style={{ height: 116, borderRadius: 20, background: '#dce8ff' }} />)}
               </div>
+              <div className="animate-pulse" style={{ height: 100, borderRadius: 20, background: '#dce8ff' }} />
+              <div className="animate-pulse" style={{ height: 220, borderRadius: 24, background: '#dce8ff' }} />
             </div>
 
           ) : loadError ? (
             <div style={{ ...CARD, alignItems: 'center', justifyContent: 'center', padding: '72px 20px', textAlign: 'center' }}>
-              <span style={{ fontSize: 44 }}>⚠️</span>
-              <p style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', marginTop: 14 }}>Could not load data</p>
-              <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>There was a problem fetching your {active?.label} data. Check your connection and try again.</p>
+              <span style={{ fontSize: 48 }}>⚠️</span>
+              <p style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', marginTop: 14 }}>Could not load data</p>
+              <p style={{ fontSize: 14, color: '#94a3b8', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>Check your connection and try again!</p>
               <button onClick={() => { const tab = subjects[activeIdx]; if (tab) loadData(tab) }}
-                style={{ marginTop: 18, padding: '10px 28px', borderRadius: 12, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Retry
+                style={{ marginTop: 18, padding: '12px 32px', borderRadius: 14, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Try Again
               </button>
             </div>
           ) : !subjectData ? (
             <div style={{ ...CARD, alignItems: 'center', justifyContent: 'center', padding: '72px 20px', textAlign: 'center' }}>
-              <span style={{ fontSize: 44 }}>📚</span>
-              <p style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', marginTop: 14 }}>No data yet for {active?.label}</p>
-              <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>Once your teacher records lessons and tests, your progress will appear here.</p>
+              <span style={{ fontSize: 52 }}>📚</span>
+              <p style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', marginTop: 14 }}>Nothing here yet for {active?.label}!</p>
+              <p style={{ fontSize: 14, color: '#94a3b8', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>Once your teacher adds lessons and tests, your progress will appear here.</p>
             </div>
 
           ) : (
             <>
-              {/* ── QUICK STATS ROW ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                {[
-                  { label: 'Attendance', value: `${attendPct}%`, sub: attendPct >= 90 ? 'Excellent' : attendPct >= 75 ? 'Good' : 'Needs improvement', color: attendColor, icon: '📅' },
-                  { label: 'Topics Done', value: totalCount > 0 ? `${completedCount}/${totalCount}` : `${subjectData.presentCount}`, sub: totalCount > 0 ? `${Math.round((completedCount / totalCount) * 100)}% of syllabus` : 'Classes attended', color: '#2563eb', icon: '📖' },
-                  { label: subjectData.attendanceStreak >= 2 ? `${subjectData.attendanceStreak} Class Streak` : 'Attendance Streak', value: subjectData.attendanceStreak >= 2 ? '🔥' : '—', sub: subjectData.attendanceStreak >= 2 ? 'Keep it up!' : 'Start attending to build one', color: '#ea580c', icon: null },
+              {/* ── STATS ROW ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                {([
+                  {
+                    icon: '📅',
+                    label: 'Classes Attended',
+                    value: subjectData.presentCount > 0 ? String(subjectData.presentCount) : '—',
+                    sub: attendPct >= 90 ? 'Amazing! Keep it up 🌟' : attendPct >= 75 ? 'Good job! Keep coming 👍' : attendPct > 0 ? 'Try to come more 💪' : 'No classes yet',
+                    bg: '#eff6ff', valueColor: '#1d4ed8', border: '#bfdbfe',
+                  },
+                  {
+                    icon: '📖',
+                    label: 'Topics Done',
+                    value: completedCount > 0 ? String(completedCount) : '0',
+                    sub: totalCount > 0
+                      ? completedCount === totalCount ? `All ${totalCount} done! 🎉` : `out of ${totalCount} topics`
+                      : 'Topics coming soon',
+                    bg: '#f0fdf4', valueColor: '#16a34a', border: '#bbf7d0',
+                  },
+                  {
+                    icon: subjectData.attendanceStreak >= 2 ? '🔥' : '💫',
+                    label: 'Class Streak',
+                    value: subjectData.attendanceStreak >= 2 ? String(subjectData.attendanceStreak) : '—',
+                    sub: subjectData.attendanceStreak >= 7 ? 'Week Warrior! 🔥🔥' : subjectData.attendanceStreak >= 3 ? 'On fire! Keep going!' : subjectData.attendanceStreak >= 2 ? 'Great start! 👏' : 'Attend more to build one',
+                    bg: '#fff7ed', valueColor: '#ea580c', border: '#fed7aa',
+                  },
                   subjectData.recentMarks[0]
-                    ? { label: 'Last Test', value: `${subjectData.recentMarks[0].score}/${subjectData.recentMarks[0].totalMarks}`, sub: subjectData.recentMarks[0].topic, color: (() => { const p = subjectData.recentMarks[0].score / subjectData.recentMarks[0].totalMarks; return p >= .7 ? '#059669' : p >= .5 ? '#f97316' : '#dc2626' })(), icon: '✏️' }
-                    : { label: 'Last Test', value: '—', sub: 'No tests yet', color: '#94a3b8', icon: '✏️' },
-                ].map((stat, i) => (
-                  <div key={i} style={{ background: '#fff', borderRadius: 16, border: '1px solid #f1f5f9', padding: '16px 18px' }}>
-                    <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 8 }}>{stat.label}</p>
-                    <p style={{ fontSize: stat.value === '🔥' ? 28 : 22, fontWeight: 900, color: stat.color, letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{stat.value}</p>
-                    <p style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', marginTop: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stat.sub}</p>
+                    ? (() => {
+                        const m = subjectData.recentMarks[0]
+                        const pct = m.totalMarks > 0 ? Math.round((m.score / m.totalMarks) * 100) : 0
+                        return {
+                          icon: pct >= 90 ? '🌟' : pct >= 70 ? '✅' : pct >= 50 ? '📝' : '💪',
+                          label: 'Last Test',
+                          value: `${m.score}/${m.totalMarks}`,
+                          sub: pct >= 90 ? 'Brilliant work! 🌟' : pct >= 70 ? 'Well done!' : pct >= 50 ? 'Getting better!' : 'Keep practising!',
+                          bg: pct >= 70 ? '#f0fdf4' : pct >= 50 ? '#fff7ed' : '#fef2f2',
+                          valueColor: pct >= 70 ? '#16a34a' : pct >= 50 ? '#ea580c' : '#dc2626',
+                          border: pct >= 70 ? '#bbf7d0' : pct >= 50 ? '#fed7aa' : '#fecaca',
+                        }
+                      })()
+                    : { icon: '✏️', label: 'Last Test', value: '—', sub: 'No tests yet', bg: '#f8fafc', valueColor: '#94a3b8', border: '#e2e8f0' },
+                ] as { icon: string; label: string; value: string; sub: string; bg: string; valueColor: string; border: string }[]).map((stat, i) => (
+                  <div key={i} style={{ background: stat.bg, borderRadius: 20, border: `2px solid ${stat.border}`, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 22, lineHeight: 1 }}>{stat.icon}</span>
+                      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b' }}>{stat.label}</p>
+                    </div>
+                    <p style={{ fontSize: 34, fontWeight: 900, color: stat.valueColor, letterSpacing: -1, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{stat.value}</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: '#64748b', lineHeight: 1.4 }}>{stat.sub}</p>
                   </div>
                 ))}
               </div>
@@ -1155,11 +1107,67 @@ export default function StudentHomePage() {
                 </div>
               )}
 
+              {/* ── BADGES SECTION ── */}
+              {allBadges.length > 0 && (() => {
+                const earned = allBadges.filter(b => b.earned)
+                const locked = allBadges.filter(b => !b.earned)
+                const earnedCount = earned.length
+                return (
+                  <div style={{ background: '#fff', borderRadius: 24, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+                    <div style={{ padding: '18px 24px', borderBottom: earnedCount > 0 ? '1px solid #f1f5f9' : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 22 }}>🏆</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>Your Badges</p>
+                        <p style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>
+                          {earnedCount === 0 ? 'Start attending and taking tests to earn badges!' : earnedCount === allBadges.length ? 'You earned all the badges! Amazing! 🎉' : `${earnedCount} of ${allBadges.length} badges earned — keep going!`}
+                        </p>
+                      </div>
+                      {earnedCount > 0 && (
+                        <div style={{ padding: '6px 16px', borderRadius: 20, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#fff', fontSize: 13, fontWeight: 800 }}>
+                          {earnedCount}/{allBadges.length}
+                        </div>
+                      )}
+                    </div>
+                    {earnedCount > 0 && (
+                      <div style={{ padding: '16px 24px', borderBottom: locked.length > 0 ? '1px solid #f8fafc' : 'none' }}>
+                        <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#059669', marginBottom: 12 }}>✓ Earned</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                          {earned.map(b => (
+                            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: b.bg, border: `1.5px solid ${b.border}` }}>
+                              <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>{b.icon}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: 13, fontWeight: 800, color: b.color, lineHeight: 1 }}>{b.name}</p>
+                                <p style={{ fontSize: 11, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>{b.description}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {locked.length > 0 && (
+                      <div style={{ padding: '16px 24px' }}>
+                        <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12 }}>🔒 Locked — earn these next!</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                          {locked.map(b => (
+                            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: '#f8fafc', border: '1.5px solid #e2e8f0', opacity: 0.8 }}>
+                              <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0, filter: 'grayscale(1)', opacity: 0.4 }}>{b.icon}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: 12.5, fontWeight: 700, color: '#94a3b8', lineHeight: 1 }}>{b.name}</p>
+                                <p style={{ fontSize: 11, color: '#cbd5e1', marginTop: 3, lineHeight: 1.4 }}>{b.hint}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
             </>
           )}
-        </div>{/* end inner flex column */}
-        </div>{/* end content pane */}
-      </div>
+        </div>{/* end maxWidth container */}
+      </div>{/* end main scrollable */}
 
       {/* ════ INTERESTS MODAL ════ */}
       {showInterests && (
