@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { apiLog, getClientIp } from '@/lib/logger'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()
   try {
+    const { allowed } = await checkRateLimit(ip)
+    if (!allowed) {
+      apiLog({ route: 'student/login', ip, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
+      return NextResponse.json(
+        { error: 'Too many attempts. Please wait a moment and try again.' },
+        { status: 429 },
+      )
+    }
+
     const { studentCode } = await req.json()
     if (!studentCode?.trim()) {
       return NextResponse.json({ error: 'Please enter your Student ID.' }, { status: 400 })

@@ -280,6 +280,12 @@ export default function StudentHomePage() {
   const [draftInterests, setDraftInterests] = useState<string[]>([])
   const [customInput,   setCustomInput]   = useState('')
   const [savingInterests, setSavingInterests] = useState(false)
+  const [learningProfile, setLearningProfile] = useState<{
+    difficultyLevel: 'beginner' | 'standard' | 'advanced'
+    learningStyle: string
+    quizCount: number
+    avgQuizScore: number | null
+  } | null>(null)
   const initDone       = useRef(false)
   const contentPaneRef = useRef<HTMLDivElement>(null)
 
@@ -297,10 +303,19 @@ export default function StudentHomePage() {
 
   async function init() {
     try {
-      const res = await fetch('/api/student/init')
+      const [res, profileRes] = await Promise.all([
+        fetch('/api/student/init'),
+        fetch('/api/student/learning-profile'),
+      ])
       if (!res.ok) { router.replace('/student/login'); return }
       const data = await res.json()
       setStudent(data.student); setCls(data.primaryClass)
+
+      if (profileRes.ok) {
+        const pData = await profileRes.json()
+        setLearningProfile(pData)
+      }
+
       const tabs: SubjectTab[] = data.tabs.map(
         (t: { classId: string; studentId: string; subject: string; teacherId?: string }, i: number) => ({
           classId: t.classId, studentId: t.studentId,
@@ -312,6 +327,18 @@ export default function StudentHomePage() {
       if (tabs.length > 0) await loadData(tabs[0])
     } catch { router.replace('/student/login') }
     finally { setLoading(false) }
+  }
+
+  function updateLearningProfile(topic: string, subject: string, score: number, total: number) {
+    fetch('/api/student/learning-profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quizResult: { topic, subject, score, total } }),
+    }).then(r => r.json()).then(data => {
+      if (data.difficultyLevel) {
+        setLearningProfile(prev => prev ? { ...prev, difficultyLevel: data.difficultyLevel } : null)
+      }
+    }).catch(() => {})
   }
 
   async function loadData(tab: SubjectTab) {
@@ -390,6 +417,7 @@ export default function StudentHomePage() {
         body: JSON.stringify({
           topic, subject: subjects[activeIdx]?.label ?? '',
           grade: cls?.grade ?? '', interests: student?.interests ?? [],
+          difficultyLevel: learningProfile?.difficultyLevel ?? 'standard',
         }),
       })
       if (!res.ok) {
@@ -422,8 +450,14 @@ export default function StudentHomePage() {
 
   function nextQuestion() {
     const next = quiz.current + 1
-    if (next >= quiz.questions.length) setQuiz(q => ({ ...q, phase: 'done' }))
-    else { setQuiz(q => ({ ...q, current: next })); setShowExpl(false) }
+    if (next >= quiz.questions.length) {
+      const { score, questions, topic } = quiz
+      setQuiz(q => ({ ...q, phase: 'done' }))
+      updateLearningProfile(topic, subjects[activeIdx]?.label ?? '', score, questions.length)
+    } else {
+      setQuiz(q => ({ ...q, current: next }))
+      setShowExpl(false)
+    }
   }
 
   function submitPoll(syllabusTopicId: string, topic: string, response: 'understood' | 'partial' | 'confused') {
@@ -580,9 +614,19 @@ export default function StudentHomePage() {
         {/* Welcome row */}
         <div>
           <p style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>{dateStr}</p>
-          <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 }}>
-            Hello, {student.name?.split(' ')[0]}! 👋
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 }}>
+              Hello, {student.name?.split(' ')[0]}! 👋
+            </h1>
+            {learningProfile && learningProfile.quizCount >= 3 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: learningProfile.difficultyLevel === 'advanced' ? '#eff6ff' : learningProfile.difficultyLevel === 'beginner' ? '#f0fdf4' : '#fff7ed', border: `1.5px solid ${learningProfile.difficultyLevel === 'advanced' ? '#bfdbfe' : learningProfile.difficultyLevel === 'beginner' ? '#bbf7d0' : '#fde68a'}`, flexShrink: 0, marginTop: 4 }}>
+                <span style={{ fontSize: 14 }}>{learningProfile.difficultyLevel === 'advanced' ? '🚀' : learningProfile.difficultyLevel === 'beginner' ? '🌱' : '📚'}</span>
+                <p style={{ fontSize: 12, fontWeight: 800, color: learningProfile.difficultyLevel === 'advanced' ? '#1d4ed8' : learningProfile.difficultyLevel === 'beginner' ? '#16a34a' : '#d97706' }}>
+                  {learningProfile.difficultyLevel === 'advanced' ? 'Advanced Learner' : learningProfile.difficultyLevel === 'beginner' ? 'Building Basics' : 'Standard Learner'}
+                </p>
+              </div>
+            )}
+          </div>
           <p style={{ fontSize: 15, color: '#64748b', marginTop: 4 }}>
             Here&apos;s how you&apos;re doing in <span style={{ fontWeight: 800, color: '#2563eb' }}>{active?.label}</span>
           </p>
@@ -1065,6 +1109,29 @@ export default function StudentHomePage() {
                   </div>
                 )
               })()}
+
+              {/* ── CHARACTER CORNER ── */}
+              <button
+                onClick={() => router.push('/student/character')}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px', borderRadius: 20, border: '1.5px solid #ddd6fe', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background .12s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#faf5ff' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff' }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #7c3aed, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
+                  🌟
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Character Corner</p>
+                  <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 3 }}>
+                    Stories to help you grow — patience, kindness, courage &amp; more
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <span style={{ padding: '5px 14px', borderRadius: 20, background: '#faf5ff', color: '#7c3aed', border: '1px solid #ddd6fe', fontSize: 13, fontWeight: 800 }}>
+                    12 traits
+                  </span>
+                  <span style={{ fontSize: 18, color: '#a855f7', fontWeight: 700 }}>→</span>
+                </div>
+              </button>
 
             </>
           )}

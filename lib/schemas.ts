@@ -152,10 +152,11 @@ export const UnderstandingCheckSchema = z.object({
 })
 
 export const PracticeQuizSchema = z.object({
-  topic:     reqStr(LEN.topic),
-  subject:   reqStr(LEN.topic),
-  grade:     anyStr(LEN.short),
-  interests: z.array(anyStr(LEN.name)).max(20).optional(),
+  topic:           reqStr(LEN.topic),
+  subject:         reqStr(LEN.topic),
+  grade:           anyStr(LEN.short),
+  interests:       z.array(anyStr(LEN.name)).max(20).optional(),
+  difficultyLevel: z.enum(['beginner', 'standard', 'advanced']).optional(),
 })
 
 export const StudentReportSchema = z.object({

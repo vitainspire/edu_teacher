@@ -470,6 +470,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setClasses([]); setStudents([]); setTests([]); setMarks([])
     setMastery([]); setAttendance([]); setSessions([]); setSyllabusTopics([])
     setSyllabusSubTopics([])
+    setTimetableEntries([]); setCatchupMaterials([]); setAssignments([]); setWorksheets([])
     localStorage.removeItem('eduteach_teacher')
     const expired = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict'
     document.cookie = `edu-session=; ${expired}`
