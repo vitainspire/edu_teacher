@@ -319,6 +319,9 @@ export default function StudentDetailPage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-black text-slate-900 leading-tight truncate">{student.name}</h1>
             <p className="text-xs text-slate-400 font-medium">Roll #{student.rollNumber} · {marks.length} assessments</p>
+            {student.studentCode && (
+              <p className="text-[10px] text-slate-400 mt-0.5">Student Portal Code: <span className="font-black text-indigo-500 tracking-wider">{student.studentCode}</span></p>
+            )}
           </div>
           <div className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${getMasteryColor(avgMastery)}`}>
             {getMasteryLabel(avgMastery)}

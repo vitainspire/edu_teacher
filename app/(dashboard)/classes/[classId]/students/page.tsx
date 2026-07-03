@@ -243,18 +243,6 @@ export default function ClassStudentsPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <p className="text-xs text-slate-400 font-medium">Roll #{student.rollNumber}</p>
-                      {student.studentCode && (
-                        <button
-                          onClick={e => { e.preventDefault(); e.stopPropagation(); copyStudentCode(student.studentCode!, student.id) }}
-                          className="flex items-center gap-1 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px] font-black text-indigo-600 tracking-wider active:scale-95 transition-transform"
-                          title="Copy Student ID"
-                        >
-                          {student.studentCode}
-                          {copiedStudentId === student.id
-                            ? <Check size={9} className="text-emerald-500" />
-                            : <Copy size={9} className="text-indigo-400" />}
-                        </button>
-                      )}
                     </div>
                     {student.interests.length > 0 ? (
                       <p className="text-xs text-blue-500 mt-0.5">
