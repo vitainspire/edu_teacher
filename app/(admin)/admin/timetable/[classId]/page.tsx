@@ -29,11 +29,12 @@ export default function ClassTimetablePage() {
   const [loading,     setLoading]     = useState(true)
 
   // Modal state
-  const [modal,                setModal]                = useState<{ slot: ScheduleSlot; day: number } | null>(null)
-  const [selectedAssignmentIdx, setSelectedAssignmentIdx] = useState(-1)
-  const [applyToAllDays,       setApplyToAllDays]       = useState(false)
-  const [saving,               setSaving]               = useState(false)
-  const [conflictErrors,       setConflictErrors]       = useState<string[]>([])
+  const [modal,            setModal]            = useState<{ slot: ScheduleSlot; day: number } | null>(null)
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
+  const [selectedLabel,    setSelectedLabel]    = useState<string>('')
+  const [applyToAllDays,   setApplyToAllDays]   = useState(false)
+  const [saving,           setSaving]           = useState(false)
+  const [conflictErrors,   setConflictErrors]   = useState<string[]>([])
 
   // Action states
   const [deletingId,  setDeletingId]  = useState<string | null>(null)
@@ -68,22 +69,17 @@ export default function ClassTimetablePage() {
 
   function openModal(slot: ScheduleSlot, day: number, forAllDays = false) {
     const existing = periodAt(slot, day)
-    if (existing) {
-      const idx = assignments.findIndex(a => a.teacherId === existing.teacherId && a.subject === existing.label)
-      setSelectedAssignmentIdx(idx >= 0 ? idx : -1)
-    } else {
-      setSelectedAssignmentIdx(-1)
-    }
+    setSelectedTeacherId(existing?.teacherId ?? '')
+    setSelectedLabel(existing?.label ?? '')
     setApplyToAllDays(forAllDays)
     setModal({ slot, day })
   }
 
   async function savePeriod() {
-    if (!school || !modal || selectedAssignmentIdx < 0) return
+    if (!school || !modal || !selectedTeacherId) return
     setSaving(true)
     setConflictErrors([])
     const { slot } = modal
-    const a = assignments[selectedAssignmentIdx]
     const daysToSave = applyToAllDays ? [1, 2, 3, 4, 5, 6] : [modal.day]
 
     const results = await Promise.all(daysToSave.map(async day => {
@@ -98,8 +94,8 @@ export default function ClassTimetablePage() {
           startTime: slot.startTime,
           endTime: slot.endTime,
           classId,
-          teacherId: a.teacherId,
-          label: a.subject ?? null,
+          teacherId: selectedTeacherId,
+          label: selectedLabel || null,
         }),
       })
       if (!res.ok) {
@@ -360,9 +356,9 @@ export default function ClassTimetablePage() {
 
                     {/* Period label — click to fill ALL days */}
                     <td
-                      className={`px-4 py-3 border-b border-r border-gray-100 align-middle group/period ${assignments.length > 0 ? 'cursor-pointer' : ''}`}
+                      className="px-4 py-3 border-b border-r border-gray-100 align-middle group/period cursor-pointer"
                       style={{ background: '#f8fafc' }}
-                      onClick={() => assignments.length > 0 && openModal(slot, 1, true)}
+                      onClick={() => openModal(slot, 1, true)}
                       title="Click to assign this period across all days at once"
                     >
                       <div className="flex items-center gap-2">
@@ -377,11 +373,9 @@ export default function ClassTimetablePage() {
                           <p className="text-[10px] text-gray-400">{slot.endTime}</p>
                         </div>
                       </div>
-                      {assignments.length > 0 && (
-                        <p className="text-[9px] text-indigo-400 mt-1 opacity-0 group-hover/period:opacity-100 transition-opacity flex items-center gap-0.5">
-                          <CalendarCheck className="w-2.5 h-2.5" /> Fill all days
-                        </p>
-                      )}
+                      <p className="text-[9px] text-indigo-400 mt-1 opacity-0 group-hover/period:opacity-100 transition-opacity flex items-center gap-0.5">
+                        <CalendarCheck className="w-2.5 h-2.5" /> Fill all days
+                      </p>
                     </td>
 
                     {/* Day cells */}
@@ -437,11 +431,10 @@ export default function ClassTimetablePage() {
                             </div>
                           ) : (
                             <button
-                              onClick={() => assignments.length > 0 ? openModal(slot, day) : undefined}
-                              disabled={assignments.length === 0}
+                              onClick={() => openModal(slot, day)}
                               className="w-full h-12 rounded-xl border-2 border-dashed border-gray-200 text-gray-300
                                 hover:border-indigo-300 hover:text-indigo-400 hover:bg-indigo-50 transition-all
-                                flex items-center justify-center disabled:cursor-not-allowed"
+                                flex items-center justify-center"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -495,16 +488,27 @@ export default function ClassTimetablePage() {
             </div>
 
             <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
-              Select Subject &amp; Teacher
+              Subject Label <span className="text-gray-400 normal-case font-normal">(optional)</span>
             </label>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
-              {assignments.map((a, i) => {
+            <input
+              type="text"
+              value={selectedLabel}
+              onChange={e => setSelectedLabel(e.target.value)}
+              placeholder="e.g. Mathematics, English, Science…"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-4"
+            />
+
+            <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
+              Select Teacher
+            </label>
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
+              {teachers.map((t, i) => {
                 const color    = SUBJECT_COLORS[i % SUBJECT_COLORS.length]
-                const selected = selectedAssignmentIdx === i
+                const selected = selectedTeacherId === t.id
                 return (
                   <button
-                    key={i}
-                    onClick={() => { setSelectedAssignmentIdx(i); setConflictErrors([]) }}
+                    key={t.id}
+                    onClick={() => { setSelectedTeacherId(t.id); setConflictErrors([]) }}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all"
                     style={{
                       borderColor: selected ? color.text : '#e5e7eb',
@@ -516,12 +520,11 @@ export default function ClassTimetablePage() {
                       style={{ background: selected ? color.text : '#f1f5f9' }}
                     >
                       <span className="text-xs font-bold" style={{ color: selected ? 'white' : '#64748b' }}>
-                        {(a.subject ?? 'S')[0].toUpperCase()}
+                        {t.name[0]?.toUpperCase() ?? 'T'}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{a.subject ?? 'Unnamed Subject'}</p>
-                      <p className="text-xs text-gray-400 truncate">{teacherName(a.teacherId)}</p>
+                      <p className="text-sm font-semibold text-gray-800 truncate">{t.name}</p>
                     </div>
                     {selected && <Check className="w-4 h-4 flex-shrink-0" style={{ color: color.text }} />}
                   </button>
@@ -553,7 +556,7 @@ export default function ClassTimetablePage() {
               </button>
               <button
                 onClick={savePeriod}
-                disabled={saving || selectedAssignmentIdx < 0}
+                disabled={saving || !selectedTeacherId}
                 className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: '#4338ca' }}
               >
