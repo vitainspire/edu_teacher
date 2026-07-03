@@ -218,7 +218,7 @@ function buildSubjectData(raw: {
   raw.attendance.forEach(a => bySession.set(a.sessionId || a.id, a))
   const unique       = [...bySession.values()]
   const presentCount = unique.filter(a => a.status !== 'absent').length
-  const attendanceRate = unique.length > 0 ? presentCount / unique.length : 1
+  const attendanceRate = unique.length > 0 ? presentCount / unique.length : 0
 
   // Attendance streak — count consecutive present sessions from most recent
   const sortedSessions = [...raw.sessions].sort((a, b) => b.date.localeCompare(a.date))
@@ -274,16 +274,13 @@ export default function StudentHomePage() {
     phase: 'idle', topic: '', questions: [], current: 0, selected: [], score: 0,
   })
   const [showExpl,      setShowExpl]      = useState(false)
-  const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set())
   const [errorMsg,      setErrorMsg]      = useState<string | null>(null)
   const [loadError,     setLoadError]     = useState(false)
   const [showInterests, setShowInterests] = useState(false)
   const [draftInterests, setDraftInterests] = useState<string[]>([])
   const [customInput,   setCustomInput]   = useState('')
   const [savingInterests, setSavingInterests] = useState(false)
-  const initDone     = useRef(false)
-  const autoExpanded = useRef<string | null>(null)
-  const studyPlansRef = useRef<HTMLDivElement>(null)
+  const initDone       = useRef(false)
   const contentPaneRef = useRef<HTMLDivElement>(null)
 
   const dateStr = useMemo(() => new Date().toLocaleDateString('en-IN', {
@@ -297,15 +294,6 @@ export default function StudentHomePage() {
     init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Auto-expand the first study plan so students see it without needing to click
-  useEffect(() => {
-    if (!subjectData || subjectData.catchupPlans.length === 0) return
-    const firstId = subjectData.catchupPlans[0].id
-    if (autoExpanded.current === firstId) return
-    autoExpanded.current = firstId
-    setExpandedPlans(new Set([firstId]))
-  }, [subjectData])
 
   async function init() {
     try {
@@ -497,18 +485,6 @@ export default function StudentHomePage() {
 
   // Auto-scroll to study plans when catchup state is active
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (ps !== 'catchup' || !studyPlansRef.current || !contentPaneRef.current) return
-    const timer = setTimeout(() => {
-      const pane = contentPaneRef.current!
-      const el   = studyPlansRef.current!
-      const paneRect = pane.getBoundingClientRect()
-      const elRect   = el.getBoundingClientRect()
-      pane.scrollTo({ top: pane.scrollTop + elRect.top - paneRect.top - 20, behavior: 'smooth' })
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [activeIdx, ps])
-
   // ── All badges (earned + locked) ──────────────────────────────────────────
 
   const allBadges = useMemo(
@@ -807,16 +783,12 @@ export default function StudentHomePage() {
                     )}
                   </div>
 
-                  {/* Right action — scroll-to-plans button */}
+                  {/* Right action — go to plans page */}
                   {ps === 'catchup' && (
                     <button
-                      onClick={() => {
-                        const pane = contentPaneRef.current
-                        const el   = studyPlansRef.current
-                        if (pane && el) pane.scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' })
-                      }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 12, background: 'linear-gradient(135deg, #ea580c, #d97706)', border: 'none', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      View Plans ↓
+                      onClick={() => router.push('/student/plans')}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 12, background: 'linear-gradient(135deg, #ea580c, #d97706)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      View Plans →
                     </button>
                   )}
                 </div>
@@ -870,97 +842,27 @@ export default function StudentHomePage() {
 
               {/* ── STUDY PLANS ── */}
               {subjectData.catchupPlans.length > 0 && (
-                <div ref={studyPlansRef} style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-                  <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, borderRadius: '20px 20px 0 0' }}>
-                    <span style={{ fontSize: 18 }}>📚</span>
-                    <div>
-                      <p style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>Study Plans from Your Teacher</p>
-                      <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Read the explanation, try the practice questions, then take a quiz.</p>
-                    </div>
-                    <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#fff7ed', color: '#ea580c', border: '1px solid #fde68a', whiteSpace: 'nowrap' }}>
+                <button
+                  onClick={() => router.push('/student/plans')}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px', borderRadius: 20, border: '1.5px solid #fed7aa', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background .12s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #ea580c, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
+                    📚
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Study Plans from Your Teacher</p>
+                    <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 3 }}>
+                      {subjectData.catchupPlans.length} plan{subjectData.catchupPlans.length !== 1 ? 's' : ''} waiting — explanations, practice questions &amp; quizzes
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    <span style={{ padding: '5px 14px', borderRadius: 20, background: '#fff7ed', color: '#ea580c', border: '1px solid #fde68a', fontSize: 13, fontWeight: 800 }}>
                       {subjectData.catchupPlans.length} active
                     </span>
+                    <span style={{ fontSize: 18, color: '#d97706', fontWeight: 700 }}>→</span>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {subjectData.catchupPlans.map((plan, idx) => {
-                      const isOpen = expandedPlans.has(plan.id)
-                      const toggle = () => setExpandedPlans(prev => {
-                        const next = new Set(prev); isOpen ? next.delete(plan.id) : next.add(plan.id); return next
-                      })
-                      return (
-                        <div key={plan.id} style={{ borderBottom: idx < subjectData.catchupPlans.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                          <div onClick={toggle} role="button" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '16px 22px', background: isOpen ? '#f8fafc' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background .12s' }}>
-                            <div style={{ width: 40, height: 40, borderRadius: 12, background: plan.reason === 'absent' ? '#fff7ed' : '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                              {plan.reason === 'absent' ? '🏫' : '📉'}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{plan.topic}</p>
-                              <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>
-                                <span style={{ fontWeight: 600, color: plan.reason === 'absent' ? '#d97706' : '#dc2626' }}>
-                                  {plan.reason === 'absent' ? 'Missed class' : 'Low score'}
-                                </span>
-                                {' · '}
-                                {new Date(plan.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                              </p>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                              <button onClick={e => { e.stopPropagation(); startQuiz(plan.topic) }}
-                                style={{ padding: '7px 16px', borderRadius: 10, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                Practice Quiz
-                              </button>
-                              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, transform: isOpen ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform .2s' }}>▾</span>
-                            </div>
-                          </div>
-                          {isOpen && (
-                            <div style={{ padding: '4px 22px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                              {student?.interests && student.interests.length > 0 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a' }}>
-                                  <span style={{ fontSize: 14 }}>✨</span>
-                                  <p style={{ fontSize: 11.5, fontWeight: 700, color: '#92400e' }}>
-                                    This plan is personalised for you using your interests: <span style={{ color: '#d97706' }}>{student.interests.slice(0, 3).join(', ')}</span>
-                                  </p>
-                                </div>
-                              )}
-                              {plan.explanation && (
-                                <div style={{ padding: '16px 18px', borderRadius: 14, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                  <p style={{ ...LBL, marginBottom: 10 }}>📖 Explanation</p>
-                                  <p style={{ fontSize: 13.5, color: '#334155', lineHeight: 1.8 }}>{plan.explanation}</p>
-                                </div>
-                              )}
-                              {plan.practiceQuestions?.length > 0 && (
-                                <div>
-                                  <p style={{ ...LBL, marginBottom: 10 }}>✏️ Practice Questions</p>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    {plan.practiceQuestions.map((q, qi) => (
-                                      <div key={qi} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderRadius: 12, background: '#fff', border: '1px solid #e2e8f0' }}>
-                                        <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#eff6ff', color: '#2563eb', fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{qi + 1}</span>
-                                        <p style={{ fontSize: 13.5, color: '#334155', lineHeight: 1.7 }}>{q}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {plan.activity && (
-                                <div style={{ padding: '14px 18px', borderRadius: 14, background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
-                                  <p style={{ ...LBL, color: '#059669', marginBottom: 8 }}>🎯 Activity from Teacher</p>
-                                  <p style={{ fontSize: 13.5, color: '#065f46', lineHeight: 1.7 }}>{plan.activity}</p>
-                                </div>
-                              )}
-                              {plan.focusNote && (
-                                <div style={{ padding: '12px 16px', borderRadius: 12, background: '#faf5ff', border: '1px solid #e9d5ff' }}>
-                                  <p style={{ fontSize: 13, color: '#7c3aed', fontWeight: 600, fontStyle: 'italic', lineHeight: 1.65 }}>💡 {plan.focusNote}</p>
-                                </div>
-                              )}
-                              <button onClick={() => startQuiz(plan.topic)} style={BLUE_BTN}>
-                                Start Practice Quiz for {plan.topic} →
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                </button>
               )}
 
               {/* ── UPCOMING TESTS ── */}
