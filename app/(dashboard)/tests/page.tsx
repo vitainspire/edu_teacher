@@ -290,6 +290,7 @@ export default function TestsPage() {
       : unitTopic.trim() ? `Unit ${safeUnit} — ${unitTopic.trim()}` : `Unit ${safeUnit}`
     await createTest({
       subject: teacher?.subject ?? '',
+      syllabusTopicId: topicId || undefined,
       topic: effectiveTopic,
       totalMarks: parseInt(totalMarks) || 10,
       conductedOn,

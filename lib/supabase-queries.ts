@@ -245,6 +245,7 @@ export async function fetchStudentsByClasses(classIds: string[]): Promise<Studen
 export async function upsertTest(t: Test) {
   const { error } = await supabase.from('tests').upsert({
     id: t.id, teacher_id: t.teacherId, class_id: t.classId ?? null,
+    syllabus_topic_id: t.syllabusTopicId ?? null,
     subject: t.subject, topic: t.topic, total_marks: t.totalMarks, conducted_on: t.conductedOn,
     term: t.term ?? null,
     questions: t.questions ? JSON.stringify(t.questions) : null,
@@ -257,6 +258,7 @@ export async function fetchTests(teacherId: string): Promise<Test[]> {
   if (error) throw error
   return (data ?? []).map(r => ({
     id: r.id, teacherId: r.teacher_id, classId: r.class_id ?? undefined,
+    syllabusTopicId: r.syllabus_topic_id ?? undefined,
     subject: r.subject, topic: r.topic, totalMarks: r.total_marks, conductedOn: r.conducted_on,
     term: r.term ?? undefined,
     questions: r.questions

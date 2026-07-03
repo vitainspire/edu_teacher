@@ -63,6 +63,7 @@ export interface Test {
   id: string
   teacherId: string
   classId?: string
+  syllabusTopicId?: string  // FK → syllabus_topics.id — links test to the exact topic taught
   subject: string
   topic: string
   totalMarks: number
