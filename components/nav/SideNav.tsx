@@ -1,20 +1,18 @@
 'use client'
 import { useMemo } from 'react'
 import { usePathname } from 'next/navigation'
-import { Home, LayoutGrid, Bell, GraduationCap, LogOut, Settings2, PenLine, BookOpen, CalendarDays } from 'lucide-react'
+import { Home, LayoutGrid, GraduationCap, LogOut, Settings2, PenLine, BookOpen } from 'lucide-react'
 import clsx from 'clsx'
 import { useApp } from '@/lib/context'
 import { computeHomeAlerts } from '@/lib/logic/home-alerts'
 import { useRouter } from 'next/navigation'
 
 const NAV_ITEMS = [
-  { href: '/home',      label: 'Home',      Icon: Home },
-  { href: '/today',     label: 'Today',     Icon: BookOpen },
-  { href: '/classes',   label: 'Classes',   Icon: LayoutGrid },
-  { href: '/timetable', label: 'Timetable', Icon: CalendarDays },
-  { href: '/tests',     label: 'Tests',     Icon: PenLine },
-  { href: '/alerts',    label: 'Alerts',    Icon: Bell },
-  { href: '/settings',  label: 'Settings',  Icon: Settings2 },
+  { href: '/home',     label: 'Home',     Icon: Home },
+  { href: '/today',    label: 'Today',    Icon: BookOpen },
+  { href: '/classes',  label: 'Classes',  Icon: LayoutGrid },
+  { href: '/tests',    label: 'Tests',    Icon: PenLine },
+  { href: '/settings', label: 'Settings', Icon: Settings2 },
 ]
 
 export default function SideNav() {
@@ -60,9 +58,9 @@ export default function SideNav() {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV_ITEMS.map(({ href, label, Icon }) => {
           const active      = path === href || path.startsWith(href + '/')
-          const isAlerts    = href === '/alerts'
-          const isTests     = href === '/tests'
-          const badge       = isAlerts ? alertCount : isTests ? pendingTestCount : 0
+          const isHome  = href === '/home'
+          const isTests = href === '/tests'
+          const badge   = isHome ? alertCount : isTests ? pendingTestCount : 0
 
           return (
             <button

@@ -1,36 +1,49 @@
 'use client'
 import { useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LayoutGrid, Bell, Settings2, CalendarDays } from 'lucide-react'
+import { Home, LayoutGrid, Settings2, BookOpen, PenLine } from 'lucide-react'
 import clsx from 'clsx'
 import { useApp } from '@/lib/context'
 import { computeHomeAlerts } from '@/lib/logic/home-alerts'
 
 const NAV_ITEMS = [
-  { href: '/home',      label: 'Home',     Icon: Home },
-  { href: '/timetable', label: 'Today',    Icon: CalendarDays },
-  { href: '/classes',   label: 'Classes',  Icon: LayoutGrid },
-  { href: '/alerts',    label: 'Alerts',   Icon: Bell },
-  { href: '/settings',  label: 'Settings', Icon: Settings2 },
+  { href: '/home',     label: 'Home',     Icon: Home },
+  { href: '/today',    label: 'Today',    Icon: BookOpen },
+  { href: '/classes',  label: 'Classes',  Icon: LayoutGrid },
+  { href: '/tests',    label: 'Tests',    Icon: PenLine },
+  { href: '/settings', label: 'Settings', Icon: Settings2 },
 ]
 
 export default function BottomNav() {
   const path   = usePathname()
   const router = useRouter()
-  const { classes, sessions, students, getStudentWarnings } = useApp()
+  const { teacher, classes, sessions, students, tests, marks, getStudentWarnings } = useApp()
 
   const alertCount = useMemo(
     () => computeHomeAlerts(classes, sessions, students, getStudentWarnings).length,
     [classes, sessions, students, getStudentWarnings],
   )
 
+  const pendingTestCount = useMemo(() => {
+    const myClassIds = new Set(
+      classes.filter(c => c.teacherId === teacher?.id).map(c => c.id)
+    )
+    return tests.filter(t => {
+      if (!t.classId || !myClassIds.has(t.classId)) return false
+      const classStudentCount = students.filter(s => s.classId === t.classId && s.isActive).length
+      const enteredCount = new Set(marks.filter(m => m.testId === t.id).map(m => m.studentId)).size
+      return classStudentCount > 0 && enteredCount < classStudentCount
+    }).length
+  }, [tests, marks, classes, students, teacher])
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 safe-bottom nav-blur">
       <div className="max-w-[480px] mx-auto flex items-center px-6 py-2">
         {NAV_ITEMS.map(({ href, label, Icon }) => {
           const active   = path === href || path.startsWith(href + '/')
-          const isAlerts = href === '/alerts'
-          const badge    = isAlerts ? alertCount : 0
+          const isHome  = href === '/home'
+          const isTests = href === '/tests'
+          const badge   = isHome ? alertCount : isTests ? pendingTestCount : 0
 
           return (
             <button

@@ -2,8 +2,8 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useApp } from '@/lib/context'
 import {
-  Clock, ChevronDown, ChevronUp,
-  Zap, BookOpen, AlertCircle, CheckCircle2, RotateCcw,
+  Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  BookOpen, AlertCircle, CheckCircle2, RotateCcw,
   UserX, AlertTriangle, BarChart2, Sparkles,
 } from 'lucide-react'
 
@@ -18,36 +18,48 @@ function relativeDate(dateStr: string): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
-interface BridgeNote {
-  concept: string
-  text: string
-}
-
+interface BridgeNote { concept: string; text: string }
 interface LessonSection {
   type: 'teach' | 'check'
   title: string
   content: string
   bridgeNote?: BridgeNote
 }
-
 interface GapTopic {
-  topic: string
-  avgMastery: number
-  weakStudentCount: number
-  totalStudents: number
+  topic: string; avgMastery: number
+  weakStudentCount: number; totalStudents: number
 }
-
 interface SmartResult {
   topic: string
   gapTopics: GapTopic[]
   lesson: { hook: string; sections: LessonSection[]; closingActivity: string }
 }
-
 type GenState = 'idle' | 'loading' | 'done' | 'error'
+
+type Slide =
+  | { kind: 'hook' }
+  | { kind: 'section'; idx: number; stepNum: number | null }
+  | { kind: 'closing' }
+
+function buildSlides(result: SmartResult): Slide[] {
+  let stepNum = 0
+  return [
+    { kind: 'hook' },
+    ...result.lesson.sections.map((sec, i) => {
+      if (sec.type === 'teach') stepNum++
+      return { kind: 'section' as const, idx: i, stepNum: sec.type === 'teach' ? stepNum : null }
+    }),
+    { kind: 'closing' },
+  ]
+}
 
 function fmt(t: string) {
   const [h, m] = t.split(':').map(Number)
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+function cacheKey(classId: string, topic: string, sub?: string): string {
+  return `${classId}::${topic.trim().toLowerCase()}::${(sub ?? '').trim().toLowerCase()}`
 }
 
 export default function TodayPage() {
@@ -97,13 +109,16 @@ export default function TodayPage() {
         label: null,
       }))
 
-  const [topics,     setTopics]     = useState<Record<string, string>>({})
-  const [topicMode,  setTopicMode]  = useState<Record<string, 'dropdown' | 'custom'>>({})
-  const [subtopics,  setSubtopics]  = useState<Record<string, string>>({})
-  const [subMode,    setSubMode]    = useState<Record<string, 'dropdown' | 'custom'>>({})
-  const [states,     setStates]     = useState<Record<string, GenState>>({})
-  const [results,    setResults]    = useState<Record<string, SmartResult>>({})
-  const [expanded,   setExpanded]   = useState<Record<string, boolean>>({})
+  const [topics,    setTopics]    = useState<Record<string, string>>({})
+  const [topicMode, setTopicMode] = useState<Record<string, 'dropdown' | 'custom'>>({})
+  const [subtopics, setSubtopics] = useState<Record<string, string>>({})
+  const [subMode,   setSubMode]   = useState<Record<string, 'dropdown' | 'custom'>>({})
+  const [states,    setStates]    = useState<Record<string, GenState>>({})
+  const [results,   setResults]   = useState<Record<string, SmartResult>>({})
+  const [openCards, setOpenCards] = useState<Record<string, boolean>>({})
+  const [prepCache, setPrepCache] = useState<Record<string, SmartResult>>({})
+  const [slideIdx,  setSlideIdx]  = useState<Record<string, number>>({})
+  const [fromCache, setFromCache] = useState<Record<string, boolean>>({})
 
   const getNextTopic = useCallback((classId: string) => {
     const b = briefingMap[classId]
@@ -114,33 +129,49 @@ export default function TodayPage() {
   const topicFor = (classId: string) =>
     topics[classId] !== undefined ? topics[classId] : getNextTopic(classId)
 
-  const generate = useCallback(async (classId: string, grade: string) => {
+  const generate = useCallback(async (classId: string, grade: string, force = false) => {
     const topic = topicFor(classId)
+    const sub   = subtopics[classId]
     if (!topic.trim()) return
-    setStates(p => ({ ...p, [classId]: 'loading' }))
-    setExpanded(p => ({ ...p, [classId]: false }))
+
+    const key = cacheKey(classId, topic, sub)
+
+    // Cache hit — show instantly, no API call
+    if (!force && prepCache[key]) {
+      setResults(p  => ({ ...p,  [classId]: prepCache[key] }))
+      setStates(p   => ({ ...p,  [classId]: 'done' }))
+      setFromCache(p => ({ ...p, [classId]: true }))
+      setSlideIdx(p  => ({ ...p, [classId]: 0 }))
+      return
+    }
+
+    setStates(p   => ({ ...p,  [classId]: 'loading' }))
+    setFromCache(p => ({ ...p, [classId]: false }))
+
     try {
       const res = await fetch('/api/smart-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           classId,
-          topic: topic.trim(),
-          subject: teacher?.subject ?? '',
+          topic:     topic.trim(),
+          subtopic:  sub?.trim() || undefined,
+          subject:   teacher?.subject ?? '',
           grade,
           teacherId: teacher?.id ?? '',
         }),
       })
       if (!res.ok) throw new Error('bad')
       const data = await res.json() as SmartResult
-      setResults(p => ({ ...p, [classId]: data }))
-      setStates(p => ({ ...p, [classId]: 'done' }))
-      setExpanded(p => ({ ...p, [classId]: true }))
+      setResults(p   => ({ ...p,  [classId]: data }))
+      setPrepCache(p => ({ ...p,  [key]: data }))
+      setStates(p    => ({ ...p,  [classId]: 'done' }))
+      setSlideIdx(p  => ({ ...p,  [classId]: 0 }))
     } catch {
       setStates(p => ({ ...p, [classId]: 'error' }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topics, subtopics, teacher, getNextTopic])
+  }, [topics, subtopics, teacher, getNextTopic, prepCache])
 
   const generateAll = () =>
     Promise.all(cards.map(c => states[c.classId] !== 'loading' ? generate(c.classId, c.grade) : null))
@@ -173,7 +204,6 @@ export default function TodayPage() {
                 boxShadow: '0 2px 12px rgba(124,58,237,0.35)',
               }}
             >
-              <Zap size={14} />
               {anyLoading ? 'Generating…' : allDone ? 'All Ready ✓' : 'Generate All'}
             </button>
           )}
@@ -181,7 +211,7 @@ export default function TodayPage() {
       </div>
 
       {/* Cards */}
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 py-5 space-y-3">
 
         {cards.length === 0 && (
           <div className="text-center py-20">
@@ -195,427 +225,444 @@ export default function TodayPage() {
         )}
 
         {cards.map(card => {
-          const state  = states[card.classId]  ?? 'idle'
-          const result = results[card.classId]
-          const isOpen = expanded[card.classId]
-          const topic  = topicFor(card.classId)
-          const isDone = state === 'done'
-          const isLoad = state === 'loading'
-          const b      = briefingMap[card.classId]
+          const state      = states[card.classId] ?? 'idle'
+          const result     = results[card.classId]
+          const isCardOpen = openCards[card.classId]
+          const topic      = topicFor(card.classId)
+          const isDone     = state === 'done'
+          const isLoad     = state === 'loading'
+          const b          = briefingMap[card.classId]
+          const cached     = fromCache[card.classId]
+          const curSlide   = slideIdx[card.classId] ?? 0
 
           return (
-            <div key={card.classId} className="rounded-3xl overflow-hidden bg-white"
-              style={{ boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
-
-              {/* Card header */}
-              <div className="p-5">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-white font-black text-sm"
-                    style={{ background: card.color }}>
-                    {card.grade || card.className[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-black text-slate-900 text-base leading-tight">
-                      {card.label ?? card.className}{card.section ? ` · ${card.section}` : ''}
-                    </p>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">{card.className}</p>
-                    {card.start && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Clock size={11} className="text-slate-400" />
-                        <span className="text-xs text-slate-400 font-medium">
-                          Period {card.period} · {fmt(card.start)} – {fmt(card.end!)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {isDone && (
-                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full">
-                      <CheckCircle2 size={11} /> Ready
-                    </span>
-                  )}
+            <div
+              key={card.classId}
+              className="rounded-3xl overflow-hidden bg-white transition-shadow"
+              style={{
+                boxShadow: isCardOpen
+                  ? '0 4px 24px rgba(0,0,0,0.09)'
+                  : '0 2px 8px rgba(0,0,0,0.05)',
+              }}
+            >
+              {/* ── Compact summary row ── */}
+              <button
+                type="button"
+                onClick={() => setOpenCards(p => ({ ...p, [card.classId]: !isCardOpen }))}
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 active:bg-slate-50"
+              >
+                <div
+                  className="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center text-white font-black text-sm"
+                  style={{ background: card.color }}
+                >
+                  {card.period ?? (card.grade || card.className[0])}
                 </div>
 
-                {/* Morning Briefing */}
-                {b && (
-                  <div className="mb-4 rounded-2xl overflow-hidden border border-slate-100">
-                    {b.lastSession && (
-                      <div className="px-4 py-3 flex items-start gap-2.5 border-b border-slate-100">
-                        <UserX size={13} className="text-slate-400 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide">
-                            Last class · {relativeDate(b.lastSession.date)} · {b.lastSession.topic}
-                          </p>
-                          {b.lastSession.absentCount > 0 ? (
-                            <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                              <span className="font-black text-orange-500">{b.lastSession.absentCount} absent</span>
-                              {' — '}
-                              {b.lastSession.absentNames.slice(0, 3).join(', ')}
-                              {b.lastSession.absentCount > 3 && ` +${b.lastSession.absentCount - 3} more`}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-emerald-600 font-semibold mt-0.5">Full attendance ✓</p>
-                          )}
-                        </div>
-                      </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-slate-900 text-sm leading-tight truncate">
+                    {card.label ?? card.className}{card.section ? ` · ${card.section}` : ''}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {card.start && (
+                      <span className="flex items-center gap-1">
+                        <Clock size={10} className="text-slate-400" />
+                        <span className="text-xs text-slate-400 font-medium tabular-nums">
+                          P{card.period} · {fmt(card.start)}
+                        </span>
+                      </span>
                     )}
-                    {b.atRiskCount > 0 && (
-                      <div className="px-4 py-3 flex items-start gap-2.5 border-b border-slate-100">
-                        <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide">
-                            At risk · {b.atRiskCount} student{b.atRiskCount !== 1 ? 's' : ''}
-                          </p>
-                          <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                            {b.atRiskNames.slice(0, 3).join(', ')}
-                            {b.atRiskCount > 3 && ` +${b.atRiskCount - 3} more`}
-                          </p>
-                        </div>
-                      </div>
+                    {topic && (
+                      <span className="text-xs text-violet-500 font-semibold truncate max-w-[140px]">{topic}</span>
                     )}
-                    {b.totalTopics > 0 && (
-                      <div className="px-4 py-3 flex items-center gap-2.5">
-                        <BarChart2 size={13} className="text-slate-400 shrink-0" />
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide shrink-0">Syllabus</p>
-                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${Math.round((b.completedTopics / b.totalTopics) * 100)}%`,
-                                background: card.color,
-                              }}
-                            />
+                  </div>
+                </div>
+
+                {isDone ? (
+                  <span className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                    <CheckCircle2 size={11} /> Ready
+                  </span>
+                ) : isLoad ? (
+                  <span className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                ) : state === 'error' ? (
+                  <span className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded-full">
+                    <AlertCircle size={10} /> Error
+                  </span>
+                ) : null}
+
+                <div className="text-slate-400 shrink-0 ml-1">
+                  {isCardOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </div>
+              </button>
+
+              {/* ── Expanded content ── */}
+              {isCardOpen && (
+                <div className="border-t border-slate-100">
+                  <div className="p-5">
+
+                    {/* Morning Briefing */}
+                    {b && (
+                      <div className="mb-4 rounded-2xl overflow-hidden border border-slate-100">
+                        {b.lastSession && (
+                          <div className="px-4 py-3 flex items-start gap-2.5 border-b border-slate-100">
+                            <UserX size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide">
+                                Last class · {relativeDate(b.lastSession.date)} · {b.lastSession.topic}
+                              </p>
+                              {b.lastSession.absentCount > 0 ? (
+                                <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                                  <span className="font-black text-orange-500">{b.lastSession.absentCount} absent</span>
+                                  {' — '}
+                                  {b.lastSession.absentNames.slice(0, 3).join(', ')}
+                                  {b.lastSession.absentCount > 3 && ` +${b.lastSession.absentCount - 3} more`}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-emerald-600 font-semibold mt-0.5">Full attendance ✓</p>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-[11px] font-bold text-slate-500 shrink-0">
-                            {b.completedTopics}/{b.totalTopics}
-                          </p>
-                        </div>
+                        )}
+                        {b.atRiskCount > 0 && (
+                          <div className="px-4 py-3 flex items-start gap-2.5 border-b border-slate-100">
+                            <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide">
+                                At risk · {b.atRiskCount} student{b.atRiskCount !== 1 ? 's' : ''}
+                              </p>
+                              <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                                {b.atRiskNames.slice(0, 3).join(', ')}
+                                {b.atRiskCount > 3 && ` +${b.atRiskCount - 3} more`}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {b.totalTopics > 0 && (
+                          <div className="px-4 py-3 flex items-center gap-2.5">
+                            <BarChart2 size={13} className="text-slate-400 shrink-0" />
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide shrink-0">Syllabus</p>
+                              <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{
+                                    width: `${Math.round((b.completedTopics / b.totalTopics) * 100)}%`,
+                                    background: card.color,
+                                  }}
+                                />
+                              </div>
+                              <p className="text-[11px] font-bold text-slate-500 shrink-0">
+                                {b.completedTopics}/{b.totalTopics}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Topic + Subtopic inputs */}
+                    <div className="mb-3 space-y-2">
+                      {/* Today's Topic */}
+                      {(() => {
+                        const syllabus      = getClassSyllabus(card.classId)
+                        const incomplete    = syllabus.filter(t => !t.isCompleted)
+                        const completed     = syllabus.filter(t =>  t.isCompleted)
+                        const hasSyllabus   = syllabus.length > 0
+                        const tMode         = topicMode[card.classId] ?? 'dropdown'
+                        const isCustomTopic = tMode === 'custom'
+                        const dropdownVal   = topics[card.classId] !== undefined
+                          ? topics[card.classId]
+                          : getNextTopic(card.classId)
+
+                        function pickTopic(val: string) {
+                          if (val === '__custom__') {
+                            setTopicMode(p => ({ ...p, [card.classId]: 'custom' }))
+                            setTopics(p => ({ ...p, [card.classId]: '' }))
+                          } else {
+                            setTopicMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                            setTopics(p => ({ ...p, [card.classId]: val }))
+                          }
+                          setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                          setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                        }
+
+                        return (
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                              <span>Today&apos;s Topic</span>
+                              {isCustomTopic && hasSyllabus && (
+                                <button type="button" onClick={() => {
+                                  setTopicMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                                  setTopics(p => ({ ...p, [card.classId]: getNextTopic(card.classId) }))
+                                  setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                                  setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                                }} className="text-[10px] font-bold text-violet-500 normal-case tracking-normal">
+                                  ← Back to syllabus
+                                </button>
+                              )}
+                            </label>
+
+                            {hasSyllabus && !isCustomTopic ? (
+                              <div className="relative">
+                                <select
+                                  value={dropdownVal}
+                                  onChange={e => pickTopic(e.target.value)}
+                                  className="w-full appearance-none px-4 py-2.5 pr-9 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                                  style={{ background: '#f8fafc' }}
+                                >
+                                  <option value="" disabled>— pick a topic —</option>
+                                  {incomplete.length > 0 && (
+                                    <optgroup label="Pending">
+                                      {incomplete.map(t => <option key={t.id} value={t.topic}>{t.topic}</option>)}
+                                    </optgroup>
+                                  )}
+                                  {completed.length > 0 && (
+                                    <optgroup label="Completed ✓">
+                                      {completed.map(t => <option key={t.id} value={t.topic}>{t.topic}</option>)}
+                                    </optgroup>
+                                  )}
+                                  <option value="__custom__">✏️  Custom topic…</option>
+                                </select>
+                                <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </span>
+                              </div>
+                            ) : (
+                              <input
+                                autoFocus={isCustomTopic}
+                                type="text"
+                                value={topic}
+                                onChange={e => setTopics(p => ({ ...p, [card.classId]: e.target.value }))}
+                                placeholder="What are you teaching today?"
+                                className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                                style={{ background: '#f8fafc' }}
+                              />
+                            )}
+                            {!topic && !hasSyllabus && (
+                              <p className="text-[11px] text-amber-500 font-medium mt-1 ml-1">No syllabus added yet — type a topic above</p>
+                            )}
+                          </div>
+                        )
+                      })()}
+
+                      {/* Subtopic */}
+                      {(() => {
+                        const syllabus   = getClassSyllabus(card.classId)
+                        const topicEntry = syllabus.find(t => t.topic === topic)
+                        const subs       = topicEntry ? getTopicSubTopics(topicEntry.id) : []
+                        const mode       = subMode[card.classId] ?? 'dropdown'
+                        const isCustom   = mode === 'custom'
+                        const currentVal = subtopics[card.classId] ?? ''
+
+                        return (
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                              <span>Subtopic <span className="font-medium normal-case text-slate-400">(optional)</span></span>
+                              {isCustom && subs.length > 0 && (
+                                <button type="button" onClick={() => {
+                                  setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                                  setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                                }} className="text-[10px] font-bold text-violet-500 normal-case tracking-normal">
+                                  ← Back to list
+                                </button>
+                              )}
+                            </label>
+                            {subs.length > 0 && !isCustom ? (
+                              <div className="relative">
+                                <select
+                                  value={currentVal}
+                                  onChange={e => {
+                                    if (e.target.value === '__custom__') {
+                                      setSubMode(p => ({ ...p, [card.classId]: 'custom' }))
+                                      setSubtopics(p => ({ ...p, [card.classId]: '' }))
+                                    } else {
+                                      setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))
+                                    }
+                                  }}
+                                  className="w-full appearance-none px-4 py-2.5 pr-9 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                                  style={{ background: '#f8fafc' }}
+                                >
+                                  <option value="">— pick a subtopic (optional) —</option>
+                                  {subs.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                  <option value="__custom__">✏️  Custom subtopic…</option>
+                                </select>
+                                <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </span>
+                              </div>
+                            ) : (
+                              <input
+                                autoFocus={isCustom}
+                                type="text"
+                                value={currentVal}
+                                onChange={e => setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))}
+                                placeholder={isCustom ? 'Type your subtopic…' : `e.g. "line symmetry", "rotational symmetry"…`}
+                                className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+                                style={{ background: '#f8fafc' }}
+                              />
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    {/* Generate button — hidden once result is ready */}
+                    {!isDone && (
+                      <button
+                        onClick={() => generate(card.classId, card.grade)}
+                        disabled={!topic.trim() || isLoad}
+                        className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-all"
+                        style={{
+                          background: 'linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%)',
+                          boxShadow: '0 2px 12px rgba(124,58,237,0.3)',
+                        }}
+                      >
+                        {isLoad
+                          ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating…</>
+                          : <><Sparkles size={14} /> Generate Prep</>
+                        }
+                      </button>
+                    )}
+
+                    {state === 'error' && (
+                      <div className="mt-2.5 flex items-center gap-2 text-red-500 text-xs font-medium">
+                        <AlertCircle size={12} /> Failed to generate. Try again.
                       </div>
                     )}
                   </div>
-                )}
 
-                {/* Topic + Subtopic inputs */}
-                <div className="mb-3 space-y-2">
-                  {/* ── Today's Topic — dropdown or custom ── */}
-                  {(() => {
-                    const syllabus     = getClassSyllabus(card.classId)
-                    const incomplete   = syllabus.filter(t => !t.isCompleted)
-                    const completed    = syllabus.filter(t =>  t.isCompleted)
-                    const hasSyllabus  = syllabus.length > 0
-                    const tMode        = topicMode[card.classId] ?? 'dropdown'
-                    const isCustomTopic = tMode === 'custom'
+                  {/* ── Slideshow ── */}
+                  {isDone && result && (() => {
+                    const slides  = buildSlides(result)
+                    const slide   = slides[curSlide]
+                    const isFirst = curSlide === 0
+                    const isLast  = curSlide === slides.length - 1
 
-                    // value shown in the dropdown (pre-select the auto-detected next topic)
-                    const dropdownVal  = topics[card.classId] !== undefined
-                      ? topics[card.classId]
-                      : getNextTopic(card.classId)
+                    let label  = ''
+                    let accent = '#7c3aed'
+                    let bg     = '#faf5ff'
+                    let border = '#e9d5ff'
 
-                    function pickTopic(val: string) {
-                      if (val === '__custom__') {
-                        setTopicMode(p => ({ ...p, [card.classId]: 'custom' }))
-                        setTopics(p => ({ ...p, [card.classId]: '' }))
-                      } else {
-                        setTopicMode(p => ({ ...p, [card.classId]: 'dropdown' }))
-                        setTopics(p => ({ ...p, [card.classId]: val }))
-                      }
-                      // reset subtopic whenever topic changes
-                      setSubtopics(p => ({ ...p, [card.classId]: '' }))
-                      setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
+                    if (slide.kind === 'hook') {
+                      label = 'Opening Hook'
+                      accent = '#7c3aed'; bg = '#faf5ff'; border = '#e9d5ff'
+                    } else if (slide.kind === 'section') {
+                      const sec = result.lesson.sections[slide.idx]
+                      label  = sec.type === 'check' ? 'Check' : `Step ${slide.stepNum} · Teach`
+                      accent = sec.type === 'check' ? '#16a34a' : '#2563eb'
+                      bg     = sec.type === 'check' ? '#f0fdf4' : '#eff6ff'
+                      border = sec.type === 'check' ? '#bbf7d0' : '#bfdbfe'
+                    } else {
+                      label = 'Closing Activity'
+                      accent = '#0891b2'; bg = '#ecfeff'; border = '#a5f3fc'
                     }
 
                     return (
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                          <span>Today&apos;s Topic</span>
-                          {isCustomTopic && hasSyllabus && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTopicMode(p => ({ ...p, [card.classId]: 'dropdown' }))
-                                setTopics(p => ({ ...p, [card.classId]: getNextTopic(card.classId) }))
-                                setSubtopics(p => ({ ...p, [card.classId]: '' }))
-                                setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
-                              }}
-                              className="text-[10px] font-bold text-violet-500 normal-case tracking-normal"
-                            >
-                              ← Back to syllabus
-                            </button>
-                          )}
-                        </label>
+                      <div className="border-t border-slate-100">
+                        {/* Slide */}
+                        <div className="mx-4 mt-4 rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${border}` }}>
 
-                        {hasSyllabus && !isCustomTopic ? (
-                          <div className="relative">
-                            <select
-                              value={dropdownVal}
-                              onChange={e => pickTopic(e.target.value)}
-                              className="w-full appearance-none px-4 py-2.5 pr-9 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
-                              style={{ background: '#f8fafc' }}
-                            >
-                              <option value="" disabled>— pick a topic —</option>
-                              {incomplete.length > 0 && (
-                                <optgroup label="Pending">
-                                  {incomplete.map(t => (
-                                    <option key={t.id} value={t.topic}>{t.topic}</option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {completed.length > 0 && (
-                                <optgroup label="Completed ✓">
-                                  {completed.map(t => (
-                                    <option key={t.id} value={t.topic}>{t.topic}</option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              <option value="__custom__">✏️  Custom topic…</option>
-                            </select>
-                            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
+                          {/* Label + counter */}
+                          <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: bg }}>
+                            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
+                              {label}
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-400 tabular-nums">
+                              {curSlide + 1} / {slides.length}
                             </span>
                           </div>
-                        ) : (
-                          <input
-                            autoFocus={isCustomTopic}
-                            type="text"
-                            value={topic}
-                            onChange={e => setTopics(p => ({ ...p, [card.classId]: e.target.value }))}
-                            placeholder="What are you teaching today?"
-                            className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
-                            style={{ background: '#f8fafc' }}
-                          />
-                        )}
 
-                        {!topic && !hasSyllabus && (
-                          <p className="text-[11px] text-amber-500 font-medium mt-1 ml-1">
-                            No syllabus added yet — type a topic above
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })()}
+                          {/* Content */}
+                          <div className="px-4 pb-5 pt-2 min-h-[110px]" style={{ background: bg }}>
+                            {slide.kind === 'hook' && (
+                              <p className="text-[15px] font-semibold text-slate-800 leading-relaxed italic">
+                                &ldquo;{result.lesson.hook}&rdquo;
+                              </p>
+                            )}
 
-                  {/* Subtopic — dropdown of saved sub-topics + custom freetext */}
-                  {(() => {
-                    const syllabus    = getClassSyllabus(card.classId)
-                    const topicEntry  = syllabus.find(t => t.topic === topic)
-                    const subs        = topicEntry ? getTopicSubTopics(topicEntry.id) : []
-                    const mode        = subMode[card.classId] ?? 'dropdown'
-                    const isCustom    = mode === 'custom'
-                    const currentVal  = subtopics[card.classId] ?? ''
+                            {slide.kind === 'section' && (() => {
+                              const sec = result.lesson.sections[slide.idx]
+                              return (
+                                <>
+                                  <p className="text-base font-black text-slate-900 mb-2 leading-snug">{sec.title}</p>
+                                  <p className="text-sm text-slate-700 leading-relaxed">{sec.content}</p>
+                                  {sec.bridgeNote && (
+                                    <div className="mt-3 pl-3 border-l-[3px] border-amber-300">
+                                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-wide mb-0.5">
+                                        ↺ {sec.bridgeNote.concept}
+                                      </p>
+                                      <p className="text-xs text-amber-800 leading-relaxed">{sec.bridgeNote.text}</p>
+                                    </div>
+                                  )}
+                                </>
+                              )
+                            })()}
 
-                    return (
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                          <span>
-                            Subtopic{' '}
-                            <span className="font-medium normal-case text-slate-400">(optional)</span>
-                          </span>
-                          {isCustom && subs.length > 0 && (
+                            {slide.kind === 'closing' && (
+                              <p className="text-sm text-slate-700 leading-relaxed">{result.lesson.closingActivity}</p>
+                            )}
+                          </div>
+
+                          {/* Prev · dots · Next */}
+                          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-slate-100">
                             <button
                               type="button"
-                              onClick={() => {
-                                setSubMode(p => ({ ...p, [card.classId]: 'dropdown' }))
-                                setSubtopics(p => ({ ...p, [card.classId]: '' }))
-                              }}
-                              className="text-[10px] font-bold text-violet-500 normal-case tracking-normal"
+                              onClick={() => setSlideIdx(p => ({ ...p, [card.classId]: Math.max(0, curSlide - 1) }))}
+                              disabled={isFirst}
+                              className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 disabled:opacity-25 active:scale-90 transition-all"
                             >
-                              ← Back to list
+                              <ChevronLeft size={16} className="text-slate-600" />
                             </button>
-                          )}
-                        </label>
 
-                        {subs.length > 0 && !isCustom ? (
-                          /* ── Dropdown with saved sub-topics ── */
-                          <div className="relative">
-                            <select
-                              value={currentVal}
-                              onChange={e => {
-                                if (e.target.value === '__custom__') {
-                                  setSubMode(p => ({ ...p, [card.classId]: 'custom' }))
-                                  setSubtopics(p => ({ ...p, [card.classId]: '' }))
-                                } else {
-                                  setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))
-                                }
-                              }}
-                              className="w-full appearance-none px-4 py-2.5 pr-9 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
-                              style={{ background: '#f8fafc' }}
-                            >
-                              <option value="">— pick a subtopic (optional) —</option>
-                              {subs.map(s => (
-                                <option key={s.id} value={s.name}>{s.name}</option>
+                            <div className="flex items-center gap-1.5">
+                              {slides.map((_, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => setSlideIdx(p => ({ ...p, [card.classId]: i }))}
+                                  className="rounded-full transition-all duration-200"
+                                  style={{
+                                    width:      i === curSlide ? 18 : 6,
+                                    height:     6,
+                                    background: i === curSlide ? accent : '#e2e8f0',
+                                  }}
+                                />
                               ))}
-                              <option value="__custom__">✏️  Custom subtopic…</option>
-                            </select>
-                            {/* chevron icon */}
-                            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
-                            </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setSlideIdx(p => ({ ...p, [card.classId]: Math.min(slides.length - 1, curSlide + 1) }))}
+                              disabled={isLast}
+                              className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 disabled:opacity-25 active:scale-90 transition-all"
+                            >
+                              <ChevronRight size={16} className="text-slate-600" />
+                            </button>
                           </div>
-                        ) : (
-                          /* ── Free-text input (no sub-topics saved, or custom mode) ── */
-                          <input
-                            autoFocus={isCustom}
-                            type="text"
-                            value={currentVal}
-                            onChange={e => setSubtopics(p => ({ ...p, [card.classId]: e.target.value }))}
-                            placeholder={
-                              isCustom
-                                ? 'Type your subtopic…'
-                                : `e.g. "line symmetry", "rotational symmetry"…`
-                            }
-                            className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-slate-800 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
-                            style={{ background: '#f8fafc' }}
-                          />
-                        )}
-                      </div>
-                    )
-                  })()}
-
-                </div>
-
-                {/* Generate button */}
-                <button
-                  onClick={() => generate(card.classId, card.grade)}
-                  disabled={!topic.trim() || isLoad}
-                  className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-all"
-                  style={{
-                    background: isDone
-                      ? 'linear-gradient(135deg, #6d28d9, #7c3aed)'
-                      : 'linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%)',
-                    boxShadow: '0 2px 12px rgba(124,58,237,0.3)',
-                  }}
-                >
-                  {isLoad ? (
-                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating Smart Lesson…</>
-                  ) : isDone ? (
-                    <><RotateCcw size={14} /> Regenerate</>
-                  ) : (
-                    <><Sparkles size={14} /> Generate Prep</>
-                  )}
-                </button>
-
-                {state === 'error' && (
-                  <div className="mt-2.5 flex items-center gap-2 text-red-500 text-xs font-medium">
-                    <AlertCircle size={12} /> Failed to generate. Try again.
-                  </div>
-                )}
-              </div>
-
-              {/* Smart lesson result */}
-              {isDone && result && (
-                <>
-                  <button
-                    onClick={() => setExpanded(p => ({ ...p, [card.classId]: !isOpen }))}
-                    className="w-full flex items-center justify-between px-5 py-3 border-t border-slate-100 text-sm font-bold text-slate-600 hover:bg-violet-50 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Zap size={13} className="text-violet-500" />
-                      {isOpen ? 'Hide lesson' : 'View lesson'}
-                      {result.gapTopics.length > 0 && (
-                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                          {result.gapTopics.length} gap{result.gapTopics.length !== 1 ? 's' : ''} embedded
-                        </span>
-                      )}
-                    </span>
-                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-
-                  {isOpen && (
-                    <div className="border-t border-slate-100">
-                      {/* Doc header */}
-                      <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', padding: '16px 20px' }}>
-                        <p style={{ fontSize: 10, fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 2 }}>Smart Lesson Plan</p>
-                        <p style={{ fontSize: 17, fontWeight: 900, color: '#fff', lineHeight: 1.2 }}>{result.topic}</p>
-                        {result.gapTopics.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                            {result.gapTopics.map(g => (
-                              <span key={g.topic} style={{ fontSize: 10, fontWeight: 700, color: '#fef3c7', background: 'rgba(245,158,11,.25)', border: '1px solid rgba(245,158,11,.4)', borderRadius: 999, padding: '2px 8px' }}>
-                                ↺ {g.topic} · {Math.round(g.avgMastery * 100)}%
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div style={{ padding: '0 20px 20px' }}>
-                        {/* Opening Hook */}
-                        <div style={{ borderBottom: '1px solid #f1f5f9', paddingTop: 16, paddingBottom: 16 }}>
-                          <p style={{ fontSize: 9, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Opening Hook</p>
-                          <p style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', lineHeight: 1.55, fontStyle: 'italic' }}>
-                            &ldquo;{result.lesson.hook}&rdquo;
-                          </p>
                         </div>
 
-                        {/* Sections */}
-                        {(() => {
-                          let stepNum = 0
-                          return result.lesson.sections.map((sec, i) => {
-                            const isCheck = sec.type === 'check'
-                            if (!isCheck) stepNum++
-                            const isLast = i === result.lesson.sections.length - 1
-                            return (
-                              <div key={i} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9', paddingTop: 14, paddingBottom: 14 }}>
-                                {/* Label row */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                                  {isCheck ? (
-                                    <CheckCircle2 size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
-                                  ) : (
-                                    <span style={{ fontSize: 10, fontWeight: 800, color: '#7c3aed' }}>Step {stepNum}</span>
-                                  )}
-                                  <span style={{
-                                    fontSize: 9, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: '.07em',
-                                    color: isCheck ? '#15803d' : '#6d28d9',
-                                    background: isCheck ? '#dcfce7' : '#ede9fe',
-                                    borderRadius: 5, padding: '2px 7px',
-                                  }}>
-                                    {isCheck ? 'Check' : 'Teach'}
-                                  </span>
-                                </div>
-
-                                {/* Title */}
-                                <p style={{ fontSize: 15, fontWeight: 800, color: isCheck ? '#15803d' : '#1e293b', marginBottom: 6, lineHeight: 1.3 }}>
-                                  {sec.title}
-                                </p>
-
-                                {/* Teaching content */}
-                                <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>{sec.content}</p>
-
-                                {/* Bridge note — inline aside, not a separate block */}
-                                {sec.bridgeNote && (
-                                  <div style={{
-                                    marginTop: 10,
-                                    paddingLeft: 12,
-                                    borderLeft: '3px solid #fcd34d',
-                                    display: 'flex',
-                                    flexDirection: 'column' as const,
-                                    gap: 2,
-                                  }}>
-                                    <span style={{ fontSize: 9, fontWeight: 800, color: '#b45309', textTransform: 'uppercase' as const, letterSpacing: '.08em' }}>
-                                      ↺ {sec.bridgeNote.concept}
-                                    </span>
-                                    <p style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>{sec.bridgeNote.text}</p>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })
-                        })()}
+                        {/* Saved badge + Regenerate */}
+                        <div className="px-4 py-3 flex items-center gap-2">
+                          {cached && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                              <CheckCircle2 size={9} /> Saved
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => generate(card.classId, card.grade, true)}
+                            className="ml-auto flex items-center gap-1.5 text-xs font-bold text-slate-500 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all"
+                          >
+                            <RotateCcw size={12} /> Regenerate
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Closing activity */}
-                      <div style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '14px 20px' }}>
-                        <p style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>
-                          Closing Activity (2 min)
-                        </p>
-                        <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.65 }}>{result.lesson.closingActivity}</p>
-                      </div>
-                    </div>
-                  )}
-                </>
+                    )
+                  })()}
+                </div>
               )}
             </div>
           )
