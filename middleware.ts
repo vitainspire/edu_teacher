@@ -4,6 +4,8 @@ import { createServerClient } from '@supabase/ssr'
 
 // Paths that are always public — no auth required
 const PUBLIC_PREFIXES = [
+  '/portals',
+  '/features',
   '/login',
   '/admin/login',
   '/student/login',
@@ -11,6 +13,8 @@ const PUBLIC_PREFIXES = [
   '/api/admin/register',
   '/api/school/has-admin',
   '/api/student',
+  '/api/personality-story',
+  '/api/personality-progress',
   '/favicon.ico',
   '/sw.js',
   '/workbox',
@@ -49,11 +53,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Root redirect
+  // Root: send logged-in users straight to their portal; everyone else sees the landing page
   if (pathname === '/') {
     const role = req.cookies.get('edu-role')?.value
-    const dest = role === 'scanner' ? '/scanner/connect' : role === 'admin' ? '/admin/dashboard' : '/home'
-    return NextResponse.redirect(new URL(dest, req.url))
+    if (role === 'scanner') return NextResponse.redirect(new URL('/scanner/connect', req.url))
+    if (role === 'admin')   return NextResponse.redirect(new URL('/admin/dashboard', req.url))
+    if (role)               return NextResponse.redirect(new URL('/home', req.url))
+    return NextResponse.next() // unauthenticated → show landing page
   }
 
   // Build a Supabase client that can read/refresh the session from cookies.
