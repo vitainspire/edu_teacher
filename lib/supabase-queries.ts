@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import type {
   Teacher, Student, Test, Mark, TopicMastery, RecoveryAttempt,
   Class, SyllabusTopic, Attendance, Session, SyllabusSubTopic, TimetableEntry, CatchupMaterial, InterventionNote,
-  TeacherClassAssignment, School, StudentDoubt, TopicPoll, Worksheet,
+  TeacherClassAssignment, School, StudentDoubt, TopicPoll, Worksheet, PrepMaterial, TaughtTopic,
 } from './types'
 
 // ─── Schools ──────────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ export async function upsertTeacher(t: Teacher) {
 }
 
 export async function fetchTeacher(userId: string): Promise<Teacher | null> {
-  const { data, error } = await supabase.from('teachers').select('*').eq('user_id', userId).maybeSingle()
+  const { data, error } = await supabase.from('teachers').select('*').eq('id', userId).single()
   if (error || !data) return null
   return {
     id: data.id,
@@ -209,7 +209,7 @@ export async function upsertStudent(s: Student) {
   const { error } = await supabase.from('students').upsert({
     id: s.id, teacher_id: s.teacherId, class_id: s.classId, name: s.name,
     roll_number: s.rollNumber, is_active: s.isActive, interests: s.interests, goal: s.goal,
-    pin: s.pin ?? null,
+    pin: s.pin ?? null, student_code: s.studentCode ?? null,
   })
   if (error) throw error
 }
@@ -245,7 +245,6 @@ export async function fetchStudentsByClasses(classIds: string[]): Promise<Studen
 export async function upsertTest(t: Test) {
   const { error } = await supabase.from('tests').upsert({
     id: t.id, teacher_id: t.teacherId, class_id: t.classId ?? null,
-    syllabus_topic_id: t.syllabusTopicId ?? null,
     subject: t.subject, topic: t.topic, total_marks: t.totalMarks, conducted_on: t.conductedOn,
     term: t.term ?? null,
     questions: t.questions ? JSON.stringify(t.questions) : null,
@@ -258,7 +257,6 @@ export async function fetchTests(teacherId: string): Promise<Test[]> {
   if (error) throw error
   return (data ?? []).map(r => ({
     id: r.id, teacherId: r.teacher_id, classId: r.class_id ?? undefined,
-    syllabusTopicId: r.syllabus_topic_id ?? undefined,
     subject: r.subject, topic: r.topic, totalMarks: r.total_marks, conductedOn: r.conducted_on,
     term: r.term ?? undefined,
     questions: r.questions
@@ -490,6 +488,62 @@ export async function updateCatchupStatus(id: string, status: CatchupMaterial['s
   try {
     await supabase.from('catchup_materials').update({ status }).eq('id', id)
   } catch { /* ignore */ }
+}
+
+// ─── Prep Materials ───────────────────────────────────────────────────────────
+
+export async function upsertPrepMaterial(m: PrepMaterial) {
+  try {
+    const { error } = await supabase.from('prep_materials').upsert({
+      id: m.id, teacher_id: m.teacherId, class_id: m.classId,
+      subject: m.subject, grade: m.grade, topic: m.topic,
+      subtopic: m.subtopic ?? null,
+      gap_topics: m.gapTopics, lesson: m.lesson,
+      created_at: m.createdAt,
+    })
+    if (error) throw error
+  } catch { /* table may not exist yet */ }
+}
+
+export async function fetchPrepMaterials(teacherId: string): Promise<PrepMaterial[]> {
+  try {
+    const { data, error } = await supabase
+      .from('prep_materials').select('*').eq('teacher_id', teacherId)
+    if (error) return []
+    return (data ?? []).map(r => ({
+      id: r.id, teacherId: r.teacher_id, classId: r.class_id,
+      subject: r.subject, grade: r.grade, topic: r.topic,
+      subtopic: r.subtopic ?? undefined,
+      gapTopics: r.gap_topics ?? [], lesson: r.lesson,
+      createdAt: r.created_at,
+    }))
+  } catch { return [] }
+}
+
+// ─── Taught Topics (per-day, shown on the timetable) ──────────────────────────
+
+export async function upsertTaughtTopic(t: TaughtTopic) {
+  try {
+    const { error } = await supabase.from('taught_topics').upsert({
+      id: t.id, teacher_id: t.teacherId, class_id: t.classId,
+      date: t.date, topic: t.topic, subtopic: t.subtopic ?? null,
+      created_at: t.createdAt,
+    })
+    if (error) throw error
+  } catch { /* table may not exist yet */ }
+}
+
+export async function fetchTaughtTopics(teacherId: string): Promise<TaughtTopic[]> {
+  try {
+    const { data, error } = await supabase
+      .from('taught_topics').select('*').eq('teacher_id', teacherId)
+    if (error) return []
+    return (data ?? []).map(r => ({
+      id: r.id, teacherId: r.teacher_id, classId: r.class_id,
+      date: r.date, topic: r.topic, subtopic: r.subtopic ?? undefined,
+      createdAt: r.created_at,
+    }))
+  } catch { return [] }
 }
 
 // ─── Interventions ────────────────────────────────────────────────────────────

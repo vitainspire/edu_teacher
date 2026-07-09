@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { verifyStudentCookie } from '@/lib/student-auth'
 
 // PATCH /api/student/profile — update interests for the authenticated student
 export async function PATCH(req: NextRequest) {
-  const studentId = req.cookies.get('edu-student-id')?.value
+  const studentId = verifyStudentCookie(req.cookies.get('edu-student-id')?.value)
   if (!studentId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   let body: unknown

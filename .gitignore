@@ -23,8 +23,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 dev.log
-dev-server.log
-*.log
+dev-check.log
+dev-smoke.log
+dev-smoke-err.log
+_diag.mjs
+/graphify-out/
 
 # local env files
 .env*.local

@@ -11,6 +11,9 @@ import { supabase } from "@/lib/supabase";
 import { Spinner } from "@/components/scanner/spinner";
 import { cn } from "@/lib/utils";
 import type { WsSection } from "@/lib/types";
+import { QualityWarning } from "@/components/scanner/quality-warning";
+import { ReviewFlag } from "@/components/scanner/review-flag";
+import { compressAndAssess, type ImageQuality } from "@/lib/scan-capture";
 
 interface Student { id: string; name: string; roll_number: number }
 interface WorksheetInfo {
@@ -19,27 +22,6 @@ interface WorksheetInfo {
   grade: string
   totalMarks: number
   sections: WsSection[]
-}
-
-function compressToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const MAX = 1600;
-      const scale = img.width > MAX ? MAX / img.width : 1;
-      const canvas = document.createElement("canvas");
-      canvas.width  = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas unavailable")); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.8));
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Load failed")); };
-    img.src = objectUrl;
-  });
 }
 
 // Convert worksheet sections to AiQuestion format for multi-grade-scan
@@ -71,16 +53,17 @@ export default function WorksheetMultiScanPage() {
   const [classId, setClassId]     = useState<string | null>(null);
 
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [pages, setPages]           = useState<{ dataUrl: string }[]>([]);
+  const [pages, setPages]           = useState<{ dataUrl: string; quality: ImageQuality }[]>([]);
   const [capturing, setCapturing]   = useState(false);
 
-  type Stage = "capture" | "grading" | "done-all";
+  type Stage = "capture" | "grading" | "flagged" | "done-all";
   const [stage, setStage]       = useState<Stage>("capture");
   const [gradeError, setGradeError] = useState<string | null>(null);
+  const [reviewReason, setReviewReason] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
 
-  const teacherId   = typeof window !== "undefined" ? (localStorage.getItem("scanner_teacher_id") ?? "") : "";
-  const teacherName = typeof window !== "undefined" ? (localStorage.getItem("scanner_teacher_name") ?? "") : "";
+  const scannerToken = typeof window !== "undefined" ? (localStorage.getItem("scanner_token") ?? "") : "";
+  const teacherName  = typeof window !== "undefined" ? (localStorage.getItem("scanner_teacher_name") ?? "") : "";
 
   useEffect(() => {
     void (async () => {
@@ -135,8 +118,8 @@ export default function WorksheetMultiScanPage() {
     if (!file) return;
     if (fileInputRef.current) fileInputRef.current.value = "";
     setCapturing(true);
-    compressToDataUrl(file)
-      .then(dataUrl => setPages(prev => [...prev, { dataUrl }]))
+    compressAndAssess(file)
+      .then(({ dataUrl, quality }) => setPages(prev => [...prev, { dataUrl, quality }]))
       .catch(err => setGradeError(String(err)))
       .finally(() => setCapturing(false));
   }, []);
@@ -161,9 +144,10 @@ export default function WorksheetMultiScanPage() {
       const [gradeRes, uploadRes] = await Promise.all([
         fetch("/api/multi-grade-scan", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-scanner-token": scannerToken },
           body: JSON.stringify({
             images,
+            worksheetId,
             studentId: current.id,
             studentName: current.name,
             totalMarks: wsInfo.totalMarks,
@@ -174,9 +158,8 @@ export default function WorksheetMultiScanPage() {
         }),
         fetch("/api/scanner-upload", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-scanner-token": scannerToken },
           body: JSON.stringify({
-            teacherId,
             worksheetId,
             studentId: current.id,
             imageDataUrl: pages[0].dataUrl,
@@ -192,6 +175,8 @@ export default function WorksheetMultiScanPage() {
         score: number
         breakdown: unknown
         feedback: string | null
+        needsReview?: boolean
+        reviewReason?: string | null
       };
 
       let imageUrl: string | undefined;
@@ -202,9 +187,8 @@ export default function WorksheetMultiScanPage() {
 
       const saveRes = await fetch("/api/worksheet-save-score", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-scanner-token": scannerToken },
         body: JSON.stringify({
-          teacherId,
           worksheetId,
           studentId: current.id,
           score: gradeData.score,
@@ -223,6 +207,12 @@ export default function WorksheetMultiScanPage() {
       setSavedCount(c => c + 1);
       setDoneIds(prev => new Set([...prev, current.id]));
 
+      if (gradeData.needsReview && gradeData.reviewReason) {
+        setReviewReason(gradeData.reviewReason);
+        setStage("flagged");
+        return;
+      }
+
       if (currentIdx + 1 >= pending.length) {
         setStage("done-all");
       } else {
@@ -232,6 +222,16 @@ export default function WorksheetMultiScanPage() {
     } catch (err) {
       setGradeError(err instanceof Error ? err.message : "Unknown error");
       setStage("capture");
+    }
+  };
+
+  const handleContinueAfterFlag = () => {
+    setReviewReason(null);
+    if (currentIdx + 1 >= pending.length) {
+      setStage("done-all");
+    } else {
+      setStage("capture");
+      advanceStudent();
     }
   };
 
@@ -254,6 +254,22 @@ export default function WorksheetMultiScanPage() {
         <p className="text-gray-500 font-medium">No students linked to this worksheet&apos;s class.</p>
         <p className="text-xs text-gray-400">Assign the worksheet to a class in the teacher portal first.</p>
         <Link href="/scanner/connect" className="text-indigo-600 font-bold text-sm">← Back to tests</Link>
+      </div>
+    );
+  }
+
+  if (stage === "flagged" && reviewReason) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-5 px-6 text-center">
+        <div className="w-full max-w-sm text-left">
+          <ReviewFlag reason={reviewReason} />
+        </div>
+        <button
+          onClick={handleContinueAfterFlag}
+          className="w-full max-w-sm bg-indigo-600 text-white font-black rounded-2xl px-8 py-4 shadow-xl shadow-indigo-200 active:scale-95 transition-transform"
+        >
+          Continue
+        </button>
       </div>
     );
   }
@@ -366,6 +382,15 @@ export default function WorksheetMultiScanPage() {
           </button>
         </div>
       )}
+
+      {(() => {
+        const badPage = pages.find(p => !p.quality.ok);
+        return badPage?.quality.reason ? (
+          <div className="mb-4">
+            <QualityWarning reason={badPage.quality.reason} onRetake={() => setPages([])} />
+          </div>
+        ) : null;
+      })()}
 
       {gradeError && (
         <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-4">

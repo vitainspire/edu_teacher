@@ -4,6 +4,9 @@ import { withCache, ck } from '@/lib/server-cache'
 import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 import { PracticeQuizSchema, parseBody } from '@/lib/schemas'
 
+// callAI's primary+fallback retry chain can take up to ~90s on failure.
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = await checkRateLimit(ip)
@@ -14,18 +17,11 @@ export async function POST(req: NextRequest) {
 
   const parsed_ = parseBody(PracticeQuizSchema, rawBody)
   if (!parsed_.ok) return parsed_.response
-  const { topic, subject, grade, interests, difficultyLevel } = parsed_.data
+  const { topic, subject, grade, interests } = parsed_.data
 
   const interestHint = interests?.length
     ? `Use examples from: ${interests.slice(0, 2).join(', ')}.`
     : 'Use simple Indian everyday examples (cricket, market, cooking, farming).'
-
-  const difficultyRule =
-    difficultyLevel === 'beginner'
-      ? 'Q1 very easy (basic recall), Q2 easy, Q3 easy-medium, Q4 medium. Use very simple language — pretend you are explaining to someone hearing this topic for the first time.'
-      : difficultyLevel === 'advanced'
-      ? 'Q1 medium, Q2 medium-hard, Q3 hard (requires reasoning), Q4 challenging (applies the concept in an unfamiliar situation). The student is strong, push them a bit.'
-      : 'Q1 easy, Q2 easy-medium, Q3 medium, Q4 slightly harder.'
 
   const prompt =
 `You are creating a 4-question multiple-choice practice quiz for a Grade ${grade} student in an Indian government school studying ${subject}.
@@ -35,7 +31,7 @@ ${interestHint}
 Rules:
 - Questions must match Grade ${grade} level — simple language, no jargon.
 - Each question has exactly 4 options (A, B, C, D). Only ONE is correct.
-- Difficulty progression: ${difficultyRule}
+- Vary difficulty: Q1 easy, Q2 easy-medium, Q3 medium, Q4 slightly harder.
 - The explanation must be 1 sentence — explain WHY the answer is correct in simple terms.
 - Do NOT use "All of the above" or "None of the above" options.
 
@@ -53,9 +49,8 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   try {
     const topInterest = interests?.[0]?.slice(0, 20).toLowerCase().replace(/\s+/g, '_') ?? 'none'
-    const level = difficultyLevel ?? 'standard'
     const { value } = await withCache(
-      ck('practice-quiz-v2', topic.toLowerCase().trim(), subject.toLowerCase().trim(), grade, topInterest, level),
+      ck('practice-quiz-v1', topic.toLowerCase().trim(), subject.toLowerCase().trim(), grade, topInterest),
       86400,
       async () => {
         const text = await callAI([{ role: 'user', content: prompt }], { maxTokens: 800 })

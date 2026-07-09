@@ -3,15 +3,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { fetchAdmin, bulkInsertStudents } from '@/lib/admin-queries'
+import { genStudentCode } from '@/lib/studentCode'
 import { randomUUID } from 'crypto'
-
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-
-function genStudentCode(): string {
-  let code = 'ST'
-  for (let i = 0; i < 6; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
-  return code
-}
 
 async function uniqueStudentCode(ac: ReturnType<typeof createAdminClient>): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {

@@ -1,17 +1,37 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { GraduationCap, LogOut, Loader2, CheckCircle2, RotateCcw, CalendarClock, Pencil, X, Check as CheckIcon } from 'lucide-react'
+import {
+  GraduationCap, LogOut, Loader2, Pencil, X, Check as CheckIcon,
+  Star, Target, Flame, CalendarCheck, TrendingUp, Dumbbell, Trophy, Rocket, type LucideIcon,
+  Home, ClipboardCheck, UserCircle, BookOpen, Bell, ChevronLeft, ChevronRight, ArrowLeft,
+  Palette, Goal, CircleDot, Music, Drama, Hourglass,
+  Clapperboard, ChefHat, Leaf, PawPrint, Gamepad2, Bot, Puzzle, AlertTriangle, Construction, UserCheck,
+} from 'lucide-react'
 import type {
   Student, TopicMastery, Mark, Attendance, CatchupMaterial,
   Class, Session, SyllabusTopic, TimetableEntry, TopicPoll, Test,
 } from '@/lib/types'
+import { QuizPanel } from '@/components/student/QuizPanel'
+import { FlashcardsPanel } from '@/components/student/FlashcardsPanel'
+import { NotesPanel } from '@/components/student/NotesPanel'
+import { TestsPanel } from '@/components/student/TestsPanel'
+import type { LearnSubject } from '@/components/student/studentLearn'
+import { SUBJECT_PALETTE } from '@/components/student/studentTheme'
+import SpaceDoodleBackground from '@/components/student/SpaceDoodleBackground'
+import PersonalityCorner from '@/components/student/PersonalityCorner'
+import { AbacusSticker, FlaskSticker, GlobeScrollSticker, QuillBookSticker } from '@/components/theme/StickerIcon'
+import {
+  BookSticker, TrophySticker, MedalSticker, GradCapSticker, RocketSticker,
+  StarSticker, FlameSticker, CalendarCheckSticker, TrendingUpSticker, DumbbellSticker,
+} from '@/components/student/StudentStickers'
 
 // ── Badge definitions ─────────────────────────────────────────────────────────
 
 interface BadgeDef {
   id: string
-  icon: string
+  Icon: LucideIcon
+  Sticker: (props: { size?: number; className?: string }) => React.ReactElement
   name: string
   description: string
   hint: string
@@ -21,16 +41,90 @@ interface BadgeDef {
 }
 
 const BADGE_DEFS: BadgeDef[] = [
-  { id: 'perfect',      icon: '⭐', name: 'Perfect Score',    description: 'Scored 100% on a test',             hint: 'Score full marks on any test',              color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-  { id: 'sharpshooter', icon: '🎯', name: 'Sharpshooter',    description: 'Scored 90%+ on a test',             hint: 'Score 90% or above on any test',            color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
-  { id: 'streak3',      icon: '🔥', name: 'Hat-Trick',       description: 'Attended 3 classes in a row',       hint: 'Attend 3 classes without missing one',      color: '#ea580c', bg: '#fff7ed', border: '#fde68a' },
-  { id: 'streak7',      icon: '🔥🔥', name: 'Week Warrior', description: 'Attended 7 classes in a row',       hint: 'Attend 7 classes in a row',                 color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
-  { id: 'attendance',   icon: '📅', name: 'Attendance Star', description: 'Over 90% overall attendance',      hint: 'Keep attendance above 90%',                 color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
-  { id: 'improving',    icon: '📈', name: 'On the Rise',     description: 'Improved since last test',          hint: 'Score higher than your previous test',      color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
-  { id: 'noweakspot',   icon: '💪', name: 'All Rounder',     description: 'No weak topics — all 60%+',         hint: 'Get 60%+ mastery in all tested topics',     color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' },
-  { id: 'topicmaster',  icon: '🏆', name: 'Topic Master',    description: '80%+ mastery in a topic',           hint: 'Reach 80%+ mastery in any topic',           color: '#4f46e5', bg: '#eef2ff', border: '#c7d2fe' },
-  { id: 'halfway',      icon: '🎓', name: 'Halfway Hero',    description: 'Completed 50% of the syllabus',    hint: 'Complete at least half the syllabus',       color: '#059669', bg: '#ecfdf5', border: '#6ee7b7' },
-  { id: 'comeback',     icon: '🚀', name: 'Comeback Kid',    description: 'Bounced back from a low score',    hint: 'Score above 60% after scoring below 50%',   color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
+  { id: 'perfect',      Icon: Star,          Sticker: StarSticker,          name: 'Perfect Score',    description: 'Scored 100% on a test',             hint: 'Score full marks on any test',              color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+  { id: 'sharpshooter', Icon: Target,        Sticker: MedalSticker,         name: 'Sharpshooter',    description: 'Scored 90%+ on a test',             hint: 'Score 90% or above on any test',            color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  { id: 'streak3',      Icon: Flame,         Sticker: FlameSticker,         name: 'Hat-Trick',       description: 'Attended 3 classes in a row',       hint: 'Attend 3 classes without missing one',      color: '#ea580c', bg: '#fff7ed', border: '#fde68a' },
+  { id: 'streak7',      Icon: Flame,         Sticker: FlameSticker,         name: 'Week Warrior',   description: 'Attended 7 classes in a row',       hint: 'Attend 7 classes in a row',                 color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+  { id: 'attendance',   Icon: CalendarCheck, Sticker: CalendarCheckSticker, name: 'Attendance Star', description: 'Over 90% overall attendance',      hint: 'Keep attendance above 90%',                 color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+  { id: 'improving',    Icon: TrendingUp,    Sticker: TrendingUpSticker,    name: 'On the Rise',     description: 'Improved since last test',          hint: 'Score higher than your previous test',      color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
+  { id: 'noweakspot',   Icon: Dumbbell,      Sticker: DumbbellSticker,      name: 'All Rounder',     description: 'No weak topics — all 60%+',         hint: 'Get 60%+ mastery in all tested topics',     color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' },
+  { id: 'topicmaster',  Icon: Trophy,        Sticker: TrophySticker,        name: 'Topic Master',    description: '80%+ mastery in a topic',           hint: 'Reach 80%+ mastery in any topic',           color: '#4f46e5', bg: '#eef2ff', border: '#c7d2fe' },
+  { id: 'halfway',      Icon: GraduationCap, Sticker: GradCapSticker,       name: 'Halfway Hero',    description: 'Completed 50% of the syllabus',    hint: 'Complete at least half the syllabus',       color: '#059669', bg: '#ecfdf5', border: '#6ee7b7' },
+  { id: 'comeback',     Icon: Rocket,        Sticker: RocketSticker,        name: 'Comeback Kid',    description: 'Bounced back from a low score',    hint: 'Score above 60% after scoring below 50%',   color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
+]
+
+function BadgeSticker({ badge, earned, size = 36 }: { badge: BadgeDef; earned: boolean; size?: number }) {
+  const [hovered, setHovered] = useState(false)
+  const Sticker = badge.Sticker
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ position: 'relative', flexShrink: 0 }}
+    >
+      <div
+        className="transition-transform duration-150 ease-out hover:scale-110"
+        style={{
+          width: size, height: size, borderRadius: Math.round(size * 0.28), position: 'relative',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default',
+          background: earned ? '#3D6CB4' : '#E7EBF3',
+        }}
+      >
+        <span style={{ display: 'flex', filter: earned ? undefined : 'grayscale(1) opacity(0.55)' }}>
+          <Sticker size={Math.round(size * 0.68)} />
+        </span>
+      </div>
+
+      {hovered && (
+        <div style={{
+          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 10,
+          background: '#1E2A44', borderRadius: 10, padding: '8px 12px', zIndex: 50,
+          width: 'max-content', maxWidth: 180, pointerEvents: 'none',
+        }}>
+          <div style={{
+            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+            width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '5px solid #1E2A44',
+          }} />
+          <p style={{ fontSize: 11.5, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>
+            {badge.name}{!earned && <span style={{ color: '#A6AEC2', fontWeight: 700 }}> · Locked</span>}
+          </p>
+          <p style={{ fontSize: 10.5, fontWeight: 500, color: '#D8E1EE', marginTop: 3, lineHeight: 1.4 }}>
+            {earned ? badge.description : badge.hint}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProgressRing({ pct, size = 78 }: { pct: number; size?: number }) {
+  const stroke = 8
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const dash = c * (1 - Math.min(100, Math.max(0, pct)) / 100)
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E3E9F3" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#3D6CB4" strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={dash} style={{ transition: 'stroke-dashoffset .5s ease' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: Math.round(size * 0.24), fontWeight: 800, color: '#1E2A44', letterSpacing: '-.5px' }}>{pct}%</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Sidebar navigation (top-level sections only — Home is the only one wired up so far) ──
+
+interface NavGroup { id: string; label: string; Icon: LucideIcon }
+
+const NAV_GROUPS: NavGroup[] = [
+  { id: 'home',      label: 'Home',       Icon: Home },
+  { id: 'learn',     label: 'Learn',      Icon: GraduationCap },
+  { id: 'tests',     label: 'Tests',      Icon: ClipboardCheck },
+  { id: 'profile',   label: 'Profile',    Icon: UserCircle },
 ]
 
 function computeAllBadges(data: SubjectData): (BadgeDef & { earned: boolean })[] {
@@ -83,6 +177,7 @@ function computeAllBadges(data: SubjectData): (BadgeDef & { earned: boolean })[]
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SubjectTab {
+  key: string        // unique per subject — classId can repeat across subjects (Model A)
   classId: string
   studentId: string
   teacherId?: string
@@ -98,6 +193,19 @@ interface UpcomingTest {
   subject: string
 }
 
+interface TaughtSession {
+  id: string
+  topic: string
+  date: string
+}
+
+interface TodaySubstitution {
+  periodNumber: number
+  subject?: string
+  substituteTeacherName?: string
+  status: 'assigned' | 'unresolved' | 'manual'
+}
+
 interface SubjectData {
   attendanceRate: number
   totalSessions: number
@@ -109,82 +217,52 @@ interface SubjectData {
   catchupPlans: CatchupMaterial[]
   syllabusTopics: SyllabusTopic[]
   timetable: TimetableEntry[]
+  substitutions: TodaySubstitution[]
   polls: TopicPoll[]
   upcomingTests: UpcomingTest[]
+  awaitingResults: UpcomingTest[]
+  taughtTopics: TaughtSession[]
+  catchupTopics: TaughtSession[]
 }
-
-interface QuizQuestion {
-  text: string
-  options: string[]
-  answerIndex: number
-  explanation: string
-}
-
-type QuizPhase = 'idle' | 'loading' | 'active' | 'done'
-interface QuizState {
-  phase: QuizPhase
-  topic: string
-  questions: QuizQuestion[]
-  current: number
-  selected: (number | null)[]
-  score: number
-}
-
-type PriorityState = 'catchup' | 'practice' | 'poll' | 'good'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TAB_COLORS = ['#4f46e5','#059669','#dc2626','#d97706','#0891b2','#7c3aed','#e11d48']
 
-const PRESET_INTERESTS = [
-  '🏏 Cricket', '⚽ Football', '🏀 Basketball', '🏸 Badminton',
-  '🎵 Music', '🎨 Drawing', '💃 Dance', '🎬 Movies',
-  '🍳 Cooking', '📚 Reading', '🚀 Space', '🌿 Nature',
-  '🐾 Animals', '🎮 Gaming', '🤖 Robots', '🧩 Puzzles',
+const PRESET_INTERESTS: { label: string; Icon: LucideIcon }[] = [
+  { label: 'Cricket',    Icon: Trophy },
+  { label: 'Football',   Icon: Goal },
+  { label: 'Basketball', Icon: CircleDot },
+  { label: 'Badminton',  Icon: Target },
+  { label: 'Music',      Icon: Music },
+  { label: 'Drawing',    Icon: Palette },
+  { label: 'Dance',      Icon: Drama },
+  { label: 'Movies',     Icon: Clapperboard },
+  { label: 'Cooking',    Icon: ChefHat },
+  { label: 'Reading',    Icon: BookOpen },
+  { label: 'Space',      Icon: Rocket },
+  { label: 'Nature',     Icon: Leaf },
+  { label: 'Animals',    Icon: PawPrint },
+  { label: 'Gaming',     Icon: Gamepad2 },
+  { label: 'Robots',     Icon: Bot },
+  { label: 'Puzzles',    Icon: Puzzle },
 ]
 
-const PS_COLOR: Record<PriorityState, string> = {
-  catchup:  '#d97706',
-  practice: '#dc2626',
-  poll:     '#2563eb',
-  good:     '#059669',
-}
-
-const PS_BORDER: Record<PriorityState, string> = {
-  catchup:  '#fde68a',
-  practice: '#fecaca',
-  poll:     '#bfdbfe',
-  good:     '#a7f3d0',
-}
-
-const FOCUS_TAG: Record<PriorityState, string> = {
-  catchup:  '🏫 Missed Class',
-  practice: '📝 Needs Practice',
-  poll:     '🧠 Quick Check-In',
-  good:     '🎯 On Track',
-}
-
+// "Made of paper" card — warm off-white surface, flat (no glossy drop
+// shadow), just a soft ink-tinted border for edge definition.
 const CARD: React.CSSProperties = {
-  background: '#fff', borderRadius: 24,
-  border: '1px solid #f1f5f9',
-  boxShadow: '0 2px 24px rgba(15,23,42,0.07)',
+  background: '#FFFFFF', borderRadius: 24,
+  border: '2.5px solid rgba(30,42,68,0.22)',
   padding: '20px 22px',
   display: 'flex', flexDirection: 'column', gap: 12,
 }
 
-const LBL: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '.09em',
-  textTransform: 'uppercase', color: '#94a3b8',
+// Home-screen card — same paper surface as CARD
+const HCARD: React.CSSProperties = {
+  background: '#FFFFFF', borderRadius: 22,
+  padding: '20px 22px',
+  textAlign: 'left', border: '2.5px solid rgba(30,42,68,0.22)', width: '100%',
 }
-
-const BLUE_BTN: React.CSSProperties = {
-  width: '100%', padding: '12px 20px', borderRadius: 14,
-  background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)',
-  boxShadow: '0 3px 12px rgba(37,99,235,0.35)',
-  border: 'none', fontSize: 13.5, fontWeight: 800,
-  color: '#fff', cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit',
-}
-
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -202,6 +280,22 @@ function formatTestDate(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
+function formatPastDate(dateStr: string): string {
+  const d = daysUntil(dateStr)
+  if (d === 0) return 'Today'
+  if (d === -1) return 'Yesterday'
+  if (d > -7) return `${-d} days ago`
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
+function subjectStickerIcon(label: string) {
+  const l = label.toLowerCase()
+  if (/science/.test(l)) return FlaskSticker
+  if (/math/.test(l)) return AbacusSticker
+  if (/evs|environment|social|geography|history/.test(l)) return GlobeScrollSticker
+  return QuillBookSticker
+}
+
 function buildSubjectData(raw: {
   attendance: Attendance[]
   sessions: Session[]
@@ -210,6 +304,7 @@ function buildSubjectData(raw: {
   catchupMaterials: CatchupMaterial[]
   syllabusTopics: SyllabusTopic[]
   timetable: TimetableEntry[]
+  substitutions: TodaySubstitution[]
   polls: TopicPoll[]
   tests: Test[]
 }): SubjectData {
@@ -218,7 +313,7 @@ function buildSubjectData(raw: {
   raw.attendance.forEach(a => bySession.set(a.sessionId || a.id, a))
   const unique       = [...bySession.values()]
   const presentCount = unique.filter(a => a.status !== 'absent').length
-  const attendanceRate = unique.length > 0 ? presentCount / unique.length : 0
+  const attendanceRate = unique.length > 0 ? presentCount / unique.length : 1
 
   // Attendance streak — count consecutive present sessions from most recent
   const sortedSessions = [...raw.sessions].sort((a, b) => b.date.localeCompare(a.date))
@@ -240,23 +335,75 @@ function buildSubjectData(raw: {
     .filter(c => c.status !== 'done')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
-  // Upcoming tests — future tests the student hasn't been marked for
+  // Upcoming tests — future tests the student hasn't been marked for. Kept
+  // uncapped here; the Home screen's "Next Up" preview and the full Tests tab
+  // apply their own caps (or lack thereof) independently downstream.
   const markedTestIds = new Set(raw.marks.map(m => m.testId))
   const today = new Date().toISOString().split('T')[0]
   const upcomingTests = raw.tests
     .filter(t => t.conductedOn >= today && !markedTestIds.has(t.id))
-    .sort((a, b) => a.conductedOn.localeCompare(b.conductedOn))
-    .slice(0, 3) as UpcomingTest[]
+    .sort((a, b) => a.conductedOn.localeCompare(b.conductedOn)) as UpcomingTest[]
+
+  // Tests that already happened but haven't been marked for this student yet —
+  // without this bucket, a conducted-but-ungraded test falls into neither
+  // "upcoming" (it's in the past) nor "previous scores" (no mark exists yet),
+  // so it would be invisible to the student even though the teacher can see it.
+  const awaitingResults = raw.tests
+    .filter(t => t.conductedOn < today && !markedTestIds.has(t.id))
+    .sort((a, b) => b.conductedOn.localeCompare(a.conductedOn)) as UpcomingTest[]
+
+  // Topics taught in class, most recent first — this is what the teacher recorded
+  // when marking attendance, so students can see what they covered/missed.
+  const seenTopicDates = new Set<string>()
+  const taughtTopics: TaughtSession[] = []
+  for (const s of sortedSessions) {
+    if (!s.topic || !s.topic.trim()) continue
+    const key = `${s.topic}|${s.date}`
+    if (seenTopicDates.has(key)) continue
+    seenTopicDates.add(key)
+    taughtTopics.push({ id: s.id, topic: s.topic, date: s.date })
+    if (taughtTopics.length >= 8) break
+  }
+
+  // Catch-up: topics taught in a session this student was marked absent for —
+  // surfaced in the Learn tab as "here's what you missed," regardless of how
+  // long ago it was taught (unlike `taughtTopics`, which is capped to recent).
+  const catchupByTopic = new Map<string, TaughtSession>()
+  for (const s of raw.sessions) {
+    if (!s.topic || !s.topic.trim()) continue
+    const record = raw.attendance.find(a => a.sessionId === s.id)
+    if (record?.status !== 'absent') continue
+    const key = s.topic.trim().toLowerCase()
+    const existing = catchupByTopic.get(key)
+    if (!existing || s.date > existing.date) catchupByTopic.set(key, { id: s.id, topic: s.topic.trim(), date: s.date })
+  }
+  const catchupTopics = [...catchupByTopic.values()].sort((a, b) => b.date.localeCompare(a.date))
 
   return {
-    attendanceRate, totalSessions: raw.sessions.length,
+    attendanceRate, totalSessions: unique.length,
     presentCount, attendanceStreak,
     recentMarks, weakTopics, strongTopics, catchupPlans,
     syllabusTopics: [...raw.syllabusTopics].sort((a, b) => a.orderIndex - b.orderIndex),
     timetable: raw.timetable,
+    substitutions: raw.substitutions ?? [],
     polls: raw.polls,
     upcomingTests,
+    awaitingResults,
+    taughtTopics,
+    catchupTopics,
   }
+}
+
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 820px)')
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return mobile
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -266,32 +413,40 @@ export default function StudentHomePage() {
   const [student,     setStudent]     = useState<Student | null>(null)
   const [cls,         setCls]         = useState<Class | null>(null)
   const [subjects,    setSubjects]    = useState<SubjectTab[]>([])
-  const [activeIdx,   setActiveIdx]   = useState(0)
-  const [subjectData, setSubjectData] = useState<SubjectData | null>(null)
+  const [allData,     setAllData]     = useState<Record<string, SubjectData>>({})
   const [loading,     setLoading]     = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
-  const [quiz, setQuiz] = useState<QuizState>({
-    phase: 'idle', topic: '', questions: [], current: 0, selected: [], score: 0,
-  })
-  const [showExpl,      setShowExpl]      = useState(false)
+  const [activeNavGroup, setActiveNavGroup] = useState<string>('home')
+  const [learnTab, setLearnTab] = useState<'notes' | 'flashcards' | 'quizzes'>('notes')
+  const [selectedLearnSubject, setSelectedLearnSubject] = useState<string | null>(null)
+  const [learnPreload, setLearnPreload] = useState<{ subject: string; topic: string } | null>(null)
+  const isMobile = useIsMobile()
   const [errorMsg,      setErrorMsg]      = useState<string | null>(null)
   const [loadError,     setLoadError]     = useState(false)
   const [showInterests, setShowInterests] = useState(false)
+  const [showNotifPanel, setShowNotifPanel] = useState(false)
   const [draftInterests, setDraftInterests] = useState<string[]>([])
   const [customInput,   setCustomInput]   = useState('')
   const [savingInterests, setSavingInterests] = useState(false)
-  const [learningProfile, setLearningProfile] = useState<{
-    difficultyLevel: 'beginner' | 'standard' | 'advanced'
-    learningStyle: string
-    quizCount: number
-    avgQuizScore: number | null
-  } | null>(null)
-  const initDone       = useRef(false)
+  const [seenTopicsMap, setSeenTopicsMap] = useState<Record<string, string>>({})
+  const [seenTests, setSeenTests] = useState<string[]>([])
+  const initDone     = useRef(false)
   const contentPaneRef = useRef<HTMLDivElement>(null)
+  const recentScrollRef = useRef<HTMLDivElement>(null)
+  const [recentScrollState, setRecentScrollState] = useState({ left: false, right: false })
 
-  const dateStr = useMemo(() => new Date().toLocaleDateString('en-IN', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  }), [])
+  function updateRecentScrollState() {
+    const el = recentScrollRef.current
+    if (!el) return
+    setRecentScrollState({
+      left:  el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    })
+  }
+
+  function scrollRecent(dir: 1 | -1) {
+    recentScrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' })
+  }
 
   useEffect(() => {
     if (initDone.current) return
@@ -301,67 +456,77 @@ export default function StudentHomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('eduteach_seen_topics')
+      if (raw) setSeenTopicsMap(JSON.parse(raw))
+    } catch { /* ignore malformed/unavailable storage */ }
+    try {
+      const rawT = localStorage.getItem('eduteach_seen_tests')
+      if (rawT) setSeenTests(JSON.parse(rawT))
+    } catch { /* ignore */ }
+  }, [])
+
+  // Mark the newest taught topic in each subject as "seen" a few seconds after it's
+  // shown, so the "New" tag has a chance to catch the student's eye before it clears.
+  useEffect(() => {
+    if (subjects.length === 0) return
+    const timer = setTimeout(() => {
+      setSeenTopicsMap(prev => {
+        let changed = false
+        const next = { ...prev }
+        for (const tab of subjects) {
+          const latest = allData[tab.key]?.taughtTopics[0]?.date
+          if (latest && next[tab.key] !== latest) { next[tab.key] = latest; changed = true }
+        }
+        if (!changed) return prev
+        try { localStorage.setItem('eduteach_seen_topics', JSON.stringify(next)) } catch { /* ignore */ }
+        return next
+      })
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, [subjects, allData])
+
   async function init() {
     try {
-      const [res, profileRes] = await Promise.all([
-        fetch('/api/student/init'),
-        fetch('/api/student/learning-profile'),
-      ])
+      const res = await fetch('/api/student/init')
       if (!res.ok) { router.replace('/student/login'); return }
       const data = await res.json()
       setStudent(data.student); setCls(data.primaryClass)
-
-      if (profileRes.ok) {
-        const pData = await profileRes.json()
-        setLearningProfile(pData)
-      }
-
       const tabs: SubjectTab[] = data.tabs.map(
         (t: { classId: string; studentId: string; subject: string; teacherId?: string }, i: number) => ({
+          key: `${t.classId}::${t.teacherId ?? ''}::${i}`,
           classId: t.classId, studentId: t.studentId,
           teacherId: t.teacherId,
           label: t.subject, color: TAB_COLORS[i % TAB_COLORS.length],
         })
       )
       setSubjects(tabs)
-      if (tabs.length > 0) await loadData(tabs[0])
+      if (tabs.length > 0) await loadAllData(tabs)
     } catch { router.replace('/student/login') }
     finally { setLoading(false) }
   }
 
-  function updateLearningProfile(topic: string, subject: string, score: number, total: number) {
-    fetch('/api/student/learning-profile', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quizResult: { topic, subject, score, total } }),
-    }).then(r => r.json()).then(data => {
-      if (data.difficultyLevel) {
-        setLearningProfile(prev => prev ? { ...prev, difficultyLevel: data.difficultyLevel } : null)
-      }
-    }).catch(() => {})
-  }
-
-  async function loadData(tab: SubjectTab) {
+  async function loadAllData(tabs: SubjectTab[]) {
     setDataLoading(true)
     setLoadError(false)
     try {
-      const params = new URLSearchParams({ classId: tab.classId, studentId: tab.studentId })
-      if (tab.teacherId) params.set('teacherId', tab.teacherId)
-      const res = await fetch(`/api/student/tab-data?${params}`)
-      if (!res.ok) { setLoadError(true); return }
-      setSubjectData(buildSubjectData(await res.json()))
-    } catch {
-      setLoadError(true)
-    } finally { setDataLoading(false) }
-  }
-
-  async function handleSelect(idx: number) {
-    setActiveIdx(idx)
-    setSubjectData(null)
-    setLoadError(false)
-    setErrorMsg(null)
-    setQuiz({ phase: 'idle', topic: '', questions: [], current: 0, selected: [], score: 0 })
-    await loadData(subjects[idx])
+      const results = await Promise.all(tabs.map(async tab => {
+        try {
+          const params = new URLSearchParams({ classId: tab.classId, studentId: tab.studentId })
+          if (tab.teacherId) params.set('teacherId', tab.teacherId)
+          const res = await fetch(`/api/student/tab-data?${params}`)
+          if (!res.ok) return null
+          return { key: tab.key, data: buildSubjectData(await res.json()) }
+        } catch { return null }
+      }))
+      const map: Record<string, SubjectData> = {}
+      results.forEach(r => { if (r) map[r.key] = r.data })
+      setAllData(map)
+      if (Object.keys(map).length === 0) setLoadError(true)
+    } finally {
+      setDataLoading(false)
+    }
   }
 
   function handleLogout() {
@@ -407,133 +572,183 @@ export default function StudentHomePage() {
     setSavingInterests(false)
   }
 
-  async function startQuiz(topic: string) {
-    setErrorMsg(null)
-    setQuiz({ phase: 'loading', topic, questions: [], current: 0, selected: [], score: 0 })
-    contentPaneRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    try {
-      const res = await fetch('/api/practice-quiz', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic, subject: subjects[activeIdx]?.label ?? '',
-          grade: cls?.grade ?? '', interests: student?.interests ?? [],
-          difficultyLevel: learningProfile?.difficultyLevel ?? 'standard',
-        }),
+  // ── Derived: merge every subject's data into one school-wide home feed ──────
+
+  const homeFeed = useMemo(() => {
+    const bySubject = subjects
+      .map(tab => ({ tab, data: allData[tab.key] }))
+      .filter((x): x is { tab: SubjectTab; data: SubjectData } => !!x.data)
+
+    // Some data is class-level (attendance, timetable) and identical across subject
+    // tabs that share a class — dedupe by classId so it isn't counted once per subject.
+    const seenClass = new Set<string>()
+    const byClass = bySubject.filter(({ tab }) => {
+      if (seenClass.has(tab.classId)) return false
+      seenClass.add(tab.classId); return true
+    })
+
+    const todayDow = new Date().getDay()
+    const todayPeriods = byClass
+      .flatMap(({ data }) => {
+        const subByPeriod = new Map(data.substitutions.map(s => [s.periodNumber, s]))
+        return data.timetable
+          .filter(t => t.dayOfWeek === todayDow)
+          .map(p => ({ ...p, subjectLabel: p.label || 'Class', substitution: subByPeriod.get(p.periodNumber) }))
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `Server error (${res.status})`)
-      }
-      const data = await res.json()
-      if (!Array.isArray(data.questions) || data.questions.length === 0)
-        throw new Error('No questions returned — please try again.')
-      setQuiz({ phase: 'active', topic, questions: data.questions, current: 0,
-        selected: new Array(data.questions.length).fill(null), score: 0 })
-      setShowExpl(false)
-    } catch (err) {
-      setQuiz(q => ({ ...q, phase: 'idle' }))
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load quiz. Please try again.')
-      contentPaneRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+    const totalPresent  = byClass.reduce((sum, x) => sum + x.data.presentCount, 0)
+    const totalSessions = byClass.reduce((sum, x) => sum + x.data.totalSessions, 0)
+    const attendPct     = totalSessions > 0 ? Math.round((totalPresent / totalSessions) * 100) : 100
+    const bestStreak     = byClass.reduce((max, x) => Math.max(max, x.data.attendanceStreak), 0)
+
+    const allUpcomingTests = bySubject
+      .flatMap(({ tab, data }) => data.upcomingTests.map(t => ({ ...t, subjectLabel: tab.label })))
+      .sort((a, b) => a.conductedOn.localeCompare(b.conductedOn))
+    // Home screen's "Next Up" card only ever previews a handful — the full list
+    // (used by the Tests tab) is kept uncapped in `allUpcomingTests` below.
+    const upcomingTests = allUpcomingTests.slice(0, 5)
+
+    const allAwaitingResults = bySubject
+      .flatMap(({ tab, data }) => data.awaitingResults.map(t => ({ ...t, subjectLabel: tab.label })))
+      .sort((a, b) => b.conductedOn.localeCompare(a.conductedOn))
+
+    const taughtTopics = bySubject
+      .flatMap(({ tab, data }) => data.taughtTopics.map(t => ({ ...t, subjectLabel: tab.label, tabKey: tab.key })))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 8)
+
+    let continueItem: { label: string; topic: string; subjectLabel: string } | null = null
+    for (const { tab, data } of bySubject) {
+      if (data.catchupPlans[0]) { continueItem = { label: 'Catch up on', topic: data.catchupPlans[0].topic, subjectLabel: tab.label }; break }
     }
-  }
-
-  function selectAnswer(oi: number) {
-    if (quiz.phase !== 'active') return
-    const q = quiz.questions[quiz.current]
-    if (!q) return
-    // Guard: never score a question that's already been answered
-    if (quiz.selected[quiz.current] !== null) return
-    const sel = [...quiz.selected]; sel[quiz.current] = oi
-    setQuiz(p => ({ ...p, selected: sel, score: p.score + (oi === q.answerIndex ? 1 : 0) }))
-    setShowExpl(true)
-  }
-
-  function nextQuestion() {
-    const next = quiz.current + 1
-    if (next >= quiz.questions.length) {
-      const { score, questions, topic } = quiz
-      setQuiz(q => ({ ...q, phase: 'done' }))
-      updateLearningProfile(topic, subjects[activeIdx]?.label ?? '', score, questions.length)
-    } else {
-      setQuiz(q => ({ ...q, current: next }))
-      setShowExpl(false)
+    if (!continueItem) for (const { tab, data } of bySubject) {
+      const nextTopic = data.syllabusTopics.find(t => !t.isCompleted)
+      if (nextTopic) { continueItem = { label: 'Continue with', topic: nextTopic.topic, subjectLabel: tab.label }; break }
     }
-  }
+    if (!continueItem) for (const { tab, data } of bySubject) {
+      if (data.weakTopics[0]) { continueItem = { label: 'Review', topic: data.weakTopics[0].topic, subjectLabel: tab.label }; break }
+    }
 
-  function submitPoll(syllabusTopicId: string, topic: string, response: 'understood' | 'partial' | 'confused') {
-    const tab = subjects[activeIdx]; if (!tab) return
-    // Snapshot current polls for rollback
-    const prevPolls = subjectData?.polls ?? []
-    setSubjectData(prev => {
-      if (!prev) return prev
-      const idx = prev.polls.findIndex(p => p.syllabusTopicId === syllabusTopicId)
-      if (idx >= 0) {
-        const updated = [...prev.polls]
-        updated[idx] = { ...updated[idx], response, respondedAt: new Date().toISOString() }
-        return { ...prev, polls: updated }
+    return { bySubject, todayPeriods, attendPct, totalPresent, totalSessions, bestStreak, upcomingTests, allUpcomingTests, allAwaitingResults, taughtTopics, continueItem }
+  }, [subjects, allData])
+
+  // ── All badges (earned + locked), merged across every subject ──────────────
+
+  const allBadges = useMemo(() => {
+    const subjectDatas = homeFeed.bySubject.map(x => x.data)
+    if (subjectDatas.length === 0) return BADGE_DEFS.map(def => ({ ...def, earned: false }))
+    const perSubject = subjectDatas.map(computeAllBadges)
+    return BADGE_DEFS.map((def, i) => ({ ...def, earned: perSubject.some(list => list[i].earned) }))
+  }, [homeFeed])
+
+  // ── Learn / Study Plan derived inputs ──────────────────────────────────────
+
+  // Every subject the student is enrolled in for their grade shows up as a tab —
+  // topics are only what's actually been taught in class (not the full syllabus),
+  // so a topic doesn't appear here until the teacher has covered it.
+  const learnSubjects = useMemo<LearnSubject[]>(() =>
+    homeFeed.bySubject.map(({ tab, data }) => {
+      const seen = new Set<string>()
+      const topics: string[] = []
+      for (const t of data.taughtTopics.map(x => x.topic)) {
+        const trimmed = t.trim()
+        const k = trimmed.toLowerCase()
+        if (!trimmed || seen.has(k)) continue
+        seen.add(k); topics.push(trimmed)
       }
-      return { ...prev, polls: [...prev.polls, {
-        id: crypto.randomUUID(), studentId: tab.studentId, classId: tab.classId,
-        syllabusTopicId, topic, subject: tab.label, response, respondedAt: new Date().toISOString(),
-      }]}
+      const catchupTopics = data.catchupTopics.map(c => ({ topic: c.topic, whenLabel: formatPastDate(c.date) }))
+      return { label: tab.label, grade: cls?.grade ?? '', topics, catchupTopics }
     })
-    fetch('/api/student/poll', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ classId: tab.classId, syllabusTopicId, topic, subject: tab.label, response }),
-    }).then(res => {
-      if (!res.ok) throw new Error('Poll save failed')
-    }).catch(() => {
-      // Rollback optimistic update on failure
-      setSubjectData(prev => prev ? { ...prev, polls: prevPolls } : prev)
-      setErrorMsg('Could not save your response — please try again.')
-    })
+  , [homeFeed, cls])
+
+  const seenTestSet = useMemo(() => new Set(seenTests), [seenTests])
+
+  const testsView = useMemo(() => {
+    // Full list — not the Home screen's capped 5-item preview — so every
+    // scheduled test the student hasn't been marked for shows up here.
+    const upcoming = homeFeed.allUpcomingTests.map(t => ({
+      id: t.id, topic: t.topic, subjectLabel: t.subjectLabel, grade: cls?.grade ?? '',
+      totalMarks: t.totalMarks, conductedOn: t.conductedOn,
+      whenLabel: formatTestDate(t.conductedOn), isNew: !seenTestSet.has(t.id),
+    }))
+    // Already conducted but no mark entered for this student yet — shown
+    // separately so a test in grading limbo isn't invisible to the student.
+    const awaitingResults = homeFeed.allAwaitingResults.map(t => ({
+      id: t.id, topic: t.topic, subjectLabel: t.subjectLabel, grade: cls?.grade ?? '',
+      totalMarks: t.totalMarks, conductedOn: t.conductedOn,
+      whenLabel: formatPastDate(t.conductedOn),
+    }))
+    const pastScores = homeFeed.bySubject
+      .flatMap(({ tab, data }) => data.recentMarks.map(m => ({
+        id: m.id, topic: m.topic, subjectLabel: tab.label,
+        score: m.score, totalMarks: m.totalMarks, conductedOn: m.conductedOn,
+      })))
+      .sort((a, b) => b.conductedOn.localeCompare(a.conductedOn))
+      .slice(0, 8)
+    return { upcoming, awaitingResults, pastScores }
+  }, [homeFeed, seenTestSet, cls])
+
+  const newTestCount = testsView.upcoming.filter(t => t.isNew).length
+
+  const firstName = (student?.name?.trim().split(/\s+/)[0]) || 'Student'
+
+  // "Today's Lesson" = most recent topic taught in class (what the class is on now).
+  const todaysLesson = useMemo(() => {
+    const t = homeFeed.taughtTopics[0]
+    if (t) return { topic: t.topic, subject: t.subjectLabel }
+    const next = homeFeed.continueItem
+    if (next) return { topic: next.topic, subject: next.subjectLabel }
+    return null
+  }, [homeFeed])
+
+  function openLesson(tab: 'notes' | 'flashcards' | 'quizzes', subject: string, topic: string) {
+    setSelectedLearnSubject(subject)
+    setLearnPreload({ subject, topic })
+    setLearnTab(tab)
+    setActiveNavGroup('learn')
   }
 
-  // ── Derived ────────────────────────────────────────────────────────────────
+  function selectNav(id: string) {
+    setActiveNavGroup(id)
+    setLearnPreload(null)   // navigating manually shows the topic picker, not a preloaded topic
+    setSelectedLearnSubject(null)
+  }
 
-  const active = subjects[activeIdx]
+  // A newly scheduled test stays flagged "New" (with a count on the Tests nav item)
+  // until the student actually opens the Tests tab — then it settles a couple of
+  // seconds later, so the "New" pills flash once on that first visit.
+  useEffect(() => {
+    if (activeNavGroup !== 'tests') return
+    const ids = homeFeed.allUpcomingTests.map(t => t.id)
+    if (ids.length === 0) return
+    const timer = setTimeout(() => {
+      setSeenTests(prev => {
+        const set = new Set(prev)
+        let changed = false
+        ids.forEach(id => { if (!set.has(id)) { set.add(id); changed = true } })
+        if (!changed) return prev
+        const next = [...set]
+        try { localStorage.setItem('eduteach_seen_tests', JSON.stringify(next)) } catch { /* ignore */ }
+        return next
+      })
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [activeNavGroup, homeFeed])
 
-  const pollMap = useMemo(
-    () => new Map((subjectData?.polls ?? []).map(p => [p.syllabusTopicId, p.response])),
-    [subjectData],
-  )
-
-  const priorityState = useMemo<PriorityState>(() => {
-    if (!subjectData) return 'good'
-    if (subjectData.catchupPlans.length > 0) return 'catchup'
-    if (subjectData.weakTopics.length > 0) return 'practice'
-    if (subjectData.syllabusTopics.some(t => t.isCompleted && !pollMap.has(t.id))) return 'poll'
-    return 'good'
-  }, [subjectData, pollMap])
-
-  const unpolled = useMemo(
-    () => subjectData?.syllabusTopics.filter(t => t.isCompleted && !pollMap.has(t.id)).slice(-2) ?? [],
-    [subjectData, pollMap],
-  )
-
-  const completedCount = subjectData?.syllabusTopics.filter(t => t.isCompleted).length ?? 0
-  const totalCount     = subjectData?.syllabusTopics.length ?? 0
-  const attendPct      = subjectData ? Math.round(subjectData.attendanceRate * 100) : 0
-  const attendColor    = attendPct >= 90 ? '#059669' : attendPct >= 75 ? '#f97316' : '#dc2626'
-  const ps             = priorityState
-
-  // Auto-scroll to study plans when catchup state is active
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // ── All badges (earned + locked) ──────────────────────────────────────────
-
-  const allBadges = useMemo(
-    () => subjectData ? computeAllBadges(subjectData) : [],
-    [subjectData],
-  )
+  useEffect(() => {
+    updateRecentScrollState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeFeed.taughtTopics])
 
 
   // ── Loading screen ─────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent' }}>
       <div style={{ textAlign: 'center' }}>
-        <div className="animate-spin" style={{ width: 44, height: 44, borderRadius: '50%', border: '4px solid #bfdbfe', borderTopColor: '#2563eb', margin: '0 auto 12px' }} />
-        <p style={{ color: '#94a3b8', fontSize: 13, fontWeight: 500 }}>Loading your dashboard…</p>
+        <div className="animate-spin" style={{ width: 44, height: 44, borderRadius: '50%', border: '4px solid #DCEBF8', borderTopColor: '#3D6CB4', margin: '0 auto 12px' }} />
+        <p style={{ color: '#5B6B87', fontSize: 13, fontWeight: 500 }}>Loading your dashboard…</p>
       </div>
     </div>
   )
@@ -542,620 +757,459 @@ export default function StudentHomePage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#eff6ff', fontFamily: 'var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'transparent', fontFamily: 'var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
 
-      {/* ════ TOP BAR ════ */}
-      <header style={{ background: '#fff', borderBottom: '2px solid #e0ecff', display: 'flex', alignItems: 'center', padding: '0 28px', height: 68, flexShrink: 0, gap: 20, boxShadow: '0 2px 12px rgba(37,99,235,0.07)' }}>
+      {activeNavGroup === 'home' && <SpaceDoodleBackground />}
+
+      {/* ════ SIDEBAR (desktop only) ════ */}
+      {!isMobile && (
+      <aside style={{ width: 240, flexShrink: 0, background: '#FFFFFF', borderRight: '2.5px solid rgba(30,42,68,0.22)', display: 'flex', flexDirection: 'column', height: '100vh' }}>
 
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 12, background: 'linear-gradient(135deg, #07153a 0%, #1d4ed8 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <GraduationCap size={20} color="#fff" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 18px 16px', borderBottom: '2.5px solid rgba(30,42,68,0.18)', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 11, background: '#3D6CB4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <GraduationCap size={18} color="#fff" />
           </div>
-          <div>
-            <p style={{ fontSize: 15, fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>EduTeach</p>
-            <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>Student Portal</p>
+          <div style={{ minWidth: 0 }}>
+            <p className="font-kid" style={{ fontSize: 15, fontWeight: 600, color: '#1E2A44', letterSpacing: '-.3px', lineHeight: 1 }}>EduTeach</p>
+            <p style={{ fontSize: 10, fontWeight: 600, color: '#5B6B87', marginTop: 3 }}>Student Portal</p>
           </div>
         </div>
 
-        <div style={{ width: 1, height: 32, background: '#e2e8f0', flexShrink: 0 }} />
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px 0' }}>
 
-        {/* Subject tabs */}
-        <div style={{ flex: 1, display: 'flex', gap: 8, overflowX: 'auto', padding: '2px 0' }}>
-          {subjects.map((sub, idx) => {
-            const isAct = idx === activeIdx
-            return (
-              <button key={sub.classId} onClick={() => handleSelect(idx)}
-                style={{ flexShrink: 0, padding: '8px 20px', borderRadius: 24, border: isAct ? 'none' : '2px solid #e2e8f0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, transition: 'all .15s', background: isAct ? 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' : '#f8fafc', color: isAct ? '#fff' : '#64748b', boxShadow: isAct ? '0 2px 10px rgba(37,99,235,0.25)' : 'none', display: 'flex', alignItems: 'center', gap: 7 }}>
-                {sub.label}
-                {isAct && dataLoading && <Loader2 size={12} className="animate-spin" style={{ color: 'rgba(255,255,255,.7)' }} />}
-              </button>
-            )
-          })}
+          {/* ── Primary navigation ── */}
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {NAV_GROUPS.map(group => {
+              const isAct = activeNavGroup === group.id
+              return (
+                <button key={group.id} onClick={() => selectNav(group.id)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 14, border: 'none', cursor: 'pointer', transition: 'all .15s', textAlign: 'left', fontFamily: 'inherit', background: isAct ? '#3D6CB4' : 'transparent' }}
+                  onMouseEnter={e => { if (!isAct) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(30,42,68,0.05)' }}
+                  onMouseLeave={e => { if (!isAct) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}>
+                  <group.Icon size={16} color={isAct ? '#fff' : '#5B6B87'} style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: isAct ? 800 : 600, flex: 1, color: isAct ? '#fff' : '#5B6B87' }}>{group.label}</span>
+                  {group.id === 'tests' && newTestCount > 0 && (
+                    <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: isAct ? 'rgba(255,255,255,.28)' : '#1E2A44', color: '#fff', fontSize: 10, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', flexShrink: 0 }}>
+                      {newTestCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </nav>
         </div>
 
-        {/* Profile area */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <button onClick={openInterestsEditor}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 20, border: '2px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#64748b', fontFamily: 'inherit' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2563eb'; (e.currentTarget as HTMLButtonElement).style.color = '#2563eb' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
-            <Pencil size={12} />
-            My Interests
-            {student?.interests && student.interests.length > 0
-              ? <span style={{ background: '#eff6ff', color: '#2563eb', borderRadius: 10, padding: '1px 7px', fontSize: 10.5, fontWeight: 900 }}>{student.interests.length}</span>
-              : <span style={{ fontSize: 10.5, color: '#f59e0b', fontWeight: 700 }}>Set!</span>
-            }
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
+        {/* User profile + sign out */}
+        <div style={{ padding: '12px 10px 14px', borderTop: '2.5px solid rgba(30,42,68,0.18)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 4px', marginBottom: 8 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 11, background: '#3D6CB4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
               {(student.name?.trim()?.[0] ?? '?').toUpperCase()}
             </div>
-            <div>
-              <p style={{ fontSize: 13.5, fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>{student.name}</p>
-              <p style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 2 }}>Roll #{student.rollNumber} · Gr {cls.grade}{cls.section ?? ''}</p>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12.5, fontWeight: 700, color: '#1E2A44', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{student.name}</p>
+              <p style={{ fontSize: 10, fontWeight: 500, color: '#5B6B87', marginTop: 3 }}>
+                Roll #{student.rollNumber} · Gr {cls.grade}{cls.section ? cls.section : ''}
+              </p>
             </div>
           </div>
-
+          <button onClick={openInterestsEditor}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#5B6B87', fontFamily: 'inherit', marginBottom: 2 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#DCEBF8'; (e.currentTarget as HTMLButtonElement).style.color = '#3D6CB4' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#5B6B87' }}>
+            <Pencil size={13} />
+            My Interests
+            {student?.interests && student.interests.length > 0
+              ? <span style={{ marginLeft: 'auto', fontSize: 10, background: '#DCEBF8', color: '#3D6CB4', borderRadius: 8, padding: '2px 7px', fontWeight: 800 }}>{student.interests.length}</span>
+              : <span style={{ marginLeft: 'auto', fontSize: 10, color: '#D9A83B', fontWeight: 700 }}>Set now</span>
+            }
+          </button>
           <button onClick={handleLogout}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#94a3b8', fontFamily: 'inherit' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#fca5a5' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0' }}>
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#5B6B87', fontFamily: 'inherit' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#FBE3DC'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#5B6B87' }}>
             <LogOut size={13} /> Sign out
           </button>
         </div>
-      </header>
+      </aside>
+      )}
 
-      {/* ════ MAIN CONTENT ════ */}
-      <div ref={contentPaneRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '28px 36px 60px' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* ════ MAIN ════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        {/* Welcome row */}
-        <div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>{dateStr}</p>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 }}>
-              Hello, {student.name?.split(' ')[0]}! 👋
-            </h1>
-            {learningProfile && learningProfile.quizCount >= 3 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: learningProfile.difficultyLevel === 'advanced' ? '#eff6ff' : learningProfile.difficultyLevel === 'beginner' ? '#f0fdf4' : '#fff7ed', border: `1.5px solid ${learningProfile.difficultyLevel === 'advanced' ? '#bfdbfe' : learningProfile.difficultyLevel === 'beginner' ? '#bbf7d0' : '#fde68a'}`, flexShrink: 0, marginTop: 4 }}>
-                <span style={{ fontSize: 14 }}>{learningProfile.difficultyLevel === 'advanced' ? '🚀' : learningProfile.difficultyLevel === 'beginner' ? '🌱' : '📚'}</span>
-                <p style={{ fontSize: 12, fontWeight: 800, color: learningProfile.difficultyLevel === 'advanced' ? '#1d4ed8' : learningProfile.difficultyLevel === 'beginner' ? '#16a34a' : '#d97706' }}>
-                  {learningProfile.difficultyLevel === 'advanced' ? 'Advanced Learner' : learningProfile.difficultyLevel === 'beginner' ? 'Building Basics' : 'Standard Learner'}
-                </p>
+        {/* Scrollable content */}
+        <div ref={contentPaneRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: isMobile ? '20px 16px 96px' : '26px 32px 48px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 760, margin: '0 auto' }}>
+
+          {/* ── Header: greeting (Home) or section title ── */}
+          {activeNavGroup === 'home' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 2 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h1 className="font-display" style={{ fontSize: isMobile ? 28 : 32, fontWeight: 700, color: '#1E2A44', letterSpacing: '-.3px', lineHeight: 1.1 }}>Hi, {firstName}!</h1>
               </div>
-            )}
-          </div>
-          <p style={{ fontSize: 15, color: '#64748b', marginTop: 4 }}>
-            Here&apos;s how you&apos;re doing in <span style={{ fontWeight: 800, color: '#2563eb' }}>{active?.label}</span>
-          </p>
-        </div>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <button onClick={() => setShowNotifPanel(v => !v)}
+                  style={{ width: 44, height: 44, borderRadius: '50%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Bell size={22} color="#1E2A44" strokeWidth={2} />
+                </button>
+                {showNotifPanel && (
+                  <>
+                    <div onClick={() => setShowNotifPanel(false)} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+                    <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 160, background: '#FFFFFF', border: '2.5px solid rgba(30,42,68,0.22)', borderRadius: 14, padding: '14px 16px', width: 220 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: '#1E2A44' }}>You&apos;re all caught up!</p>
+                      <p style={{ fontSize: 11.5, color: '#5B6B87', marginTop: 4, lineHeight: 1.4 }}>No new notifications right now.</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2 }}>
+              <div>
+                <h1 style={{ fontSize: isMobile ? 26 : 30, fontWeight: 800, color: '#1E2A44', letterSpacing: '-.4px' }}>
+                  {NAV_GROUPS.find(g => g.id === activeNavGroup)?.label ?? 'Home'}
+                </h1>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#5B6B87' }}>Grade {cls.grade}{cls.section ? ` - Section ${cls.section}` : ''}</span>
+              </div>
+              {activeNavGroup === 'tests' && (
+                <ClipboardCheck size={26} color="#1E2A44" strokeWidth={2} style={{ marginTop: 4, flexShrink: 0 }} />
+              )}
+            </div>
+          )}
 
           {/* ── Error toast ── */}
           {errorMsg && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderRadius: 14, background: '#fef2f2', border: '1.5px solid #fca5a5' }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderRadius: 14, background: '#fef2f2', border: '2.5px solid #fca5a5' }}>
+              <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0 }} />
               <p style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#991b1b', lineHeight: 1.5 }}>{errorMsg}</p>
               <button onClick={() => setErrorMsg(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fca5a5', fontSize: 18, lineHeight: 1, padding: 0, fontFamily: 'inherit' }}>✕</button>
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fca5a5', display: 'flex', padding: 0, fontFamily: 'inherit' }}><X size={18} /></button>
             </div>
           )}
 
           {dataLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-                {[1,2,3,4].map(i => <div key={i} className="animate-pulse" style={{ height: 116, borderRadius: 20, background: '#dce8ff' }} />)}
+              <div className="animate-pulse" style={{ height: 48, borderRadius: 16, background: 'rgba(30,42,68,0.08)' }} />
+              <div className="animate-pulse" style={{ height: 160, borderRadius: 24, background: 'rgba(30,42,68,0.08)' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+                {[1,2,3].map(i => <div key={i} className="animate-pulse" style={{ height: 156, borderRadius: 24, background: 'rgba(30,42,68,0.08)' }} />)}
               </div>
-              <div className="animate-pulse" style={{ height: 100, borderRadius: 20, background: '#dce8ff' }} />
-              <div className="animate-pulse" style={{ height: 220, borderRadius: 24, background: '#dce8ff' }} />
             </div>
 
           ) : loadError ? (
             <div style={{ ...CARD, alignItems: 'center', justifyContent: 'center', padding: '72px 20px', textAlign: 'center' }}>
-              <span style={{ fontSize: 48 }}>⚠️</span>
-              <p style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', marginTop: 14 }}>Could not load data</p>
-              <p style={{ fontSize: 14, color: '#94a3b8', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>Check your connection and try again!</p>
-              <button onClick={() => { const tab = subjects[activeIdx]; if (tab) loadData(tab) }}
-                style={{ marginTop: 18, padding: '12px 32px', borderRadius: 14, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', border: 'none', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Try Again
+              <AlertTriangle size={44} color="#dc2626" strokeWidth={1.75} />
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#1E2A44', marginTop: 14 }}>Could not load data</p>
+              <p style={{ fontSize: 13, color: '#5B6B87', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>There was a problem fetching your dashboard. Check your connection and try again.</p>
+              <button onClick={() => loadAllData(subjects)}
+                style={{ marginTop: 18, padding: '10px 28px', borderRadius: 12, background: '#3D6CB4', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Retry
               </button>
             </div>
-          ) : !subjectData ? (
+          ) : homeFeed.bySubject.length === 0 ? (
             <div style={{ ...CARD, alignItems: 'center', justifyContent: 'center', padding: '72px 20px', textAlign: 'center' }}>
-              <span style={{ fontSize: 52 }}>📚</span>
-              <p style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', marginTop: 14 }}>Nothing here yet for {active?.label}!</p>
-              <p style={{ fontSize: 14, color: '#94a3b8', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>Once your teacher adds lessons and tests, your progress will appear here.</p>
+              <BookOpen size={44} color="#A6AEC2" strokeWidth={1.75} />
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#1E2A44', marginTop: 14 }}>No data yet</p>
+              <p style={{ fontSize: 13, color: '#5B6B87', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>Once your teacher records lessons and tests, your progress will appear here.</p>
             </div>
 
-          ) : (
+          ) : activeNavGroup === 'home' ? (
             <>
-              {/* ── STATS ROW ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-                {([
-                  {
-                    icon: '📅',
-                    label: 'Classes Attended',
-                    value: subjectData.presentCount > 0 ? String(subjectData.presentCount) : '—',
-                    sub: attendPct >= 90 ? 'Amazing! Keep it up 🌟' : attendPct >= 75 ? 'Good job! Keep coming 👍' : attendPct > 0 ? 'Try to come more 💪' : 'No classes yet',
-                    bg: '#eff6ff', valueColor: '#1d4ed8', border: '#bfdbfe',
-                  },
-                  {
-                    icon: '📖',
-                    label: 'Topics Done',
-                    value: completedCount > 0 ? String(completedCount) : '0',
-                    sub: totalCount > 0
-                      ? completedCount === totalCount ? `All ${totalCount} done! 🎉` : `out of ${totalCount} topics`
-                      : 'Topics coming soon',
-                    bg: '#f0fdf4', valueColor: '#16a34a', border: '#bbf7d0',
-                  },
-                  {
-                    icon: subjectData.attendanceStreak >= 2 ? '🔥' : '💫',
-                    label: 'Class Streak',
-                    value: subjectData.attendanceStreak >= 2 ? String(subjectData.attendanceStreak) : '—',
-                    sub: subjectData.attendanceStreak >= 7 ? 'Week Warrior! 🔥🔥' : subjectData.attendanceStreak >= 3 ? 'On fire! Keep going!' : subjectData.attendanceStreak >= 2 ? 'Great start! 👏' : 'Attend more to build one',
-                    bg: '#fff7ed', valueColor: '#ea580c', border: '#fed7aa',
-                  },
-                  subjectData.recentMarks[0]
-                    ? (() => {
-                        const m = subjectData.recentMarks[0]
-                        const pct = m.totalMarks > 0 ? Math.round((m.score / m.totalMarks) * 100) : 0
-                        return {
-                          icon: pct >= 90 ? '🌟' : pct >= 70 ? '✅' : pct >= 50 ? '📝' : '💪',
-                          label: 'Last Test',
-                          value: `${m.score}/${m.totalMarks}`,
-                          sub: pct >= 90 ? 'Brilliant work! 🌟' : pct >= 70 ? 'Well done!' : pct >= 50 ? 'Getting better!' : 'Keep practising!',
-                          bg: pct >= 70 ? '#f0fdf4' : pct >= 50 ? '#fff7ed' : '#fef2f2',
-                          valueColor: pct >= 70 ? '#16a34a' : pct >= 50 ? '#ea580c' : '#dc2626',
-                          border: pct >= 70 ? '#bbf7d0' : pct >= 50 ? '#fed7aa' : '#fecaca',
-                        }
-                      })()
-                    : { icon: '✏️', label: 'Last Test', value: '—', sub: 'No tests yet', bg: '#f8fafc', valueColor: '#94a3b8', border: '#e2e8f0' },
-                ] as { icon: string; label: string; value: string; sub: string; bg: string; valueColor: string; border: string }[]).map((stat, i) => (
-                  <div key={i} style={{ background: stat.bg, borderRadius: 20, border: `2px solid ${stat.border}`, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 22, lineHeight: 1 }}>{stat.icon}</span>
-                      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#64748b' }}>{stat.label}</p>
-                    </div>
-                    <p style={{ fontSize: 34, fontWeight: 900, color: stat.valueColor, letterSpacing: -1, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{stat.value}</p>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: '#64748b', lineHeight: 1.4 }}>{stat.sub}</p>
+              {/* ── Substitute teacher notice(s) for today ── */}
+              {homeFeed.todayPeriods.filter(p => p.substitution).map(p => (
+                <div key={`${p.classId}-${p.periodNumber}`} style={{ ...CARD, flexDirection: 'row', alignItems: 'center', gap: 12, padding: '14px 18px', background: p.substitution!.status === 'unresolved' ? '#FFF7ED' : '#EFF6FF' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 11, background: p.substitution!.status === 'unresolved' ? '#FED7AA' : '#BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <UserCheck size={17} color={p.substitution!.status === 'unresolved' ? '#9A3412' : '#1E3A8A'} />
                   </div>
-                ))}
-              </div>
-
-              {/* ── TODAY'S FOCUS / QUIZ ── */}
-              {quiz.phase !== 'idle' ? (
-
-                <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 22px', display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' }}>
-                    <span style={{ color: '#fff', fontWeight: 800, fontSize: 14, flex: 1 }}>Quiz — {quiz.topic}</span>
-                    {quiz.phase === 'active' && (
-                      <span style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, fontWeight: 700, background: 'rgba(255,255,255,.15)', padding: '3px 12px', borderRadius: 20 }}>
-                        {quiz.current + 1} / {quiz.questions.length}
-                      </span>
-                    )}
-                    <button onClick={() => setQuiz(q => ({ ...q, phase: 'idle' }))}
-                      style={{ background: 'rgba(255,255,255,.15)', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 14px', borderRadius: 8, fontFamily: 'inherit' }}>
-                      ✕ Exit
-                    </button>
-                  </div>
-                  <div style={{ padding: '24px 22px' }}>
-                    {quiz.phase === 'loading' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '48px 0', gap: 12 }}>
-                        <Loader2 size={28} className="animate-spin" style={{ color: '#2563eb' }} />
-                        <p style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Preparing your questions…</p>
-                      </div>
-                    )}
-                    {quiz.phase === 'active' && quiz.questions[quiz.current] && (() => {
-                      const q = quiz.questions[quiz.current]
-                      const sel = quiz.selected[quiz.current]
-                      const answered = sel !== null
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                          <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 15, lineHeight: 1.65 }}>{q.text}</p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {q.options.map((opt, oi) => {
-                              let bg = '#f8fafc', border = '#e2e8f0', col = '#475569'
-                              if (answered) {
-                                if (oi === q.answerIndex) { bg = '#ecfdf5'; border = '#6ee7b7'; col = '#065f46' }
-                                else if (oi === sel)      { bg = '#fef2f2'; border = '#fca5a5'; col = '#991b1b' }
-                                else                      { col = '#cbd5e1' }
-                              }
-                              return (
-                                <button key={oi} onClick={() => !answered && selectAnswer(oi)} disabled={answered}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, border: `2px solid ${border}`, background: bg, color: col, fontSize: 13, fontWeight: 600, textAlign: 'left', cursor: answered ? 'default' : 'pointer', transition: 'all .12s', fontFamily: 'inherit' }}>
-                                  <span style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, flexShrink: 0, ...(answered && oi === q.answerIndex ? { background: '#059669', borderColor: '#059669', color: '#fff' } : {}), ...(answered && oi === sel && oi !== q.answerIndex ? { background: '#ef4444', borderColor: '#ef4444', color: '#fff' } : {}) }}>
-                                    {String.fromCharCode(65 + oi)}
-                                  </span>
-                                  {opt}
-                                </button>
-                              )
-                            })}
-                          </div>
-                          {showExpl && (
-                            <div style={{ borderRadius: 14, padding: '14px 16px', background: sel === q.answerIndex ? '#ecfdf5' : '#fef2f2', border: `1px solid ${sel === q.answerIndex ? '#a7f3d0' : '#fca5a5'}` }}>
-                              <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 5, color: sel === q.answerIndex ? '#065f46' : '#991b1b' }}>
-                                {sel === q.answerIndex ? '✓ Correct!' : '✗ Incorrect'}
-                              </p>
-                              <p style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.7 }}>{q.explanation}</p>
-                            </div>
-                          )}
-                          {answered && (
-                            <button onClick={nextQuestion} style={{ ...BLUE_BTN, width: 'auto', alignSelf: 'flex-start', padding: '11px 28px' }}>
-                              {quiz.current + 1 < quiz.questions.length ? 'Next Question →' : 'See Results'}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })()}
-                    {quiz.phase === 'done' && (
-                      <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                        <p style={{ fontSize: 56 }}>{quiz.score === quiz.questions.length ? '🎉' : quiz.score >= quiz.questions.length / 2 ? '👍' : '💪'}</p>
-                        <p style={{ fontSize: 36, fontWeight: 900, color: '#1e293b', marginTop: 10, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>{quiz.score}/{quiz.questions.length}</p>
-                        <p style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>
-                          {quiz.score === quiz.questions.length ? 'Perfect! Every answer correct.' : quiz.score >= quiz.questions.length / 2 ? 'Good effort! Keep practising.' : "Keep going — you'll get there!"}
-                        </p>
-                        <button onClick={() => setQuiz(q => ({ ...q, phase: 'idle' }))}
-                          style={{ marginTop: 20, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 14, background: '#f1f5f9', border: 'none', fontSize: 13, fontWeight: 700, color: '#475569', cursor: 'pointer', fontFamily: 'inherit' }}>
-                          <RotateCcw size={14} /> Back to dashboard
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#1E2A44', lineHeight: 1.4 }}>
+                    {p.substitution!.status === 'unresolved'
+                      ? <>Period {p.periodNumber} ({p.subjectLabel}) has no regular teacher today — a staff member will be assigned soon.</>
+                      : <>Period {p.periodNumber} ({p.subjectLabel}) is being covered by <strong>{p.substitution!.substituteTeacherName}</strong> today.</>}
+                  </p>
                 </div>
+              ))}
 
-              ) : (
-                /* ── FOCUS CARD ── */
-                <div style={{ background: '#fff', borderRadius: 16, border: `1.5px solid ${PS_BORDER[ps]}`, display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px' }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: PS_COLOR[ps], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                    {ps === 'catchup' ? '📋' : ps === 'practice' ? '✏️' : ps === 'poll' ? '🧠' : '🎉'}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: PS_COLOR[ps], marginBottom: 4 }}>
-                      {FOCUS_TAG[ps]}
+              {/* ── Today's Lesson ── */}
+              <div style={{ borderRadius: 22, overflow: 'hidden', border: '2.5px solid rgba(30,42,68,0.22)' }}>
+                <div style={{ background: '#3D6CB4', padding: '20px 22px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 14 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(255,255,255,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <BookSticker size={22} />
                     </div>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', lineHeight: 1.4 }}>
-                      {ps === 'catchup'  && `Your teacher prepared ${subjectData.catchupPlans.length} study plan${subjectData.catchupPlans.length > 1 ? 's' : ''} just for you`}
-                      {ps === 'practice' && `${subjectData.weakTopics[0]?.topic} needs work — you're at ${Math.round((subjectData.weakTopics[0]?.mastery ?? 0) * 100)}% mastery`}
-                      {ps === 'poll'     && 'Quick check-in: Did you understand the last topics?'}
-                      {ps === 'good'     && "You're fully on track — great attendance and strong topics!"}
-                    </p>
-                    {ps === 'catchup' && student?.interests && student.interests.length > 0 && (
-                      <p style={{ fontSize: 11, color: '#d97706', marginTop: 4, fontWeight: 600 }}>
-                        ✨ Explained using your interests: {student.interests.slice(0, 2).join(', ')}
-                      </p>
-                    )}
+                    <p style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Today&apos;s Lesson</p>
                   </div>
-
-                  {/* Right action — go to plans page */}
-                  {ps === 'catchup' && (
-                    <button
-                      onClick={() => router.push('/student/plans')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 12, background: 'linear-gradient(135deg, #ea580c, #d97706)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      View Plans →
-                    </button>
+                  {todaysLesson ? (
+                    <p className="font-display" style={{ fontSize: isMobile ? 24 : 27, fontWeight: 700, color: '#fff', letterSpacing: '-.2px', lineHeight: 1.2 }}>{todaysLesson.topic}</p>
+                  ) : (
+                    <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>Once your teacher records a lesson, it&apos;ll show up here with notes, flashcards, and a quiz.</p>
                   )}
                 </div>
-              )}
+                {todaysLesson && (
+                  <div style={{ background: '#fff', padding: '16px 22px' }}>
+                    <button onClick={() => openLesson('notes', todaysLesson.subject, todaysLesson.topic)}
+                      style={{ width: '100%', padding: '14px 0', borderRadius: 14, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 800, color: '#fff', background: '#3D6CB4' }}>
+                      Start Lesson
+                    </button>
+                  </div>
+                )}
+              </div>
 
-              {/* Practice topics — shown below focus banner when in practice state */}
-              {quiz.phase === 'idle' && ps === 'practice' && (
-                <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #fde68a', padding: '18px 20px' }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#d97706', marginBottom: 12 }}>Choose a topic to practise</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {subjectData.weakTopics.map((t, i) => (
-                      <button key={i} onClick={() => startQuiz(t.topic)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, border: '1.5px solid #fde68a', background: '#fff7ed', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 13.5, fontWeight: 700, color: '#92400e' }}>{t.topic}</p>
-                          <p style={{ fontSize: 11, color: '#d97706', marginTop: 2 }}>{Math.round(t.mastery * 100)}% mastery — needs improvement</p>
+              {/* ── Attendance + Achievements, side by side ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ ...HCARD, textAlign: 'center' }}>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 14 }}>Attendance</p>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <ProgressRing pct={homeFeed.attendPct} size={92} />
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#5B6B87', marginTop: 12 }}>{homeFeed.totalPresent}/{homeFeed.totalSessions} classes</p>
+                  {homeFeed.bestStreak >= 2 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 8 }}>
+                      <Flame size={13} color="#ea580c" />
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#ea580c' }}>{homeFeed.bestStreak}-class streak</span>
+                    </div>
+                  )}
+                </div>
+
+                {allBadges.length > 0 && (
+                  <div style={{ ...HCARD }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 14 }}>Achievements</p>
+                    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                      {allBadges.filter(b => b.earned).map(b => <BadgeSticker key={b.id} badge={b} earned size={44} />)}
+                      {allBadges.filter(b => !b.earned).map(b => <BadgeSticker key={b.id} badge={b} earned={false} size={44} />)}
+                      <Star size={20} color="#EAC968" fill="#EAC968" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%) rotate(12deg)', pointerEvents: 'none' }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Next Up ── */}
+              <div style={{ ...HCARD }}>
+                <p style={{ fontSize: 16, fontWeight: 800, color: '#1E2A44', letterSpacing: '-.3px', marginBottom: 12 }}>Next Up</p>
+                {homeFeed.upcomingTests.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {homeFeed.upcomingTests.map(t => (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                            <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44' }}>{t.topic}</p>
+                            {!seenTestSet.has(t.id) && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#1E2A44', color: '#fff', fontSize: 9.5, fontWeight: 800, letterSpacing: '.04em', padding: '2px 7px', borderRadius: 8, flexShrink: 0 }}>
+                                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />
+                                NEW
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: 11.5, color: '#5B6B87', marginTop: 2 }}>{t.subjectLabel} · {t.totalMarks} marks</p>
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', background: '#d97706', padding: '5px 14px', borderRadius: 8, flexShrink: 0 }}>Practice →</span>
-                      </button>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#3D6CB4', flexShrink: 0 }}>{formatTestDate(t.conductedOn)}</span>
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p style={{ fontSize: 13.5, color: '#5B6B87' }}>No upcoming tests scheduled.</p>
+                )}
+              </div>
 
-              {/* Poll form — shown below focus banner when in poll state */}
-              {quiz.phase === 'idle' && ps === 'poll' && (
-                <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #bfdbfe', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#2563eb', marginBottom: 0 }}>Your response is anonymous</p>
-                  {unpolled.map(topic => (
-                    <div key={topic.id} style={{ padding: '14px 16px', borderRadius: 14, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 10 }}>{topic.topic}</p>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {([
-                          { r: 'understood' as const, label: '✅ I got it',  bg: '#ecfdf5', activeBorder: '#059669', activeColor: '#065f46' },
-                          { r: 'partial'    as const, label: '🤔 Sort of',   bg: '#fffbeb', activeBorder: '#d97706', activeColor: '#92400e' },
-                          { r: 'confused'   as const, label: '❌ Not yet',   bg: '#fef2f2', activeBorder: '#dc2626', activeColor: '#991b1b' },
-                        ]).map(({ r, label, bg, activeBorder, activeColor }) => {
-                          const isSel = pollMap.get(topic.id) === r
-                          return (
-                            <button key={r} onClick={() => submitPoll(topic.id, topic.topic, r)}
-                              style={{ flex: 1, padding: '11px 6px', borderRadius: 12, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit', transition: 'all .12s', background: isSel ? bg : '#fff', border: `2px solid ${isSel ? activeBorder : '#e2e8f0'}`, color: isSel ? activeColor : '#94a3b8' }}>
-                              {label}
-                            </button>
-                          )
-                        })}
-                      </div>
+              {/* ── Recent Lessons ── */}
+              {homeFeed.taughtTopics.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 2px' }}>
+                    <p style={{ fontSize: 16, fontWeight: 800, color: '#1E2A44', letterSpacing: '-.3px' }}>Recent Lessons</p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => scrollRecent(-1)} disabled={!recentScrollState.left}
+                        style={{ width: 28, height: 28, borderRadius: '50%', border: '2.5px solid rgba(30,42,68,0.22)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: recentScrollState.left ? 'pointer' : 'default', opacity: recentScrollState.left ? 1 : 0.35 }}>
+                        <ChevronLeft size={15} color="#3D6CB4" />
+                      </button>
+                      <button onClick={() => scrollRecent(1)} disabled={!recentScrollState.right}
+                        style={{ width: 28, height: 28, borderRadius: '50%', border: '2.5px solid rgba(30,42,68,0.22)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: recentScrollState.right ? 'pointer' : 'default', opacity: recentScrollState.right ? 1 : 0.35 }}>
+                        <ChevronRight size={15} color="#3D6CB4" />
+                      </button>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ── STUDY PLANS ── */}
-              {subjectData.catchupPlans.length > 0 && (
-                <button
-                  onClick={() => router.push('/student/plans')}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px', borderRadius: 20, border: '1.5px solid #fed7aa', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background .12s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff' }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #ea580c, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
-                    📚
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Study Plans from Your Teacher</p>
-                    <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 3 }}>
-                      {subjectData.catchupPlans.length} plan{subjectData.catchupPlans.length !== 1 ? 's' : ''} waiting — explanations, practice questions &amp; quizzes
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                    <span style={{ padding: '5px 14px', borderRadius: 20, background: '#fff7ed', color: '#ea580c', border: '1px solid #fde68a', fontSize: 13, fontWeight: 800 }}>
-                      {subjectData.catchupPlans.length} active
-                    </span>
-                    <span style={{ fontSize: 18, color: '#d97706', fontWeight: 700 }}>→</span>
-                  </div>
-                </button>
-              )}
-
-              {/* ── UPCOMING TESTS ── */}
-              {subjectData.upcomingTests.length > 0 && (
-                <div style={{ background: '#fff', borderRadius: 20, border: '1.5px solid #bfdbfe', overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 22px', borderBottom: '1px solid #eff6ff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <CalendarClock size={16} style={{ color: '#2563eb' }} />
-                    <p style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>Upcoming Tests</p>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {subjectData.upcomingTests.map((t, i) => {
-                      const d = daysUntil(t.conductedOn)
-                      const urgent = d <= 2
+                  <div ref={recentScrollRef} onScroll={updateRecentScrollState} className="no-scrollbar"
+                    style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                    {homeFeed.taughtTopics.map(t => {
+                      const seenBefore = seenTopicsMap[t.tabKey]
+                      const isNew = !seenBefore || t.date > seenBefore
                       return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 22px', borderBottom: i < subjectData.upcomingTests.length - 1 ? '1px solid #f1f5f9' : 'none', background: urgent ? '#fffbeb' : '#fff' }}>
-                          <div style={{ width: 44, height: 44, borderRadius: 12, background: urgent ? '#fde68a' : '#eff6ff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontSize: 18, fontWeight: 900, color: urgent ? '#d97706' : '#2563eb', lineHeight: 1 }}>{d === 0 ? '!' : d}</span>
-                            <span style={{ fontSize: 8, fontWeight: 700, color: urgent ? '#d97706' : '#2563eb', textTransform: 'uppercase', letterSpacing: '.05em' }}>{d === 0 ? 'Today' : 'days'}</span>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{t.topic}</p>
-                            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>
-                              {new Date(t.conductedOn + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · Max marks: {t.totalMarks}
-                            </p>
-                          </div>
-                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <p style={{ fontSize: 13, fontWeight: 800, color: urgent ? '#ea580c' : '#2563eb', marginBottom: 6 }}>{formatTestDate(t.conductedOn)}</p>
-                            <button onClick={() => startQuiz(t.topic)}
-                              style={{ padding: '7px 16px', borderRadius: 10, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                              Practise →
-                            </button>
-                          </div>
+                        <div key={t.id} style={{ ...HCARD, flex: '0 0 150px', width: 150, padding: '16px 14px', position: 'relative' }}>
+                          {isNew && (
+                            <span style={{ position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: '50%', background: '#1E2A44' }} />
+                          )}
+                          <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', lineHeight: 1.3, marginBottom: 10 }}>{t.topic}</p>
+                          <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#1E3A55', background: '#DCEBF8', padding: '3px 9px', borderRadius: 7 }}>{t.subjectLabel}</span>
+                          <p style={{ fontSize: 11.5, fontWeight: 600, color: '#5B6B87', marginTop: 8 }}>{formatPastDate(t.date)}</p>
                         </div>
                       )
                     })}
                   </div>
                 </div>
               )}
+            </>
 
-              {/* ── 2-COL: RECENT TESTS | SYLLABUS PROGRESS ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #f1f5f9', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <p style={{ ...LBL }}>Recent Test Scores</p>
-                  {subjectData.recentMarks.length === 0 ? (
-                    <p style={{ fontSize: 13, color: '#cbd5e1', fontWeight: 500 }}>No tests recorded yet</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {subjectData.recentMarks.slice(0, 4).map((m, i) => {
-                        const pct   = m.totalMarks > 0 ? Math.round((m.score / m.totalMarks) * 100) : 0
-                        const color = pct >= 70 ? '#059669' : pct >= 50 ? '#f97316' : '#dc2626'
-                        return (
-                          <div key={i}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.topic}</p>
-                                <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                                  {new Date(m.conductedOn + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                                </p>
-                              </div>
-                              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                <p style={{ fontSize: 15, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color }}>{m.score}/{m.totalMarks}</p>
-                                <p style={{ fontSize: 11, fontWeight: 700, color, marginTop: 1 }}>{pct}%</p>
-                              </div>
-                            </div>
-                            <div style={{ height: 6, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', borderRadius: 4, width: `${pct}%`, background: color, transition: 'width .4s' }} />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+          ) : activeNavGroup === 'learn' ? (
+            selectedLearnSubject == null ? (
+              /* ── Subject list — pick a subject before Notes/Flashcards/Quiz ── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {learnSubjects.length === 0 ? (
+                  <div style={{ ...HCARD, textAlign: 'center', padding: '48px 20px' }}>
+                    <p style={{ fontSize: 13.5, color: '#5B6B87' }}>No subjects yet — once your teacher sets up your class, subjects will appear here.</p>
+                  </div>
+                ) : learnSubjects.map((s, i) => {
+                  const StickerIcon = subjectStickerIcon(s.label)
+                  const palette = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length]
+                  return (
+                    <button key={s.label} onClick={() => setSelectedLearnSubject(s.label)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', textAlign: 'left',
+                        background: palette.bg, border: `3px solid ${palette.border}`, borderRadius: 20,
+                        padding: '18px 20px', width: '100%',
+                      }}>
+                      <span style={{ width: 52, height: 52, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <StickerIcon size={28} />
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 18, fontWeight: 800, color: palette.text }}>{s.label}</p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: palette.text, opacity: 0.75, marginTop: 2 }}>{s.topics.length} topic{s.topics.length === 1 ? '' : 's'} taught</p>
+                      </div>
+                      {s.catchupTopics.length > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#D97706', color: '#fff', fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 20, flexShrink: 0 }}>
+                          <Hourglass size={10} strokeWidth={2.5} /> {s.catchupTopics.length}
+                        </span>
+                      )}
+                      <ChevronRight size={20} color={palette.text} style={{ flexShrink: 0 }} />
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <>
+                {/* ── Back to subjects + subject name ── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 2 }}>
+                  <button onClick={() => { setSelectedLearnSubject(null); setLearnPreload(null) }}
+                    style={{ background: '#fff', border: '2.5px solid rgba(30,42,68,0.22)', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <ArrowLeft size={16} color="#3D6CB4" />
+                  </button>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: '#1E2A44', letterSpacing: '-.3px' }}>{selectedLearnSubject}</p>
                 </div>
 
-                <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #f1f5f9', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p style={{ ...LBL }}>Syllabus Progress</p>
-                    {totalCount > 0 && <p style={{ fontSize: 13, fontWeight: 800, color: '#2563eb', fontVariantNumeric: 'tabular-nums' }}>{Math.round((completedCount / totalCount) * 100)}%</p>}
-                  </div>
-                  {totalCount === 0 ? (
-                    <p style={{ fontSize: 13, color: '#cbd5e1', fontWeight: 500 }}>No syllabus added yet</p>
-                  ) : (
-                    <>
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{completedCount} of {totalCount} topics</span>
-                        </div>
-                        <div style={{ height: 10, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 6, width: `${Math.round((completedCount / totalCount) * 100)}%`, background: 'linear-gradient(90deg, #1d4ed8, #2563eb)', transition: 'width .4s' }} />
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {subjectData.syllabusTopics.filter(t => t.isCompleted).slice(-5).reverse().map((t, i) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <CheckCircle2 size={14} style={{ color: '#059669', flexShrink: 0 }} />
-                            <span style={{ fontSize: 13, fontWeight: 500, color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.topic}</span>
-                          </div>
-                        ))}
-                        {completedCount > 5 && <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>+ {completedCount - 5} more completed</p>}
-                      </div>
-                    </>
-                  )}
+                {/* Sub-tabs: Notes / Flashcards / Quiz (pill switcher) */}
+                <div style={{ display: 'flex', gap: 4, background: '#fff', borderRadius: 14, padding: 4, border: '2.5px solid rgba(30,42,68,0.22)' }}>
+                  {([['notes', 'Summary Notes'], ['flashcards', 'Flashcards'], ['quizzes', 'Quiz']] as const).map(([id, label]) => {
+                    const isAct = learnTab === id
+                    return (
+                      <button key={id} onClick={() => setLearnTab(id)}
+                        style={{ flex: 1, padding: '10px 8px', borderRadius: 11, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 800, transition: 'all .15s', background: isAct ? '#3D6CB4' : 'transparent', color: isAct ? '#fff' : '#5B6B87' }}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div style={{ ...HCARD }}>
+                  {(() => {
+                    const subjectOnly = learnSubjects.filter(s => s.label === selectedLearnSubject)
+                    return learnTab === 'notes'
+                      ? <NotesPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                          onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                      : learnTab === 'flashcards'
+                      ? <FlashcardsPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                          onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                      : <QuizPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                          onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                  })()}
+                </div>
+              </>
+            )
+
+          ) : activeNavGroup === 'tests' ? (
+            <TestsPanel upcomingTests={testsView.upcoming} awaitingResults={testsView.awaitingResults} pastScores={testsView.pastScores} interests={student.interests ?? []} />
+
+          ) : activeNavGroup === 'profile' ? (
+            <>
+              <div style={{ ...HCARD, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#3D6CB4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                  {(student.name?.trim()?.[0] ?? '?').toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: '#1E2A44' }}>{student.name}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#5B6B87', marginTop: 3 }}>Roll #{student.rollNumber} · Grade {cls.grade}{cls.section ? ` · Section ${cls.section}` : ''}</p>
                 </div>
               </div>
 
-              {/* ── 2-COL: PRACTICE TOPICS | STRONG TOPICS ── */}
-              {(subjectData.weakTopics.length > 0 || subjectData.strongTopics.length > 0) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #f1f5f9', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <p style={{ ...LBL }}>Needs More Practice</p>
-                    {subjectData.weakTopics.length === 0
-                      ? <p style={{ fontSize: 13, color: '#94a3b8' }}>No weak topics — great work! 🎉</p>
-                      : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {subjectData.weakTopics.map((t, i) => (
-                            <button key={i} onClick={() => startQuiz(t.topic)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12, background: '#fff7ed', border: '1px solid #fde68a', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>{t.topic}</p>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 800, color: '#c2410c', background: '#fde68a', padding: '2px 10px', borderRadius: 10 }}>{Math.round(t.mastery * 100)}%</span>
-                                <span style={{ fontSize: 11, color: '#d97706', fontWeight: 700 }}>Practice →</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                    }
-                  </div>
-                  <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #f1f5f9', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <p style={{ ...LBL }}>Doing Well In</p>
-                    {subjectData.strongTopics.length === 0
-                      ? <p style={{ fontSize: 13, color: '#94a3b8' }}>Keep studying — strong topics will appear here.</p>
-                      : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {subjectData.strongTopics.map((t, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12, background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
-                              <CheckCircle2 size={15} style={{ color: '#059669', flexShrink: 0 }} />
-                              <p style={{ fontSize: 13, fontWeight: 700, color: '#065f46', flex: 1 }}>{t.topic}</p>
-                              <span style={{ fontSize: 12, fontWeight: 800, color: '#059669', background: '#a7f3d0', padding: '2px 10px', borderRadius: 10 }}>{Math.round(t.mastery * 100)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                    }
-                  </div>
+              <button onClick={openInterestsEditor}
+                style={{ ...HCARD, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 11, background: '#DCEBF8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Pencil size={17} color="#3D6CB4" />
                 </div>
-              )}
-
-              {/* ── BADGES SECTION ── */}
-              {allBadges.length > 0 && (() => {
-                const earned = allBadges.filter(b => b.earned)
-                const locked = allBadges.filter(b => !b.earned)
-                const earnedCount = earned.length
-                return (
-                  <div style={{ background: '#fff', borderRadius: 24, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
-                    <div style={{ padding: '18px 24px', borderBottom: earnedCount > 0 ? '1px solid #f1f5f9' : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontSize: 22 }}>🏆</span>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>Your Badges</p>
-                        <p style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>
-                          {earnedCount === 0 ? 'Start attending and taking tests to earn badges!' : earnedCount === allBadges.length ? 'You earned all the badges! Amazing! 🎉' : `${earnedCount} of ${allBadges.length} badges earned — keep going!`}
-                        </p>
-                      </div>
-                      {earnedCount > 0 && (
-                        <div style={{ padding: '6px 16px', borderRadius: 20, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#fff', fontSize: 13, fontWeight: 800 }}>
-                          {earnedCount}/{allBadges.length}
-                        </div>
-                      )}
-                    </div>
-                    {earnedCount > 0 && (
-                      <div style={{ padding: '16px 24px', borderBottom: locked.length > 0 ? '1px solid #f8fafc' : 'none' }}>
-                        <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#059669', marginBottom: 12 }}>✓ Earned</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                          {earned.map(b => (
-                            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: b.bg, border: `1.5px solid ${b.border}` }}>
-                              <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>{b.icon}</span>
-                              <div style={{ minWidth: 0 }}>
-                                <p style={{ fontSize: 13, fontWeight: 800, color: b.color, lineHeight: 1 }}>{b.name}</p>
-                                <p style={{ fontSize: 11, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>{b.description}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {locked.length > 0 && (
-                      <div style={{ padding: '16px 24px' }}>
-                        <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12 }}>🔒 Locked — earn these next!</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                          {locked.map(b => (
-                            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: '#f8fafc', border: '1.5px solid #e2e8f0', opacity: 0.8 }}>
-                              <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0, filter: 'grayscale(1)', opacity: 0.4 }}>{b.icon}</span>
-                              <div style={{ minWidth: 0 }}>
-                                <p style={{ fontSize: 12.5, fontWeight: 700, color: '#94a3b8', lineHeight: 1 }}>{b.name}</p>
-                                <p style={{ fontSize: 11, color: '#cbd5e1', marginTop: 3, lineHeight: 1.4 }}>{b.hint}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
-
-              {/* ── CHARACTER CORNER ── */}
-              <button
-                onClick={() => router.push('/student/character')}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px', borderRadius: 20, border: '1.5px solid #ddd6fe', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background .12s' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#faf5ff' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff' }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #7c3aed, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
-                  🌟
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Character Corner</p>
-                  <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 3 }}>
-                    Stories to help you grow — patience, kindness, courage &amp; more
-                  </p>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                  <span style={{ padding: '5px 14px', borderRadius: 20, background: '#faf5ff', color: '#7c3aed', border: '1px solid #ddd6fe', fontSize: 13, fontWeight: 800 }}>
-                    12 traits
-                  </span>
-                  <span style={{ fontSize: 18, color: '#a855f7', fontWeight: 700 }}>→</span>
+                <div style={{ flex: 1, textAlign: 'left' }}>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: '#1E2A44' }}>My Interests</p>
+                  <p style={{ fontSize: 12, color: '#5B6B87', marginTop: 2 }}>{student.interests?.length ? `${student.interests.length} selected — used to personalise your learning` : 'Set your interests to personalise learning'}</p>
                 </div>
               </button>
 
+              <button onClick={handleLogout}
+                style={{ ...HCARD, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 11, background: '#FBE3DC', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <LogOut size={17} color="#dc2626" />
+                </div>
+                <p style={{ fontSize: 14, fontWeight: 800, color: '#dc2626', textAlign: 'left' }}>Sign out</p>
+              </button>
             </>
+
+          ) : (
+            <div style={{ ...CARD, alignItems: 'center', justifyContent: 'center', padding: '72px 20px', textAlign: 'center' }}>
+              <Construction size={44} color="#A6AEC2" strokeWidth={1.75} />
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#1E2A44', marginTop: 14 }}>Coming soon</p>
+              <p style={{ fontSize: 13, color: '#5B6B87', marginTop: 5, lineHeight: 1.6, maxWidth: 340 }}>This section is on the way.</p>
+            </div>
           )}
-        </div>{/* end maxWidth container */}
-      </div>{/* end main scrollable */}
+        </div>{/* end inner flex column */}
+        </div>{/* end content pane */}
+      </div>
+
+      {/* ════ BOTTOM NAV (mobile only) ════ */}
+      {isMobile && (
+        <nav style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 100, background: '#fff', borderTop: '2.5px solid rgba(30,42,68,0.22)', display: 'flex', padding: '8px 6px', paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+          {NAV_GROUPS.map(group => {
+            const isAct = activeNavGroup === group.id
+            return (
+              <button key={group.id} onClick={() => selectNav(group.id)}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 2px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', position: 'relative' }}>
+                <div style={{ position: 'relative' }}>
+                  <group.Icon size={22} color={isAct ? '#3D6CB4' : '#1E2A44'} fill={isAct && group.id === 'home' ? '#3D6CB4' : 'none'} strokeWidth={isAct ? 2 : 1.8} />
+                  {group.id === 'tests' && newTestCount > 0 && (
+                    <span style={{ position: 'absolute', top: -4, right: -6, minWidth: 15, height: 15, borderRadius: 8, background: '#1E2A44', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{newTestCount}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 10.5, fontWeight: isAct ? 800 : 600, color: isAct ? '#3D6CB4' : '#1E2A44' }}>{group.label}</span>
+                {isAct && (
+                  <span style={{ width: 18, height: 3, borderRadius: 2, background: '#3D6CB4', marginTop: 1 }} />
+                )}
+              </button>
+            )
+          })}
+        </nav>
+      )}
 
       {/* ════ INTERESTS MODAL ════ */}
       {showInterests && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(4px)' }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(30,42,68,0.55)' }}
           onClick={e => { if (e.target === e.currentTarget) setShowInterests(false) }}>
-          <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 480, margin: '0 16px', boxShadow: '0 24px 80px rgba(15,23,42,0.25)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+          <div style={{ background: '#FFFFFF', border: '2.5px solid rgba(30,42,68,0.22)', borderRadius: 24, width: '100%', maxWidth: 480, margin: '0 16px', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
 
             {/* Header */}
-            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 12, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '2.5px solid rgba(30,42,68,0.18)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: '#3D6CB4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Pencil size={16} color="#fff" />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 15, fontWeight: 900, color: '#0f172a' }}>My Interests</p>
-                <p style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 2 }}>Pick topics and AI will use them in your practice and catch-up plans</p>
+                <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44' }}>My Interests</p>
+                <p style={{ fontSize: 11.5, color: '#5B6B87', marginTop: 2 }}>Pick topics and AI will use them in your practice and catch-up plans</p>
               </div>
               <button onClick={() => setShowInterests(false)}
-                style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <X size={15} color="#64748b" />
+                style={{ background: 'rgba(30,42,68,0.06)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <X size={15} color="#5B6B87" />
               </button>
             </div>
 
@@ -1164,13 +1218,14 @@ export default function StudentHomePage() {
 
               {/* Preset chips */}
               <div>
-                <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12 }}>Choose your hobbies</p>
+                <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5B6B87', marginBottom: 12 }}>Choose your hobbies</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {PRESET_INTERESTS.map(label => {
+                  {PRESET_INTERESTS.map(({ label, Icon }) => {
                     const sel = draftInterests.includes(label)
                     return (
                       <button key={label} onClick={() => togglePreset(label)}
-                        style={{ padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s', border: `2px solid ${sel ? '#2563eb' : '#e2e8f0'}`, background: sel ? '#eff6ff' : '#f8fafc', color: sel ? '#1d4ed8' : '#64748b' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s', border: `3px solid ${sel ? '#3D6CB4' : 'rgba(30,42,68,0.22)'}`, background: sel ? '#DCEBF8' : 'transparent', color: sel ? '#1E3A55' : '#5B6B87' }}>
+                        <Icon size={14} />
                         {label}
                       </button>
                     )
@@ -1180,17 +1235,17 @@ export default function StudentHomePage() {
 
               {/* Custom input */}
               <div>
-                <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 10 }}>Add your own</p>
+                <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5B6B87', marginBottom: 10 }}>Add your own</p>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input
                     value={customInput}
                     onChange={e => setCustomInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addCustom()}
                     placeholder="e.g. Kabaddi, Painting…"
-                    style={{ flex: 1, border: '2px solid #e2e8f0', borderRadius: 12, padding: '9px 14px', fontSize: 13, fontFamily: 'inherit', color: '#1e293b', outline: 'none' }}
+                    style={{ flex: 1, border: '3px solid rgba(30,42,68,0.22)', borderRadius: 12, padding: '9px 14px', fontSize: 13, fontFamily: 'inherit', color: '#1E2A44', outline: 'none', background: '#fff' }}
                   />
                   <button onClick={addCustom}
-                    style={{ padding: '9px 18px', borderRadius: 12, background: '#1d4ed8', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    style={{ padding: '9px 18px', borderRadius: 12, background: '#1E2A44', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     Add
                   </button>
                 </div>
@@ -1199,13 +1254,13 @@ export default function StudentHomePage() {
               {/* Selected list */}
               {draftInterests.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 10 }}>Selected ({draftInterests.length})</p>
+                  <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#5B6B87', marginBottom: 10 }}>Selected ({draftInterests.length})</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                     {draftInterests.map(i => (
-                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, background: '#eff6ff', border: '1.5px solid #bfdbfe', fontSize: 12.5, fontWeight: 700, color: '#1d4ed8' }}>
+                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, background: '#DCEBF8', border: '2.5px solid #AACDEA', fontSize: 12.5, fontWeight: 700, color: '#1E3A55' }}>
                         {i}
                         <button onClick={() => setDraftInterests(prev => prev.filter(x => x !== i))}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: '#93c5fd' }}>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: '#5B87AD' }}>
                           <X size={12} />
                         </button>
                       </span>
@@ -1216,13 +1271,13 @@ export default function StudentHomePage() {
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '14px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 10, flexShrink: 0 }}>
+            <div style={{ padding: '14px 24px', borderTop: '2.5px solid rgba(30,42,68,0.18)', display: 'flex', gap: 10, flexShrink: 0 }}>
               <button onClick={() => setShowInterests(false)}
-                style={{ flex: 1, padding: '12px 0', borderRadius: 14, border: '2px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                style={{ flex: 1, padding: '12px 0', borderRadius: 14, border: '3px solid rgba(30,42,68,0.22)', background: '#fff', color: '#5B6B87', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                 Cancel
               </button>
               <button onClick={saveInterests} disabled={savingInterests}
-                style={{ flex: 2, padding: '12px 0', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', color: '#fff', fontSize: 13, fontWeight: 800, cursor: savingInterests ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingInterests ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                style={{ flex: 2, padding: '12px 0', borderRadius: 14, border: 'none', background: '#3D6CB4', color: '#fff', fontSize: 13, fontWeight: 800, cursor: savingInterests ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingInterests ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                 {savingInterests ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><CheckIcon size={14} /> Save Preferences</>}
               </button>
             </div>
@@ -1230,6 +1285,8 @@ export default function StudentHomePage() {
           </div>
         </div>
       )}
+
+      {activeNavGroup === 'home' && <PersonalityCorner isMobile={isMobile} />}
 
     </div>
   )

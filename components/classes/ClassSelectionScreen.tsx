@@ -5,15 +5,15 @@ import { useApp } from '@/lib/context'
 import type { Class } from '@/lib/types'
 
 const GRADE_COLORS: Record<string, string> = {
-  '1': '#7c3aed', '2': '#7c3aed',
-  '3': '#2563eb', '4': '#2563eb',
-  '5': '#059669', '6': '#059669',
-  '7': '#d97706', '8': '#d97706',
-  '9': '#e11d48', '10': '#e11d48',
-  '11': '#0891b2', '12': '#0891b2',
+  '1': '#31215C', '2': '#31215C',
+  '3': '#1E3A55', '4': '#1E3A55',
+  '5': '#234A1D', '6': '#234A1D',
+  '7': '#4A3809', '8': '#4A3809',
+  '9': '#5C1F38', '10': '#5C1F38',
+  '11': '#5C2416', '12': '#5C2416',
 }
 function gradeColor(grade: string) {
-  return GRADE_COLORS[grade] ?? '#6366f1'
+  return GRADE_COLORS[grade] ?? 'var(--ink)'
 }
 
 interface Props {
@@ -46,24 +46,24 @@ export default function ClassSelectionScreen({ schoolClasses }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      style={{ background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(58,44,30,0.6)' }}
     >
       <div
-        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
-        style={{ maxHeight: '90vh', boxShadow: '0 24px 60px rgba(0,0,0,0.35)' }}
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
+        style={{ maxHeight: '90vh', background: 'var(--paper-soft)', border: '1.5px solid rgba(58,44,30,0.18)' }}
       >
         {/* Header */}
-        <div className="px-6 pt-7 pb-4" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)' }}>
+        <div className="px-6 pt-7 pb-4" style={{ background: 'var(--ink)' }}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.12)' }}>
               <School size={16} className="text-white" />
             </div>
-            <span className="text-indigo-200 text-xs font-bold uppercase tracking-widest">
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(253,248,238,0.7)' }}>
               {teacher?.schoolName}
             </span>
           </div>
-          <h2 className="text-white text-xl font-black leading-tight">Which classes do you teach?</h2>
-          <p className="text-indigo-300 text-sm mt-1">
+          <h2 className="font-display text-white text-xl font-black leading-tight">Which classes do you teach?</h2>
+          <p className="text-sm mt-1" style={{ color: 'rgba(253,248,238,0.7)' }}>
             Select the classes you&apos;re assigned to for <span className="text-white font-bold">{teacher?.subject}</span>
           </p>
         </div>
@@ -81,7 +81,7 @@ export default function ClassSelectionScreen({ schoolClasses }: Props) {
                 onClick={() => toggle(cls.id)}
                 className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-all active:scale-[0.98]"
                 style={{
-                  background: isSelected ? `${color}12` : '#f8fafc',
+                  background: isSelected ? `${color}12` : 'rgba(58,44,30,0.03)',
                   border: `2px solid ${isSelected ? color : 'transparent'}`,
                 }}
               >
@@ -95,38 +95,38 @@ export default function ClassSelectionScreen({ schoolClasses }: Props) {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-black text-slate-800 text-sm">{cls.name}</span>
+                    <span className="font-black text-ink text-sm">{cls.name}</span>
                     {cls.section && (
-                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}>
                         {cls.section}
                       </span>
                     )}
                   </div>
-                  <span className="flex items-center gap-1 text-xs text-slate-400 font-medium mt-0.5">
+                  <span className="flex items-center gap-1 text-xs text-ink-soft font-medium mt-0.5">
                     <Users size={10} /> {count} student{count !== 1 ? 's' : ''}
                   </span>
                 </div>
 
                 {isSelected
                   ? <CheckCircle2 size={22} style={{ color }} className="shrink-0" />
-                  : <Circle size={22} className="text-slate-200 shrink-0" />}
+                  : <Circle size={22} className="text-ink-faint shrink-0" />}
               </button>
             )
           })}
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-6 pt-3 border-t border-slate-100">
+        <div className="px-4 pb-6 pt-3" style={{ borderTop: '1px solid rgba(58,44,30,0.08)' }}>
           {selected.size === 0 && (
-            <p className="text-center text-xs text-slate-400 font-medium mb-3">
+            <p className="text-center text-xs text-ink-faint font-medium mb-3">
               Tick at least one class to continue
             </p>
           )}
           <button
             onClick={handleConfirm}
             disabled={selected.size === 0 || saving}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-black text-white transition-all active:scale-[0.98] disabled:opacity-40"
-            style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' }}
+            className="paper-btn-primary w-full"
+            style={{ opacity: selected.size === 0 || saving ? 0.5 : 1 }}
           >
             <BookOpen size={15} />
             {saving ? 'Saving…' : `Confirm ${selected.size > 0 ? `(${selected.size} class${selected.size !== 1 ? 'es' : ''})` : ''}`}

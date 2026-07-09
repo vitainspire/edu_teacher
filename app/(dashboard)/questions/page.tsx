@@ -1,13 +1,14 @@
 import { TeacherSubjectGrade } from '@/components/questions/TeacherSubjectGrade'
+import PageHeader from '@/components/theme/PageHeader'
 
 export default function QuestionsPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white px-4 pt-4 pb-4 border-b border-gray-100">
-        <h1 className="text-2xl font-bold text-gray-900">Blackboard Questions</h1>
-        <p className="text-sm text-gray-500 mt-0.5">AI-generated questions — read from phone onto board</p>
-      </div>
-      <div className="px-4 py-4">
+    <div className="paper-page pb-28">
+      <PageHeader
+        title="Blackboard Questions"
+        subtitle="AI-generated questions — read from phone onto board"
+      />
+      <div className="px-5 pt-3 relative z-10">
         <TeacherSubjectGrade />
       </div>
     </div>

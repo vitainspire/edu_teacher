@@ -189,30 +189,33 @@ export default function ConnectPage() {
     setCodeError(null);
     setCodeLoading(true);
 
-    const { data, error: dbError } = await supabase
-      .from("schools")
-      .select("id, name")
-      .eq("join_code", trimmed.toUpperCase())
-      .single();
+    const res = await fetch("/api/scanner/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ joinCode: trimmed }),
+    });
+    const data = await res.json().catch(() => ({}));
 
-    if (dbError || !data) {
-      setCodeError("School code not found. Ask your school admin for the correct code.");
+    if (!res.ok) {
+      setCodeError(data.error ?? "School code not found. Ask your school admin for the correct code.");
       setCodeLoading(false);
       return;
     }
 
-    const s = data as { id: string; name: string };
-    localStorage.setItem("scanner_school_id", s.id);
-    localStorage.setItem("scanner_school_name", s.name ?? "");
-    setSchoolId(s.id);
-    setSchoolName(s.name ?? "");
+    const s = data as { schoolId: string; schoolName: string; token: string };
+    localStorage.setItem("scanner_school_id", s.schoolId);
+    localStorage.setItem("scanner_school_name", s.schoolName ?? "");
+    localStorage.setItem("scanner_token", s.token);
+    setSchoolId(s.schoolId);
+    setSchoolName(s.schoolName ?? "");
     setCodeLoading(false);
-    void loadAll(s.id);
+    void loadAll(s.schoolId);
   }
 
   function disconnect() {
     localStorage.removeItem("scanner_school_id");
     localStorage.removeItem("scanner_school_name");
+    localStorage.removeItem("scanner_token");
     setSchoolId(null);
     setTestGroups([]);
     setWorksheetGroups([]);

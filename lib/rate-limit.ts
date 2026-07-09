@@ -15,6 +15,7 @@ interface Entry { count: number; windowStart: number }
 const stores = {
   standard: new Map<string, Entry>(),
   vision:   new Map<string, Entry>(),
+  auth:     new Map<string, Entry>(),
 }
 
 function checkInMemory(ip: string, max: number, store: Map<string, Entry>): { allowed: boolean; remaining: number } {
@@ -35,9 +36,10 @@ type UpstashLimiter = { limit: (id: string) => Promise<{ success: boolean; remai
 const limiters: Record<string, UpstashLimiter | null | 'uninit'> = {
   standard: 'uninit',
   vision:   'uninit',
+  auth:     'uninit',
 }
 
-async function getLimiter(tier: 'standard' | 'vision'): Promise<UpstashLimiter | null> {
+async function getLimiter(tier: 'standard' | 'vision' | 'auth'): Promise<UpstashLimiter | null> {
   if (limiters[tier] !== 'uninit') return limiters[tier] as UpstashLimiter | null
   const url   = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
@@ -45,7 +47,7 @@ async function getLimiter(tier: 'standard' | 'vision'): Promise<UpstashLimiter |
   try {
     const { Redis }     = await import('@upstash/redis')
     const { Ratelimit } = await import('@upstash/ratelimit')
-    const max = tier === 'vision' ? 20 : 60
+    const max = tier === 'vision' ? 20 : tier === 'auth' ? 10 : 60
     limiters[tier] = new Ratelimit({
       redis: new Redis({ url, token }),
       limiter: Ratelimit.slidingWindow(max, '1 h'),
@@ -85,5 +87,19 @@ export async function checkVisionRateLimit(ip: string): Promise<{ allowed: boole
   } catch (e) {
     console.warn('[rate-limit] Upstash unavailable, falling back to per-instance memory (vision):', e)
     return checkInMemory(ip, 20, stores.vision)
+  }
+}
+
+// Auth/login/join-code routes: 10 requests per hour per IP — these guard credential
+// guessing (student codes, school join codes, admin passwords), so the limit is tight.
+export async function checkAuthRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
+  const lim = await getLimiter('auth')
+  if (!lim) return checkInMemory(ip, 10, stores.auth)
+  try {
+    const result = await lim.limit(ip)
+    return { allowed: result.success, remaining: result.remaining }
+  } catch (e) {
+    console.warn('[rate-limit] Upstash unavailable, falling back to per-instance memory (auth):', e)
+    return checkInMemory(ip, 10, stores.auth)
   }
 }

@@ -3,13 +3,13 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   BookOpen, Users, Save, Check, Sparkles,
-  Lightbulb, RefreshCw, AlertTriangle,
+  AlertTriangle,
   ChevronDown, ChevronUp, CheckCircle2,
-  GraduationCap, Play, Zap,
+  GraduationCap, Play, Link2, Camera,
 } from 'lucide-react'
-import type { LessonPrep } from '@/lib/types'
 import { useApp } from '@/lib/context'
-import { aiKey, getAiCache, setAiCache, TTL } from '@/lib/ai-cache'
+import ScanAttendanceModal from '@/components/attendance/ScanAttendanceModal'
+import type { Student } from '@/lib/types'
 import clsx from 'clsx'
 
 type Status = 'present' | 'absent' | 'late'
@@ -18,7 +18,6 @@ const STATUS_CONFIG: Record<Status, { label: string; color: string; bg: string }
   absent:  { label: 'A', color: 'text-red-700',     bg: 'bg-red-100 border-red-300' },
   late:    { label: 'L', color: 'text-amber-700',   bg: 'bg-amber-100 border-amber-300' },
 }
-interface EngageData { hook: string; watchNote: string; realLifeExamples?: string[] }
 
 export default function AttendancePage() {
   const { classId } = useParams<{ classId: string }>()
@@ -31,15 +30,37 @@ export default function AttendancePage() {
     attendance: rawAttendance,
     recordSession, toggleTopicComplete,
     syllabusSubTopics, toggleSubTopicComplete,
-    saveSessionSnapshot,
+    getTaughtTopicToday, saveTaughtTopic,
   } = useApp()
 
   const cls      = classes.find(c => c.id === classId)
   // Use raw React state (not ref-based getter) so the effect never sees a stale empty list
-  const students = useMemo(
+  const ctxStudents = useMemo(
     () => rawStudents.filter(s => s.classId === classId && s.isActive),
     [rawStudents, classId]
   )
+  // Fallback: if the shared context roster is empty for this class (e.g. the initial
+  // load hasn't populated admin-managed students yet), fetch them directly so the
+  // teacher never ends up marking attendance against an empty roster.
+  const [directStudents, setDirectStudents] = useState<Student[]>([])
+  useEffect(() => {
+    if (ctxStudents.length > 0) { setDirectStudents([]); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { fetchStudentsByClasses } = await import('@/lib/supabase-queries')
+        const list = await fetchStudentsByClasses([classId])
+        if (!cancelled) {
+          setDirectStudents(
+            list.filter(s => s.isActive).sort((a, b) => (a.rollNumber || '').localeCompare(b.rollNumber || ''))
+          )
+        }
+      } catch { /* leave empty — save guard will handle it */ }
+    })()
+    return () => { cancelled = true }
+  }, [ctxStudents.length, classId])
+
+  const students = ctxStudents.length > 0 ? ctxStudents : directStudents
   const syllabus = getClassSyllabus(classId)
   const today    = new Date().toISOString().split('T')[0]
 
@@ -62,10 +83,6 @@ export default function AttendancePage() {
   const hasInitialized = useRef(false)
   // manuallyReset: teacher tapped "Record Another Session" → ignore today's saved data
   const [manuallyReset, setManuallyReset] = useState(false)
-  // justSaved: true only right after saving in this session (show Class Starter)
-  const [justSaved, setJustSaved]         = useState(false)
-  const [engageData, setEngageData]       = useState<EngageData | null>(null)
-  const [engageLoading, setEngageLoading] = useState(false)
   const [markingDone, setMarkingDone]     = useState(false)
   const [weekComplete, setWeekComplete]   = useState<number | null>(null)
   // Post-save late-arrival edits: absent → late after session is saved
@@ -74,11 +91,10 @@ export default function AttendancePage() {
   const [isInheritedAttendance, setIsInheritedAttendance] = useState(false)
   const [showFullAttendance, setShowFullAttendance]       = useState(false)
   const inheritedFromMorning = useRef(false)
-  const [lessonPrep, setLessonPrep]       = useState<LessonPrep | null>(null)
-  const [prepLoading, setPrepLoading]     = useState(false)
-  const [prepOpen, setPrepOpen]           = useState(false)
-  const [checkQuestions, setCheckQuestions] = useState<string[] | null>(null)
-  const [checkLoading, setCheckLoading]     = useState(false)
+  // True when the topic/sub-topic below was auto-filled from a Timetable prep material for today
+  const [syncedFromTimetable, setSyncedFromTimetable] = useState(false)
+  const skipNextSubtopicAutoPick = useRef(false)
+  const [scanOpen, setScanOpen] = useState(false)
 
   // ── Derived state (no effects needed) ─────────────────────────────────────
   // todaySession: the session saved for this class today, if any
@@ -151,137 +167,71 @@ export default function AttendancePage() {
     }
     inheritedFromMorning.current = false
 
-    if (syllabus.length > 0 && !topicText) {
-      const lastSession = classSessions[0]
-      let suggested = null
-      if (lastSession) {
-        suggested = syllabus.find(t => t.id === lastSession.syllabusTopicId && !t.isCompleted) ?? null
-      }
-      if (!suggested) {
-        const sorted = [...syllabus].sort((a, b) => {
-          if (a.weekNumber != null && b.weekNumber != null) return a.weekNumber - b.weekNumber
-          return a.orderIndex - b.orderIndex
-        })
-        suggested = sorted.find(t => !t.isCompleted) ?? null
-      }
-      if (suggested) {
-        setTopicText(suggested.topic)
-        setSelectedTopicId(suggested.id)
+    if (!topicText) {
+      // Prefer whatever topic/sub-topic was already prepped for this class today
+      // via the Timetable's Prep Material popup, so the two stay in sync.
+      const taught = getTaughtTopicToday(classId)
+      const matchedTopic = taught ? syllabus.find(t => t.topic.toLowerCase() === taught.topic.toLowerCase()) : null
+
+      if (taught) {
+        setTopicText(taught.topic)
+        setSyncedFromTimetable(true)
+        if (matchedTopic) {
+          setSelectedTopicId(matchedTopic.id)
+          if (taught.subtopic) {
+            const matchedSub = syllabusSubTopics.find(
+              s => s.topicId === matchedTopic.id && s.name.toLowerCase() === taught.subtopic!.toLowerCase()
+            )
+            if (matchedSub) {
+              setSelectedSubTopicId(matchedSub.id)
+              skipNextSubtopicAutoPick.current = true
+            }
+          }
+        }
+      } else if (syllabus.length > 0) {
+        const lastSession = classSessions[0]
+        let suggested = null
+        if (lastSession) {
+          suggested = syllabus.find(t => t.id === lastSession.syllabusTopicId && !t.isCompleted) ?? null
+        }
+        if (!suggested) {
+          const sorted = [...syllabus].sort((a, b) => {
+            if (a.weekNumber != null && b.weekNumber != null) return a.weekNumber - b.weekNumber
+            return a.orderIndex - b.orderIndex
+          })
+          suggested = sorted.find(t => !t.isCompleted) ?? null
+        }
+        if (suggested) {
+          setTopicText(suggested.topic)
+          setSelectedTopicId(suggested.id)
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSaved, students.length, syllabus.length, classSessions.length])
 
-  // Save lesson snapshot when engage data arrives after a fresh save
-  useEffect(() => {
-    if (!justSaved || !engageData?.hook || !todaySession) return
-    saveSessionSnapshot(todaySession.id, {
-      hook: engageData.hook,
-      realLifeExamples: engageData.realLifeExamples ?? [],
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engageData, justSaved, todaySession])
-
   // Auto-pick first incomplete sub-topic when topic changes
   useEffect(() => {
     if (!selectedTopicId) return
+    if (skipNextSubtopicAutoPick.current) { skipNextSubtopicAutoPick.current = false; return }
     const subs = syllabusSubTopics
       .filter(s => s.topicId === selectedTopicId && !s.isCompleted)
       .sort((a, b) => a.orderIndex - b.orderIndex)
     setSelectedSubTopicId(subs[0]?.id ?? '')
   }, [selectedTopicId, syllabusSubTopics])
 
-  const fetchPrep = async (topic: string) => {
-    if (!topic.trim()) return
-    setPrepLoading(true)
-    setPrepOpen(true)
-    setLessonPrep(null)
-    try {
-      const ck = aiKey('lesson-prep', { topic: topic.toLowerCase().trim(), subject: (cls?.name ?? '').toLowerCase(), grade: cls?.grade ?? '' })
-      const cached = getAiCache<LessonPrep>(ck)
-      if (cached) { setLessonPrep(cached); setPrepLoading(false); return }
-      const res = await fetch('/api/lesson-prep', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, subject: cls?.name ?? '', grade: cls?.grade ?? '' }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setAiCache(ck, data, TTL.ONE_MONTH)
-        setLessonPrep(data)
-      }
-    } catch { /* ignore */ }
-    finally { setPrepLoading(false) }
-  }
-
   const handleTopicTextChange = (val: string) => {
     setTopicText(val)
     const match = syllabus.find(t => t.topic.toLowerCase() === val.toLowerCase())
     setSelectedTopicId(match?.id ?? '')
-    setEngageData(null)
-    setLessonPrep(null)
-    setPrepOpen(false)
+    setSyncedFromTimetable(false)
   }
 
   const handlePickSyllabusTopic = (topicId: string, topicName: string) => {
     setSelectedTopicId(topicId)
     setTopicText(topicName)
     setShowSyllabusPicker(false)
-    setEngageData(null)
-  }
-
-  const fetchHook = (label: string, currentMap: Record<string, Status>) => {
-    setEngageData(null)
-    setEngageLoading(true)
-    const presentStudents = students
-      .filter(s => currentMap[s.id] !== 'absent')
-      .map(s => ({ name: s.name, interests: s.interests ?? [], goal: s.goal ?? '' }))
-    const absentNames = students
-      .filter(s => currentMap[s.id] === 'absent')
-      .map(s => s.name)
-    const topInterests = presentStudents.flatMap(s => s.interests).reduce((acc: Record<string, number>, i) => { acc[i] = (acc[i] ?? 0) + 1; return acc }, {})
-    const top3 = Object.entries(topInterests).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([i]) => i).sort().join('~')
-    const absentBucket = absentNames.length === 0 ? 'full' : absentNames.length < 4 ? 'few' : 'many'
-    const ck = aiKey('engage', { topic: label.toLowerCase().trim(), grade: cls?.grade ?? '', top3, absentBucket })
-    const cached = getAiCache<EngageData>(ck)
-    if (cached) { setEngageData(cached); setEngageLoading(false); return }
-    fetch('/api/engage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        topic: label,
-        presentStudents,
-        totalStudents: students.length,
-        absentNames,
-        grade: cls?.grade ?? '',
-      }),
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) { setAiCache(ck, data, TTL.ONE_DAY); setEngageData(data) }
-        else setEngageData({ hook: '', watchNote: '' })
-      })
-      .catch(() => setEngageData({ hook: '', watchNote: '' }))
-      .finally(() => setEngageLoading(false))
-  }
-
-  const fetchCheckQuestions = async (topic: string) => {
-    setCheckQuestions(null)
-    setCheckLoading(true)
-    try {
-      const res = await fetch('/api/understanding-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, subject: cls?.name ?? '', grade: cls?.grade ?? '' }),
-      })
-      if (res.ok) {
-        const data = await res.json() as { questions?: string[] }
-        if (Array.isArray(data.questions) && data.questions.length >= 2) {
-          setCheckQuestions(data.questions.slice(0, 2))
-        }
-      }
-    } catch { /* ignore */ }
-    finally { setCheckLoading(false) }
+    setSyncedFromTimetable(false)
   }
 
   const toggle = (studentId: string) => {
@@ -300,18 +250,24 @@ export default function AttendancePage() {
 
   const handleSave = async () => {
     if (!topicText.trim()) return
+    // Guard: never save a session with an empty roster — that records the topic but
+    // zero attendance (so students' absences never persist). Wait for students to load.
+    if (students.length === 0) {
+      alert('Student list is still loading — please wait a moment and try again.')
+      return
+    }
     setSaving(true)
-    const topicId   = selectedTopicId || ''
-    const topicName = selectedSubTopic ? `${topicText} — ${selectedSubTopic.name}` : topicText
+    const topicId = selectedTopicId || ''
     await recordSession(
       classId, today, topicId, topicText,
       students.map(s => ({ studentId: s.id, status: statusMap[s.id] ?? 'present' })),
       sessionNote.trim() || undefined,
     )
+    // Keep the Timetable's "taught today" record in sync, even if the teacher
+    // never opened the Prep Material popup for this class.
+    saveTaughtTopic({ classId, topic: topicText.trim(), subtopic: selectedSubTopic?.name }).catch(() => {})
     setSaving(false)
     setManuallyReset(false)   // let todaySession be found → isSaved becomes true
-    setJustSaved(true)
-    fetchHook(topicName, statusMap)
   }
 
   const handleMarkDone = async () => {
@@ -361,10 +317,10 @@ export default function AttendancePage() {
   if (students.length === 0) {
     return (
       <div className="p-4">
-        <div className="card text-center py-14">
-          <Users size={36} className="text-slate-300 mx-auto mb-3" />
-          <p className="font-semibold text-slate-700">No students yet</p>
-          <p className="text-sm text-slate-400 mt-1">Add students in the Students tab first.</p>
+        <div className="paper-card text-center py-14">
+          <Users size={36} className="text-ink-faint mx-auto mb-3" />
+          <p className="font-semibold text-ink">No students yet</p>
+          <p className="text-sm text-ink-soft mt-1">Add students in the Students tab first.</p>
         </div>
       </div>
     )
@@ -374,26 +330,26 @@ export default function AttendancePage() {
     <div className="p-4 space-y-4 pb-8">
 
       {/* ── Session header ── */}
-      <div className={`rounded-3xl p-5 shadow-md ${isSaved ? 'bg-emerald-700' : 'bg-blue-700'}`}>
+      <div className="rounded-3xl p-5" style={{ background: isSaved ? '#AAD6A0' : '#AACDEA', border: '2px solid rgba(58,44,30,0.12)' }}>
         <div className="flex items-center gap-2 mb-3">
-          {isSaved ? <Check size={12} className="text-emerald-300" /> : <Sparkles size={12} className="text-blue-300" />}
-          <p className={`text-xs font-bold uppercase tracking-wide ${isSaved ? 'text-emerald-300' : 'text-blue-300'}`}>
+          {isSaved ? <Check size={12} style={{ color: '#234A1D' }} /> : <Sparkles size={12} style={{ color: '#1E3A55' }} />}
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: isSaved ? '#234A1D' : '#1E3A55', opacity: 0.75 }}>
             {new Date(today + 'T00:00:00').toLocaleDateString('en-IN', {
               weekday: 'long', day: 'numeric', month: 'short',
             })}
           </p>
         </div>
 
-        <p className={`text-xs font-semibold mb-1.5 ${isSaved ? 'text-emerald-300' : 'text-blue-300'}`}>
+        <p className="text-xs font-semibold mb-1.5" style={{ color: isSaved ? '#234A1D' : '#1E3A55', opacity: 0.75 }}>
           {isSaved ? 'Taught today' : 'What are you teaching today?'}
         </p>
 
         {/* Topic — editable before save, summary after */}
         {isSaved ? (
           <div className="rounded-2xl px-4 py-3 flex items-center justify-between"
-            style={{ background: 'rgba(255,255,255,0.15)' }}>
-            <p className="text-white font-bold text-sm">{displayTopic}</p>
-            <p className="text-emerald-200 text-xs font-semibold">
+            style={{ background: 'rgba(255,255,255,0.55)' }}>
+            <p className="font-display font-bold text-sm" style={{ color: '#234A1D' }}>{displayTopic}</p>
+            <p className="text-xs font-semibold" style={{ color: '#234A1D', opacity: 0.75 }}>
               {presentCount}P · {absentCount > 0 ? `${absentCount}A` : 'all present'}
             </p>
           </div>
@@ -404,67 +360,22 @@ export default function AttendancePage() {
               value={topicText}
               onChange={e => handleTopicTextChange(e.target.value)}
               placeholder="e.g. Fractions, Photosynthesis, World War II…"
-              className="w-full bg-white/15 text-white placeholder-blue-300/50 rounded-2xl px-4 py-3 text-sm font-semibold outline-none focus:bg-white/20 transition-colors"
+              className="w-full rounded-2xl px-4 py-3 text-sm font-semibold outline-none transition-colors"
+              style={{ background: 'rgba(255,255,255,0.55)', color: '#1E3A55' }}
             />
             {selectedTopic && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <CheckCircle2 size={16} className="text-blue-300" />
+                <CheckCircle2 size={16} style={{ color: '#1E3A55' }} />
               </div>
             )}
           </div>
         )}
 
-        {/* Prep for class button */}
-        {displayTopic.trim() && !isSaved && (
-          <button
-            type="button"
-            onClick={() => prepOpen ? setPrepOpen(false) : fetchPrep(topicText)}
-            className="mt-3 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors"
-            style={{ background: 'rgba(255,255,255,0.18)', color: '#e0e7ff' }}
-          >
-            <Zap size={10} />
-            {prepLoading ? 'Loading prep…' : prepOpen ? 'Hide prep' : 'Prep for class'}
-            {!prepLoading && <ChevronDown size={10} className={prepOpen ? 'rotate-180' : ''} />}
-          </button>
-        )}
-
-        {/* Lesson prep panel */}
-        {prepOpen && (
-          <div className="mt-2 rounded-2xl p-4 space-y-3 text-sm" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            {prepLoading ? (
-              <div className="space-y-2">
-                {[1,2,3].map(i => <div key={i} className="h-3 rounded-full animate-pulse" style={{ background: 'rgba(255,255,255,0.2)', width: `${70 + i * 8}%` }} />)}
-              </div>
-            ) : lessonPrep ? (
-              <>
-                <div>
-                  <p className="text-[11px] font-bold text-blue-200 uppercase tracking-wide mb-1">Explanation</p>
-                  <p className="text-white/90 text-xs leading-relaxed">{lessonPrep.explanation}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-blue-200 uppercase tracking-wide mb-1">Indian Examples</p>
-                  <ul className="space-y-1">
-                    {lessonPrep.examples.map((ex, i) => (
-                      <li key={i} className="text-white/80 text-xs flex gap-1.5"><span className="text-blue-300">·</span>{ex}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-blue-200 uppercase tracking-wide mb-1">Common Mistakes</p>
-                  <ul className="space-y-1">
-                    {lessonPrep.commonMistakes.map((m, i) => (
-                      <li key={i} className="text-white/80 text-xs flex gap-1.5"><span className="text-amber-300">⚠</span>{m}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-blue-200 uppercase tracking-wide mb-1">Quick Activity (2 min)</p>
-                  <p className="text-white/90 text-xs leading-relaxed">{lessonPrep.quickActivity}</p>
-                </div>
-              </>
-            ) : (
-              <p className="text-white/50 text-xs">Could not load prep. Tap to retry.</p>
-            )}
+        {/* Synced-from-Timetable indicator */}
+        {syncedFromTimetable && !isSaved && (
+          <div className="flex items-center gap-1.5 mt-2">
+            <Link2 size={11} style={{ color: '#1E3A55', opacity: 0.7 }} />
+            <span className="text-[11px] font-semibold" style={{ color: '#1E3A55', opacity: 0.7 }}>Synced from Timetable prep material</span>
           </div>
         )}
 
@@ -473,7 +384,8 @@ export default function AttendancePage() {
           <button
             type="button"
             onClick={() => setShowSyllabusPicker(p => !p)}
-            className="mt-3 flex items-center gap-1.5 bg-white/10 text-blue-200 text-xs font-bold px-3 py-1.5 rounded-xl active:bg-white/20 transition-colors"
+            className="mt-3 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl active:scale-95 transition-transform"
+            style={{ background: 'rgba(255,255,255,0.4)', color: '#1E3A55' }}
           >
             <BookOpen size={10} />
             {showSyllabusPicker ? 'Close syllabus' : 'Pick from syllabus'}
@@ -484,8 +396,8 @@ export default function AttendancePage() {
         {/* Sub-topic badge */}
         {selectedTopicId && topicSubTopics.length > 0 && (
           <div className="flex items-center gap-2 mt-2.5">
-            <span className="text-xs text-blue-300 font-medium">Sub-topic:</span>
-            <span className="text-xs bg-white/15 text-white font-bold px-2.5 py-1 rounded-xl">
+            <span className="text-xs font-medium" style={{ color: '#1E3A55', opacity: 0.7 }}>Sub-topic:</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.5)', color: '#1E3A55' }}>
               {selectedSubTopic ? selectedSubTopic.name : '—'}
             </span>
           </div>
@@ -494,9 +406,9 @@ export default function AttendancePage() {
 
       {/* ── Syllabus picker ── */}
       {showSyllabusPicker && (
-        <div className="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-50">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Your Syllabus</p>
+        <div className="paper-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-black/5">
+            <p className="text-xs font-bold text-ink-soft uppercase tracking-wide">Your Syllabus</p>
           </div>
           <div className="max-h-64 overflow-y-auto">
             {syllabus.map((topic, idx) => {
@@ -506,25 +418,25 @@ export default function AttendancePage() {
                 <button key={topic.id} type="button"
                   onClick={() => handlePickSyllabusTopic(topic.id, topic.topic)}
                   className={clsx(
-                    'w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-50 last:border-0 active:bg-slate-50 transition-colors',
+                    'w-full flex items-center gap-3 px-4 py-3 text-left border-b border-black/5 last:border-0 active:bg-black/[0.03] transition-colors',
                     topic.isCompleted && 'opacity-50',
                   )}>
-                  <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full text-xs font-bold flex items-center justify-center shrink-0">
+                  <span className="w-6 h-6 bg-[#DCEBF8] text-[#1E3A55] rounded-full text-xs font-bold flex items-center justify-center shrink-0">
                     {idx + 1}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className={clsx('font-semibold text-sm truncate', topic.isCompleted ? 'text-slate-400 line-through' : 'text-slate-800')}>
+                    <p className={clsx('font-semibold text-sm truncate', topic.isCompleted ? 'text-ink-soft line-through' : 'text-ink')}>
                       {topic.topic}
                     </p>
                     {subCount > 0 && (
-                      <p className="text-xs text-slate-400">{doneSubs}/{subCount} sub-topics done</p>
+                      <p className="text-xs text-ink-soft">{doneSubs}/{subCount} sub-topics done</p>
                     )}
                   </div>
                   {topic.isCompleted && (
                     <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-1.5 py-0.5 rounded-full shrink-0">Done</span>
                   )}
                   {selectedTopicId === topic.id && !topic.isCompleted && (
-                    <CheckCircle2 size={14} className="text-blue-500 shrink-0" />
+                    <CheckCircle2 size={14} className="text-[#5B87AD] shrink-0" />
                   )}
                 </button>
               )
@@ -535,21 +447,21 @@ export default function AttendancePage() {
 
       {/* ── Sub-topic picker (when syllabus topic is selected with sub-topics) ── */}
       {selectedTopicId && topicSubTopics.length > 0 && !isSaved && (
-        <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
-          <div className="px-4 py-3 border-b border-slate-50">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Sub-topics of &quot;{selectedTopic?.topic}&quot;</p>
+        <div className="paper-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-black/5">
+            <p className="text-xs font-bold text-ink-soft uppercase tracking-wide">Sub-topics of &quot;{selectedTopic?.topic}&quot;</p>
           </div>
           {topicSubTopics.map(sub => (
             <button key={sub.id} type="button"
               onClick={() => setSelectedSubTopicId(sub.id)}
               className={clsx(
-                'w-full flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 text-left transition-all',
-                selectedSubTopicId === sub.id ? 'bg-blue-50' : 'active:bg-slate-50',
+                'w-full flex items-center gap-3 px-4 py-3 border-b border-black/5 last:border-0 text-left transition-all',
+                selectedSubTopicId === sub.id ? 'bg-[#DCEBF8]' : 'active:bg-black/[0.03]',
               )}>
               {sub.isCompleted
                 ? <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-                : <div className="w-4 h-4 rounded-full border-2 border-slate-300 shrink-0" />}
-              <span className={clsx('flex-1 text-sm font-semibold', sub.isCompleted ? 'text-slate-400 line-through' : 'text-slate-800')}>
+                : <div className="w-4 h-4 rounded-full border-2 border-ink-faint shrink-0" />}
+              <span className={clsx('flex-1 text-sm font-semibold', sub.isCompleted ? 'text-ink-soft line-through' : 'text-ink')}>
                 {sub.name}
               </span>
               {sub.isCompleted && (
@@ -562,14 +474,14 @@ export default function AttendancePage() {
 
       {/* ── Session Note ── */}
       {displayTopic.trim() && !isSaved && (
-        <div className="bg-white rounded-3xl border border-slate-100 px-4 py-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">What did you cover today?</p>
+        <div className="paper-card px-4 py-4">
+          <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">What did you cover today?</p>
           <textarea
             value={sessionNote}
             onChange={e => setSessionNote(e.target.value)}
             placeholder="e.g. Taught 3-digit × 1-digit with worked examples (optional)"
             rows={2}
-            className="w-full text-sm text-slate-800 placeholder-slate-400 bg-slate-50 rounded-2xl px-3 py-2.5 border border-slate-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
+            className="w-full text-sm text-ink placeholder-ink-faint bg-black/[0.03] rounded-2xl px-3 py-2.5 border border-black/5 resize-none focus:outline-none focus:ring-2 focus:ring-[#AACDEA]"
           />
         </div>
       )}
@@ -578,30 +490,30 @@ export default function AttendancePage() {
       {displayTopic.trim() && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Attendance</p>
-            <p className="text-xs text-slate-400 font-semibold">
+            <p className="text-xs font-bold text-ink-soft uppercase tracking-wide">Attendance</p>
+            <p className="text-xs text-ink-soft font-semibold">
               {presentCount}P · {absentCount}A{lateCount > 0 ? ` · ${lateCount}L` : ''}
             </p>
           </div>
 
           {/* ── Compact inherited view: morning roll already taken, just confirm ── */}
           {!isSaved && isInheritedAttendance && !showFullAttendance && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
+            <div className="bg-[#DCEBF8] border border-[#AACDEA] rounded-2xl px-4 py-3">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <Check size={13} className="text-blue-600" />
-                  <p className="text-sm font-bold text-blue-800">Morning roll carried over</p>
+                  <Check size={13} className="text-[#5B87AD]" />
+                  <p className="text-sm font-bold text-[#1E3A55]">Morning roll carried over</p>
                 </div>
                 <button type="button" onClick={() => setShowFullAttendance(true)}
-                  className="text-xs font-bold text-blue-500 underline">
+                  className="text-xs font-bold text-[#5B87AD] underline">
                   Edit
                 </button>
               </div>
               {absentCount === 0 && lateCount === 0 ? (
-                <p className="text-xs text-blue-600">All {students.length} students present today</p>
+                <p className="text-xs text-[#5B87AD]">All {students.length} students present today</p>
               ) : (
                 <>
-                  <p className="text-xs text-blue-600 mb-2">
+                  <p className="text-xs text-[#5B87AD] mb-2">
                     {presentCount} present
                     {absentCount > 0 ? ` · ${absentCount} absent` : ''}
                     {lateCount > 0 ? ` · ${lateCount} late` : ''}
@@ -628,9 +540,9 @@ export default function AttendancePage() {
             <div className="space-y-2">
               {isInheritedAttendance && showFullAttendance && (
                 <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-xs text-blue-600 font-semibold">Editing morning roll — applies to this session only</p>
+                  <p className="text-xs text-[#5B87AD] font-semibold">Editing morning roll — applies to this session only</p>
                   <button type="button" onClick={() => setShowFullAttendance(false)}
-                    className="text-xs font-bold text-slate-500 underline">
+                    className="text-xs font-bold text-ink-soft underline">
                     ← Summary
                   </button>
                 </div>
@@ -649,6 +561,10 @@ export default function AttendancePage() {
                   All Late
                 </button>
               </div>
+              <button type="button" onClick={() => setScanOpen(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-bold text-[#8069B0] bg-[#E9E1F6] border border-[#C7B7E8] active:scale-95 transition-all">
+                <Camera size={14} /> Scan Attendance Sheet
+              </button>
             </div>
           )}
 
@@ -667,23 +583,23 @@ export default function AttendancePage() {
                     }}
                     disabled={isSaved && status === 'present'}
                     className={clsx(
-                      'w-full flex items-center gap-3 card text-left',
+                      'w-full flex items-center gap-3 paper-card p-4 text-left',
                       canToggle && 'active:scale-[0.98] transition-transform',
                     )}>
                     <div className={clsx('w-10 h-10 rounded-full border-2 flex items-center justify-center font-extrabold text-sm shrink-0', cfg.bg, cfg.color)}>
                       {cfg.label}
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-slate-800">{student.name}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="font-semibold text-ink">{student.name}</p>
+                      <p className="text-xs text-ink-soft">
                         Roll {student.rollNumber}
-                        {student.interests?.length > 0 && <span className="ml-1 text-blue-400">· {student.interests[0]}</span>}
+                        {student.interests?.length > 0 && <span className="ml-1 text-[#5B87AD]">· {student.interests[0]}</span>}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={clsx('px-3 py-1 rounded-full text-xs font-bold border', cfg.bg, cfg.color)}>{status}</span>
                       {isSaved && (status === 'absent' || status === 'late') && (
-                        <span className="text-[10px] text-slate-400 font-semibold">
+                        <span className="text-[10px] text-ink-soft font-semibold">
                           {status === 'absent' ? 'tap → Late' : 'tap → Absent'}
                         </span>
                       )}
@@ -697,7 +613,7 @@ export default function AttendancePage() {
           {!isSaved && (
             <button type="button" onClick={handleSave}
               disabled={saving || !topicText.trim()}
-              className="w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 bg-blue-700 text-white active:scale-95 transition-all shadow-sm disabled:opacity-50">
+              className="paper-btn-primary w-full text-base disabled:opacity-50">
               {saving ? <span className="animate-pulse">Saving…</span> : <><Save size={18} /> Save Session</>}
             </button>
           )}
@@ -724,160 +640,9 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* ── Class Starter — only shown after a fresh save in this session, not on restore ── */}
-          {justSaved && <div
-            className="rounded-3xl p-5 space-y-3"
-            style={{
-              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-              boxShadow: '0 8px 32px rgba(79,70,229,0.35)',
-            }}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                <Lightbulb size={18} className="text-white" />
-              </div>
-              <div>
-                <p className="font-black text-white text-sm leading-none">Class Starter</p>
-                <p className="text-[11px] text-white/60 mt-0.5 font-medium">Read this out loud to start your class</p>
-              </div>
-              {!engageLoading && engageData && (
-                <button type="button"
-                  onClick={() => {
-                    const label = selectedSubTopic
-                      ? `${topicText} — ${selectedSubTopic.name}`
-                      : topicText
-                    fetchHook(label, statusMap)
-                  }}
-                  className="ml-auto p-2 rounded-xl active:bg-white/20 transition-colors"
-                  style={{ background: 'rgba(255,255,255,0.12)' }}>
-                  <RefreshCw size={13} className="text-white/70" />
-                </button>
-              )}
-            </div>
-
-            {engageLoading ? (
-              <div className="space-y-2.5">
-                <div className="h-3 rounded-full animate-pulse w-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
-                <div className="h-3 rounded-full animate-pulse w-5/6" style={{ background: 'rgba(255,255,255,0.2)' }} />
-                <div className="h-3 rounded-full animate-pulse w-3/4" style={{ background: 'rgba(255,255,255,0.2)' }} />
-              </div>
-            ) : engageData?.hook ? (
-              <div className="rounded-2xl px-4 py-4" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                <p className="text-sm text-white leading-relaxed font-medium">{engageData.hook}</p>
-              </div>
-            ) : (
-              <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Generating…</p>
-            )}
-          </div>}
-
-          {/* ── Real Life Connections ── */}
-          {justSaved && !engageLoading && engageData?.realLifeExamples && engageData.realLifeExamples.length > 0 && (
-            <div className="rounded-3xl p-5 space-y-3" style={{
-              background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-              boxShadow: '0 8px 32px rgba(5,150,105,0.35)',
-            }}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}>
-                  <span className="text-lg">🌍</span>
-                </div>
-                <div>
-                  <p className="font-black text-white text-sm leading-none">Where Will You Use This?</p>
-                  <p className="text-[11px] mt-0.5 font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                    Tell your students — this topic is already in their life
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {engageData.realLifeExamples.map((ex, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5"
-                      style={{ background: 'rgba(255,255,255,0.25)', color: 'white' }}>
-                      {i + 1}
-                    </span>
-                    <p className="text-sm text-white leading-relaxed font-medium">{ex}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Understanding Check — only shown after save in this session ── */}
-          {justSaved && (
-            <div className="rounded-3xl p-5 space-y-3" style={{
-              background: 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)',
-              boxShadow: '0 8px 32px rgba(3,105,161,0.35)',
-            }}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}>
-                  <span className="text-lg">🎯</span>
-                </div>
-                <div className="flex-1">
-                  <p className="font-black text-white text-sm leading-none">Understanding Check</p>
-                  <p className="text-[11px] text-white/60 mt-0.5 font-medium">Ask these aloud after teaching</p>
-                </div>
-                {checkQuestions && (
-                  <button type="button"
-                    onClick={() => {
-                      const label = selectedSubTopic
-                        ? `${topicText} — ${selectedSubTopic.name}`
-                        : topicText
-                      fetchCheckQuestions(label)
-                    }}
-                    className="p-2 rounded-xl active:bg-white/20 transition-colors"
-                    style={{ background: 'rgba(255,255,255,0.12)' }}>
-                    <RefreshCw size={13} className="text-white/70" />
-                  </button>
-                )}
-              </div>
-
-              {!checkQuestions && !checkLoading && (
-                <button type="button"
-                  onClick={() => {
-                    const label = selectedSubTopic
-                      ? `${topicText} — ${selectedSubTopic.name}`
-                      : topicText
-                    fetchCheckQuestions(label)
-                  }}
-                  className="w-full py-3 rounded-2xl text-sm font-bold text-white/90 active:scale-[0.98] transition-all"
-                  style={{ background: 'rgba(255,255,255,0.15)' }}>
-                  Generate Check Questions
-                </button>
-              )}
-
-              {checkLoading && (
-                <div className="space-y-2.5">
-                  <div className="h-3 rounded-full animate-pulse w-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
-                  <div className="h-3 rounded-full animate-pulse w-4/5" style={{ background: 'rgba(255,255,255,0.2)' }} />
-                </div>
-              )}
-
-              {checkQuestions && checkQuestions.length >= 2 && (
-                <div className="space-y-2.5">
-                  {checkQuestions.map((q, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                      <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5"
-                        style={{ background: 'rgba(255,255,255,0.25)', color: 'white' }}>
-                        {i === 0 ? 'Q1' : 'Q2'}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-bold mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                          {i === 0 ? 'RECALL' : 'APPLY'}
-                        </p>
-                        <p className="text-sm text-white leading-relaxed font-medium">{q}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Absent students — with late-arrival toggle */}
           {(absentCount > 0 || lateCount > 0) && (
-            <div className="card border-red-100 bg-red-50/40">
+            <div className="rounded-3xl p-4 border border-red-100 bg-red-50/40">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-7 h-7 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
                   <AlertTriangle size={14} className="text-red-500" />
@@ -899,8 +664,8 @@ export default function AttendancePage() {
                     <span className="w-7 h-7 bg-red-100 text-red-600 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0">
                       {s.name[0].toUpperCase()}
                     </span>
-                    <span className="text-sm font-semibold text-slate-800 flex-1 text-left">{s.name}</span>
-                    <span className="text-xs text-slate-400">Roll #{s.rollNumber}</span>
+                    <span className="text-sm font-semibold text-ink flex-1 text-left">{s.name}</span>
+                    <span className="text-xs text-ink-soft">Roll #{s.rollNumber}</span>
                     <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">→ Late</span>
                   </button>
                 ))}
@@ -911,27 +676,22 @@ export default function AttendancePage() {
                     <span className="w-7 h-7 bg-amber-100 text-amber-700 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0">
                       {s.name[0].toUpperCase()}
                     </span>
-                    <span className="text-sm font-semibold text-slate-800 flex-1 text-left">{s.name}</span>
-                    <span className="text-xs text-slate-400">Roll #{s.rollNumber}</span>
+                    <span className="text-sm font-semibold text-ink flex-1 text-left">{s.name}</span>
+                    <span className="text-xs text-ink-soft">Roll #{s.rollNumber}</span>
                     <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">Late</span>
                   </button>
                 ))}
               </div>
-              {engageData?.watchNote && (
-                <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 mt-2.5 leading-relaxed">
-                  📌 {engageData.watchNote}
-                </p>
-              )}
             </div>
           )}
 
           {/* Next sub-topic suggestion */}
           {topicSubTopics.length > 0 && nextIncompleteSubTopic && nextIncompleteSubTopic.id !== selectedSubTopicId && (
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
-              <p className="text-xs font-bold text-blue-700 mb-1">Next sub-topic</p>
-              <p className="text-sm font-semibold text-blue-900">{nextIncompleteSubTopic.name}</p>
+            <div className="bg-[#DCEBF8] border border-[#AACDEA] rounded-2xl px-4 py-3">
+              <p className="text-xs font-bold text-[#5B87AD] mb-1">Next sub-topic</p>
+              <p className="text-sm font-semibold text-[#1E3A55]">{nextIncompleteSubTopic.name}</p>
               <button type="button" onClick={() => setSelectedSubTopicId(nextIncompleteSubTopic.id)}
-                className="mt-2 text-xs font-bold text-blue-600 underline">
+                className="mt-2 text-xs font-bold text-[#5B87AD] underline">
                 Switch to this sub-topic
               </button>
             </div>
@@ -940,7 +700,7 @@ export default function AttendancePage() {
           {/* Mark as done (only visible for syllabus-linked topics) */}
           {markDoneVisible && (
             <button type="button" onClick={handleMarkDone} disabled={markingDone}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-emerald-600 text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-all disabled:opacity-60">
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-emerald-600 text-white font-bold text-sm active:scale-[0.98] transition-all disabled:opacity-60">
               <CheckCircle2 size={17} />
               {markingDone ? 'Saving…' : markDoneLabel}
             </button>
@@ -950,15 +710,15 @@ export default function AttendancePage() {
           {weekComplete !== null && (
             <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xl">🎉</span>
-                <p className="font-extrabold text-amber-900 text-lg">Week {weekComplete} complete!</p>
+                <Sparkles size={20} className="text-amber-500" />
+                <p className="font-display font-extrabold text-amber-900 text-lg">Week {weekComplete} complete!</p>
               </div>
               <p className="text-sm text-amber-800 mb-4 leading-relaxed">
                 All Week {weekComplete} topics are done. A good time to run an exam.
               </p>
               <button type="button"
                 onClick={() => router.push(`/classes/${classId}/marks?createTest=1`)}
-                className="w-full flex items-center justify-center gap-2 bg-amber-600 text-white font-extrabold py-3 rounded-2xl text-sm active:scale-[0.98] transition-transform shadow-sm">
+                className="w-full flex items-center justify-center gap-2 bg-amber-600 text-white font-extrabold py-3 rounded-2xl text-sm active:scale-[0.98] transition-transform">
                 <GraduationCap size={16} /> Create Exam for Week {weekComplete}
               </button>
             </div>
@@ -968,13 +728,11 @@ export default function AttendancePage() {
           <button type="button"
             onClick={() => {
               setManuallyReset(true)
-              setJustSaved(false)
               hasInitialized.current = false
               setWeekComplete(null)
-              setEngageData(null)
-              setCheckQuestions(null)
               setTopicText('')
               setSelectedTopicId('')
+              setSyncedFromTimetable(false)
               setSessionNote('')
               setLateEdits({})
               setShowFullAttendance(false)
@@ -992,11 +750,21 @@ export default function AttendancePage() {
                 inheritedFromMorning.current = false
               }
             }}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-100 text-slate-700 text-sm font-bold active:scale-95 transition-transform">
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-ink text-sm font-bold active:scale-95 transition-transform"
+            style={{ background: 'rgba(58,44,30,0.08)' }}>
             <Play size={13} fill="currentColor" /> Record Another Session
           </button>
         </div>
       )}
+
+      <ScanAttendanceModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        students={students}
+        className={cls?.name ?? ''}
+        date={today}
+        onApply={map => setStatusMap(prev => ({ ...prev, ...map }))}
+      />
     </div>
   )
 }

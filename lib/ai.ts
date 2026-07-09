@@ -1,6 +1,7 @@
 const API_KEY        = process.env.OPENROUTER_API_KEY        || ''
 const MODEL          = process.env.OPENROUTER_MODEL          || 'google/gemini-2.5-flash'
 const FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || 'meta-llama/llama-3.1-8b-instruct:free'
+const IMAGE_MODEL     = process.env.OPENROUTER_IMAGE_MODEL     || 'google/gemini-2.5-flash-image'
 
 type ContentPart =
   | { type: 'text';      text: string }
@@ -140,5 +141,49 @@ export async function callAI(messages: AIMessage[], options: AIOptions = {}): Pr
       await delay(2000)
       throw new Error(`[ai] Both models failed. Primary: ${primaryErr}. Fallback: ${fallbackErr}`)
     }
+  }
+}
+
+/**
+ * Generates an illustration via an OpenRouter image-capable model.
+ * Returns null on any failure (missing key, timeout, model declined) so callers
+ * can render text-only content rather than surfacing an error.
+ */
+export async function generateIllustration(
+  prompt: string,
+  options: { timeoutMs?: number } = {},
+): Promise<{ url: string } | null> {
+  if (!API_KEY) return null
+
+  const { timeoutMs = 30_000 } = options
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:  'POST',
+      headers: {
+        Authorization:  `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://eduteach.app',
+        'X-Title':      'EduTeach',
+      },
+      body: JSON.stringify({
+        model:      IMAGE_MODEL,
+        messages:   [{ role: 'user', content: prompt }],
+        modalities: ['image', 'text'],
+      }),
+      signal: controller.signal,
+    })
+    if (!response.ok) return null
+
+    const data = await response.json()
+    const url = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url
+    return typeof url === 'string' && url ? { url } : null
+  } catch (err) {
+    console.warn(`[ai] illustration generation failed: ${err}`)
+    return null
+  } finally {
+    clearTimeout(timer)
   }
 }

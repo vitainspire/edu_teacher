@@ -20,10 +20,10 @@ const DIFFICULTY_COLOR = {
 }
 
 const SECTION_META: Record<QuestionType, { label: string; sectionLetter: string; bg: string; border: string; badge: string }> = {
-  'mcq':           { label: 'Multiple Choice',    sectionLetter: 'A', bg: 'bg-blue-50',   border: 'border-blue-200',  badge: 'bg-blue-100 text-blue-700' },
-  'fill-in-blank': { label: 'Fill in the Blank',  sectionLetter: 'B', bg: 'bg-green-50',  border: 'border-green-200', badge: 'bg-green-100 text-green-700' },
-  'short-answer':  { label: 'Short Answer',        sectionLetter: 'C', bg: 'bg-amber-50',  border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700' },
-  'long-answer':   { label: 'Long Answer',          sectionLetter: 'D', bg: 'bg-purple-50', border: 'border-purple-200',badge: 'bg-purple-100 text-purple-700' },
+  'mcq':           { label: 'Multiple Choice',    sectionLetter: 'A', bg: 'bg-sticker-blue/20',   border: 'border-sticker-blue/40',  badge: 'bg-sticker-blue/30 text-sticker-blueDark' },
+  'fill-in-blank': { label: 'Fill in the Blank',  sectionLetter: 'B', bg: 'bg-sticker-green/20',  border: 'border-sticker-green/40', badge: 'bg-sticker-green/30 text-sticker-greenDark' },
+  'short-answer':  { label: 'Short Answer',        sectionLetter: 'C', bg: 'bg-sticker-gold/20',  border: 'border-sticker-gold/40', badge: 'bg-sticker-gold/30 text-sticker-goldDark' },
+  'long-answer':   { label: 'Long Answer',          sectionLetter: 'D', bg: 'bg-sticker-violet/20', border: 'border-sticker-violet/40', badge: 'bg-sticker-violet/30 text-sticker-violetDark' },
 }
 
 const TYPE_ORDER: QuestionType[] = ['mcq', 'fill-in-blank', 'short-answer', 'long-answer']
@@ -86,9 +86,9 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
   return (
     <div className="space-y-4">
       {/* Inputs */}
-      <div className="card space-y-4">
+      <div className="paper-card p-5 space-y-4">
         <div>
-          <label className="label">Topic *</label>
+          <label className="label" style={{ color: 'var(--ink-soft)' }}>Topic *</label>
           <input
             type="text"
             value={topic}
@@ -102,14 +102,14 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
         {/* Marks selector — only show if no initialMarks passed */}
         {!initialMarks && (
           <div>
-            <label className="label">Paper Size</label>
+            <label className="label" style={{ color: 'var(--ink-soft)' }}>Paper Size</label>
             <div className="flex gap-2">
               {MARKS_OPTIONS.map((m) => (
                 <button
                   key={m}
                   onClick={() => { setTotalMarks(m); setQuestions([]) }}
                   className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
-                    totalMarks === m ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700'
+                    totalMarks === m ? 'bg-ink text-white' : 'bg-ink/8 text-ink-soft'
                   }`}
                 >
                   {m}M
@@ -122,7 +122,7 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
         <button
           onClick={generate}
           disabled={!topic.trim() || loading}
-          className="btn-primary w-full"
+          className="paper-btn-primary w-full"
         >
           {loading ? (
             <span className="flex items-center gap-2">
@@ -144,8 +144,8 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
       {totalQ > 0 && (
         <div className="space-y-5">
           <div className="flex items-center justify-between px-1">
-            <p className="text-sm font-semibold text-gray-700">{totalQ} questions — {totalMarks} marks</p>
-            <button onClick={generate} className="btn-ghost text-sm py-1">
+            <p className="text-sm font-semibold text-ink">{totalQ} questions — {totalMarks} marks</p>
+            <button onClick={generate} className="flex items-center text-sm py-1 px-2 rounded-lg text-ink-soft font-semibold hover:bg-ink/10 transition-colors">
               <RefreshCw size={14} className="mr-1 inline" /> Regenerate
             </button>
           </div>
@@ -167,8 +167,8 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                     <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${meta.badge}`}>
                       {meta.sectionLetter}
                     </span>
-                    <span className="font-semibold text-gray-800 text-sm">{meta.label}</span>
-                    <span className="text-xs text-gray-500">
+                    <span className="font-semibold text-ink text-sm">{meta.label}</span>
+                    <span className="text-xs text-ink-soft">
                       {section.length} × {section[0].marks} mark{section[0].marks > 1 ? 's' : ''}
                     </span>
                   </div>
@@ -178,17 +178,17 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                 </div>
 
                 {/* Questions in this section */}
-                <div className="border-x border-b border-gray-200 rounded-b-2xl divide-y divide-gray-100">
+                <div className="border-x border-b border-ink/10 rounded-b-2xl divide-y divide-ink/10">
                   {section.map((q, i) => {
                     const globalIdx = offset + i
                     return (
                       <div key={globalIdx} className="p-4 space-y-3">
                         <div className="flex items-start gap-3">
-                          <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="w-6 h-6 rounded-full bg-ink/8 text-ink-soft text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                             {globalIdx + 1}
                           </span>
                           <div className="flex-1 space-y-2">
-                            <p className="text-sm text-gray-900 leading-relaxed">{q.text}</p>
+                            <p className="text-sm text-ink leading-relaxed">{q.text}</p>
 
                             {/* MCQ options */}
                             {type === 'mcq' && q.options && q.options.length > 0 && (
@@ -198,8 +198,8 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                                     key={oi}
                                     className={`text-xs px-3 py-1.5 rounded-lg border ${
                                       opt.startsWith(q.answer)
-                                        ? 'bg-green-50 border-green-300 text-green-800 font-semibold'
-                                        : 'bg-gray-50 border-gray-200 text-gray-700'
+                                        ? 'bg-sticker-green/25 border-sticker-green text-sticker-greenDark font-semibold'
+                                        : 'bg-ink/5 border-ink/10 text-ink-soft'
                                     }`}
                                   >
                                     {opt}
@@ -211,9 +211,9 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                             {/* Keywords for short answer */}
                             {type === 'short-answer' && q.keywords && q.keywords.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
-                                <span className="text-xs text-gray-400">Key terms:</span>
+                                <span className="text-xs text-ink-faint">Key terms:</span>
                                 {q.keywords.map((kw, ki) => (
-                                  <span key={ki} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                  <span key={ki} className="text-xs bg-sticker-gold/30 text-sticker-goldDark px-2 py-0.5 rounded-full">
                                     {kw}
                                   </span>
                                 ))}
@@ -222,7 +222,7 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
 
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant={DIFFICULTY_COLOR[q.difficulty]}>{q.difficulty}</Badge>
-                              <span className="text-xs text-gray-400">{q.marks} mark{q.marks > 1 ? 's' : ''}</span>
+                              <span className="text-xs text-ink-faint">{q.marks} mark{q.marks > 1 ? 's' : ''}</span>
                             </div>
                           </div>
                         </div>
@@ -230,8 +230,8 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                         {/* Fill-in-blank: answer always visible */}
                         {type === 'fill-in-blank' && q.answer && (
                           <div className="mt-1 flex items-center gap-2">
-                            <span className="text-xs text-gray-400">Answer:</span>
-                            <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-lg">
+                            <span className="text-xs text-ink-faint">Answer:</span>
+                            <span className="text-xs font-semibold text-sticker-greenDark bg-sticker-green/20 border border-sticker-green/40 px-2 py-0.5 rounded-lg">
                               {q.answer}
                             </span>
                           </div>
@@ -242,7 +242,7 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                           <div>
                             <button
                               onClick={() => toggleAnswer(globalIdx)}
-                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 mt-1"
+                              className="flex items-center gap-1 text-xs text-ink-soft hover:text-ink mt-1"
                             >
                               {showAnswer[globalIdx]
                                 ? <><ChevronUp size={12} /> Hide answer</>
@@ -250,7 +250,7 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                               }
                             </button>
                             {showAnswer[globalIdx] && (
-                              <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2 text-xs text-gray-700 leading-relaxed">
+                              <div className="mt-2 bg-ink/5 rounded-xl px-3 py-2 text-xs text-ink-soft leading-relaxed">
                                 {q.answer}
                               </div>
                             )}
@@ -261,7 +261,7 @@ export default function QuestionGenerator({ subject, grade, initialMarks }: Prop
                         <button
                           onClick={() => copyQuestion(q.text, globalIdx)}
                           className={`w-full py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                            copied === globalIdx ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                            copied === globalIdx ? 'bg-sticker-green/30 text-sticker-greenDark' : 'bg-ink/8 text-ink-soft'
                           }`}
                         >
                           {copied === globalIdx ? <CheckCircle size={13} /> : <Copy size={13} />}

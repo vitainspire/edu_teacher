@@ -12,15 +12,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!isLoading && !teacher) {
-      router.replace('/login')
+      router.replace('/teacher/login')
     }
   }, [teacher, isLoading, router])
 
   if (isLoading || !teacher) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-700 to-blue-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--ink)' }}>
         <div className="text-center">
-          <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-5">
+          <div className="w-16 h-16 bg-white/15 border border-white/25 rounded-3xl flex items-center justify-center mx-auto mb-5">
             <GraduationCap size={32} className="text-white" />
           </div>
           <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen md:flex" style={{ background: '#f1f5f9' }}>
+    <div className="min-h-screen md:flex relative" style={{ background: 'var(--paper-bg)' }}>
       <SideNav />
       <div className="flex-1 min-w-0 page-container">
         {children}

@@ -3,6 +3,8 @@ import { createServerComponentClient } from "@/lib/supabase-server";
 import { gradeMcq, gradeFib, gradeShortAnswer } from "@/lib/graders";
 import type { AiQuestion } from "@/lib/types";
 import { apiLog, getClientIp } from "@/lib/logger";
+import { getConsistentLongAnswerGrade } from "@/lib/grading-cache";
+import { assessPaperConfidence } from "@/lib/grade-review";
 
 export const maxDuration = 60;
 
@@ -220,7 +222,7 @@ export async function POST(request: Request) {
     (result.longAnswerGrades ?? []).map(g => [g.questionIndex, g])
   );
 
-  const breakdown = safeQuestions.map((q, i) => {
+  const breakdown = await Promise.all(safeQuestions.map(async (q, i) => {
     const scanned = answerMap.get(i) ?? '';
     const type    = q.type ?? 'long-answer';
     const max     = q.marks ?? 0;
@@ -246,20 +248,29 @@ export async function POST(request: Request) {
         errorType = marksAwarded === 0 ? 'conceptual' : 'procedural';
       }
     } else {
-      // long-answer — use LLM grade + LLM error classification
+      // long-answer — use LLM grade + LLM error classification, memoized so a
+      // re-submitted scan of the same paper can never disagree with itself.
       const llmGrade = longGradeMap.get(i);
-      marksAwarded = llmGrade ? Math.max(0, Math.min(llmGrade.marksAwarded ?? 0, max)) : 0;
-      feedback     = llmGrade?.feedback ?? (scanned ? 'Graded by AI' : 'No answer written');
-      errorType    = marksAwarded < max ? (llmGrade?.errorType ?? null) : null;
+      const graded = await getConsistentLongAnswerGrade(q.text, q.answer, scanned, max, () => ({
+        marksAwarded: llmGrade ? Math.max(0, Math.min(llmGrade.marksAwarded ?? 0, max)) : 0,
+        feedback: llmGrade?.feedback ?? (scanned ? 'Graded by AI' : 'No answer written'),
+        errorType: llmGrade?.errorType ?? null,
+      }));
+      marksAwarded = graded.marksAwarded;
+      feedback     = graded.feedback;
+      errorType    = marksAwarded < max ? (graded.errorType ?? null) : null;
     }
 
     return { question: i + 1, awarded: marksAwarded, max, note: feedback, errorType };
-  });
+  }));
 
   const score = Math.min(
     breakdown.reduce((s, b) => s + b.awarded, 0),
     totalMarks,
   );
+
+  const extractedAnswers = safeQuestions.map((_, i) => answerMap.get(i) ?? '');
+  const { needsReview, reviewReason } = assessPaperConfidence(breakdown, extractedAnswers);
 
   if (isPreSelected) {
     apiLog({ route: 'grade-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
@@ -270,6 +281,8 @@ export async function POST(request: Request) {
       confidence: 'high',
       breakdown,
       feedback: result.generalFeedback ?? null,
+      needsReview,
+      reviewReason,
     });
   }
 
@@ -282,6 +295,8 @@ export async function POST(request: Request) {
     score,
     breakdown,
     feedback: result.generalFeedback ?? null,
+    needsReview,
+    reviewReason,
   });
 }
 

@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useAdmin } from '@/lib/admin-context'
 import {
-  ArrowLeft, Loader2, Send, X, Check, Edit2, Trash2,
-  Plus, Coffee, UtensilsCrossed, AlertCircle, ExternalLink, Copy, CalendarCheck
+  Loader2, Send, X, Check, Edit2, Trash2,
+  Plus, Coffee, UtensilsCrossed, AlertCircle, Copy, CalendarCheck, UserPlus
 } from 'lucide-react'
 import Link from 'next/link'
+import PageHeader from '@/components/theme/PageHeader'
 import type { Class, SchoolTimetablePeriod, ScheduleSlot, SchoolSchedule } from '@/lib/types'
 
 const DAYS      = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -14,10 +15,12 @@ const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 interface ClassAssignment { teacherId: string; classId: string; subject?: string }
 interface TeacherInfo     { id: string; name: string }
+interface GradeSubjectLite { subject: string; category: 'core' | 'special' }
+
+const OTHER_SUBJECT = '__other__'
 
 export default function ClassTimetablePage() {
   const params  = useParams()
-  const router  = useRouter()
   const classId = params.classId as string
   const { school } = useAdmin()
 
@@ -26,15 +29,28 @@ export default function ClassTimetablePage() {
   const [classInfo,   setClassInfo]   = useState<Class | null>(null)
   const [assignments, setAssignments] = useState<ClassAssignment[]>([])
   const [teachers,    setTeachers]    = useState<TeacherInfo[]>([])
+  const [gradeSubjects, setGradeSubjects] = useState<GradeSubjectLite[]>([])
   const [loading,     setLoading]     = useState(true)
 
   // Modal state
-  const [modal,            setModal]            = useState<{ slot: ScheduleSlot; day: number } | null>(null)
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
-  const [selectedLabel,    setSelectedLabel]    = useState<string>('')
-  const [applyToAllDays,   setApplyToAllDays]   = useState(false)
-  const [saving,           setSaving]           = useState(false)
-  const [conflictErrors,   setConflictErrors]   = useState<string[]>([])
+  const [modal,                setModal]                = useState<{ slot: ScheduleSlot; day: number } | null>(null)
+  const [selectedAssignmentIdx, setSelectedAssignmentIdx] = useState(-1)
+  const [applyToAllDays,       setApplyToAllDays]       = useState(false)
+  const [saving,               setSaving]               = useState(false)
+  const [conflictErrors,       setConflictErrors]       = useState<string[]>([])
+
+  // Inline "add subject & teacher" form, shown inside the same modal.
+  // Subject choice is a closed dropdown sourced from this grade's official
+  // subject lineup (Classes → grade → Subjects) — plus an "Other" custom
+  // option — so a manual entry here can't silently drift from the exact
+  // subject name the whole-school generator expects.
+  const [newTeacherId,     setNewTeacherId]     = useState('')
+  const [subjectChoice,    setSubjectChoice]    = useState('')
+  const [customSubject,    setCustomSubject]    = useState('')
+  const [addingAssignment, setAddingAssignment] = useState(false)
+  const [addError,         setAddError]         = useState<string | null>(null)
+  const isOtherSubject = subjectChoice === OTHER_SUBJECT
+  const newSubject = isOtherSubject ? customSubject.trim() : subjectChoice
 
   // Action states
   const [deletingId,  setDeletingId]  = useState<string | null>(null)
@@ -61,7 +77,20 @@ export default function ClassTimetablePage() {
 
   useEffect(() => { load() }, [load])
 
+  // The grade's official subject lineup (Classes → grade → Subjects) drives
+  // the dropdown below — once classInfo resolves, we know which grade to ask for.
+  useEffect(() => {
+    if (!school || !classInfo?.grade) return
+    fetch(`/api/admin/schools/${school.id}/grade-subjects?grade=${encodeURIComponent(classInfo.grade)}`)
+      .then(r => r.json())
+      .then(d => setGradeSubjects((d.subjects ?? []).map((s: GradeSubjectLite) => ({ subject: s.subject, category: s.category }))))
+      .catch(() => setGradeSubjects([]))
+  }, [school, classInfo?.grade])
+
   const teacherName = (tid: string) => teachers.find(t => t.id === tid)?.name ?? '—'
+
+  // Subjects this class hasn't already been assigned a teacher for.
+  const availableGradeSubjects = gradeSubjects.filter(gs => !assignments.some(a => a.subject === gs.subject))
 
   function periodAt(slot: ScheduleSlot, day: number) {
     return periods.find(p => p.dayOfWeek === day && p.periodNumber === slot.periodNumber)
@@ -69,17 +98,56 @@ export default function ClassTimetablePage() {
 
   function openModal(slot: ScheduleSlot, day: number, forAllDays = false) {
     const existing = periodAt(slot, day)
-    setSelectedTeacherId(existing?.teacherId ?? '')
-    setSelectedLabel(existing?.label ?? '')
+    if (existing) {
+      const idx = assignments.findIndex(a => a.teacherId === existing.teacherId && a.subject === existing.label)
+      setSelectedAssignmentIdx(idx >= 0 ? idx : -1)
+    } else {
+      setSelectedAssignmentIdx(-1)
+    }
     setApplyToAllDays(forAllDays)
+    setNewTeacherId('')
+    setSubjectChoice('')
+    setCustomSubject('')
+    setAddError(null)
     setModal({ slot, day })
   }
 
+  async function addAssignment() {
+    if (!school || !newTeacherId || !newSubject) return
+    setAddingAssignment(true)
+    setAddError(null)
+    try {
+      const subject = newSubject
+      const res = await fetch(`/api/admin/schools/${school.id}/classes/${classId}/assign-teacher`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId: newTeacherId, subject }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setAddError(body.error ?? 'Could not add subject')
+        return
+      }
+      const freshRes = await fetch(`/api/admin/schools/${school.id}/classes/${classId}/assign-teacher`)
+      const freshData = await freshRes.json()
+      const updated: ClassAssignment[] = freshData.assignments ?? []
+      setAssignments(updated)
+      const idx = updated.findIndex(a => a.teacherId === newTeacherId && a.subject === subject)
+      setSelectedAssignmentIdx(idx >= 0 ? idx : updated.length - 1)
+      setNewTeacherId('')
+      setSubjectChoice('')
+      setCustomSubject('')
+    } finally {
+      setAddingAssignment(false)
+    }
+  }
+
   async function savePeriod() {
-    if (!school || !modal || !selectedTeacherId) return
+    if (!school || !modal || selectedAssignmentIdx < 0) return
     setSaving(true)
     setConflictErrors([])
     const { slot } = modal
+    const a = assignments[selectedAssignmentIdx]
     const daysToSave = applyToAllDays ? [1, 2, 3, 4, 5, 6] : [modal.day]
 
     const results = await Promise.all(daysToSave.map(async day => {
@@ -94,8 +162,8 @@ export default function ClassTimetablePage() {
           startTime: slot.startTime,
           endTime: slot.endTime,
           classId,
-          teacherId: selectedTeacherId,
-          label: selectedLabel || null,
+          teacherId: a.teacherId,
+          label: a.subject ?? null,
         }),
       })
       if (!res.ok) {
@@ -171,14 +239,14 @@ export default function ClassTimetablePage() {
 
   if (loading) return (
     <div className="flex items-center justify-center py-32">
-      <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+      <Loader2 className="w-6 h-6 animate-spin text-ink" />
     </div>
   )
 
   if (!schedule) return (
     <div className="p-6 max-w-xl mx-auto text-center py-20">
-      <p className="text-gray-500 mb-3">No school schedule template set up yet.</p>
-      <Link href="/admin/timetable" className="text-indigo-600 underline text-sm">Set up schedule →</Link>
+      <p className="text-ink-soft mb-3">No school schedule template set up yet.</p>
+      <Link href="/admin/timetable" className="text-ink font-bold underline text-sm">Set up schedule →</Link>
     </div>
   )
 
@@ -187,344 +255,311 @@ export default function ClassTimetablePage() {
   const totalSlots    = slots.filter(s => s.type === 'period').length * 6
 
   return (
-    <div className="p-6 max-w-full mx-auto">
+    <div className="pb-10">
 
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3 mb-5">
-        <button
-          onClick={() => router.push('/admin/timetable')}
-          className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-900 truncate">
-            {classInfo?.name ?? 'Class'} — Timetable
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Grade {classInfo?.grade} · Section {classInfo?.section} · {assignedCount} of {totalSlots} slots filled
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {publishMsg && (
-            <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
-              {publishMsg}
-            </span>
-          )}
-          <button
-            onClick={publish}
-            disabled={publishing || periods.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-60"
-            style={{ background: '#059669' }}
-          >
-            {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Publish
-          </button>
-        </div>
-      </div>
-
-      {/* ── No subjects warning ── */}
-      {assignments.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">Step required: Assign subjects first</p>
-            <p className="text-xs text-amber-600 mt-1 leading-relaxed">
-              Before filling the timetable, go to <strong>Classes → {classInfo?.name} → Assign</strong> and add
-              subject–teacher pairs (e.g. Maths → Mr. Raj, Science → Ms. Priya). Once done, come back here — the
-              timetable slots will show a picker with those subject cards.
-            </p>
+      <PageHeader
+        title={`${classInfo?.name ?? 'Class'} — Timetable`}
+        subtitle={`Grade ${classInfo?.grade} · Section ${classInfo?.section} · ${assignedCount} of ${totalSlots} slots filled`}
+        action={
+          <div className="flex items-center gap-2">
+            {publishMsg && (
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full whitespace-nowrap">
+                {publishMsg}
+              </span>
+            )}
+            <button
+              onClick={publish}
+              disabled={publishing || periods.length === 0}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-sm font-bold active:scale-95 transition-transform disabled:opacity-60 whitespace-nowrap"
+              style={{ background: '#059669' }}
+            >
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Publish
+            </button>
           </div>
-          <Link
-            href={`/admin/classes/${classId}/assign`}
-            className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors px-3 py-1.5 rounded-lg flex-shrink-0 whitespace-nowrap"
-          >
-            Go to Assign <ExternalLink className="w-3 h-3" />
-          </Link>
-        </div>
-      )}
+        }
+      />
 
-      {/* ── Subjects legend ── */}
-      {assignments.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Subjects in this class</p>
-            <p className="text-xs text-gray-400">Click a period number to fill all days at once</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {assignments.map((a, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
-                style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length].bg, color: SUBJECT_COLORS[i % SUBJECT_COLORS.length].text }}
-              >
-                <span className="font-semibold">{a.subject ?? 'Subject'}</span>
-                <span className="opacity-60">·</span>
-                <span>{teacherName(a.teacherId)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="px-5 md:px-8 space-y-4 relative z-10">
 
-      {/* ── Timetable grid ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse" style={{ minWidth: 720 }}>
-            <thead>
-              {/* Row 1: Day names */}
-              <tr>
-                <th className="w-28 px-4 py-3 text-left border-b border-r border-gray-100" style={{ background: '#f8fafc' }}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Period</p>
-                </th>
-                {DAYS.map((day, i) => (
+        {/* ── Subjects legend ── */}
+        {assignments.length > 0 && (
+          <div className="paper-card p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold text-ink-soft uppercase tracking-widest">Subjects in this class</p>
+              <p className="text-xs text-ink-faint">Click a period number to fill all days at once</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {assignments.map((a, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold"
+                  style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length].bg, color: SUBJECT_COLORS[i % SUBJECT_COLORS.length].text }}
+                >
+                  <span className="font-bold">{a.subject ?? 'Subject'}</span>
+                  <span className="opacity-50">·</span>
+                  <span className="opacity-80">{teacherName(a.teacherId)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Timetable grid ── */}
+        <div className="paper-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse" style={{ minWidth: 720 }}>
+              <thead>
+                {/* Row 1: Day names */}
+                <tr>
                   <th
-                    key={day}
-                    className="px-3 py-3 text-center border-b border-r border-gray-100 last:border-r-0"
-                    style={{ background: '#f8fafc' }}
+                    className="w-28 px-4 py-3 text-left border-b border-r border-[rgba(58,44,30,0.12)]"
+                    style={{ background: 'rgba(58,44,30,0.04)' }}
                   >
-                    <p className="text-xs font-bold text-gray-700">{DAY_SHORT[i]}</p>
-                    <p className="text-[10px] text-gray-400 font-normal">{day}</p>
+                    <p className="text-xs font-bold text-ink-soft uppercase tracking-widest">Period</p>
                   </th>
-                ))}
-              </tr>
+                  {DAYS.map((day, i) => (
+                    <th
+                      key={day}
+                      className="px-3 py-3 text-center border-b border-r border-[rgba(58,44,30,0.12)] last:border-r-0"
+                      style={{ background: 'rgba(58,44,30,0.04)' }}
+                    >
+                      <p className="text-xs font-bold text-ink">{DAY_SHORT[i]}</p>
+                      <p className="text-[10px] text-ink-faint font-medium">{day}</p>
+                    </th>
+                  ))}
+                </tr>
 
-              {/* Row 2: Copy-day-to-all action row */}
-              <tr style={{ background: '#faf5ff' }}>
-                <td className="px-4 py-2 border-b border-r border-purple-100">
-                  <p className="text-[10px] text-purple-400 font-semibold uppercase tracking-wide">Copy day →</p>
-                  <p className="text-[9px] text-gray-400 leading-tight mt-0.5">
-                    Fills all other days<br />with that day&apos;s schedule
-                  </p>
-                </td>
-                {DAYS.map((day, i) => {
-                  const dayNum   = i + 1
-                  const dayFilled = periods.filter(p => p.dayOfWeek === dayNum).length
-                  const isCopying = copyingDay === dayNum
+                {/* Row 2: Copy-day-to-all action row */}
+                <tr style={{ background: 'rgba(199,183,232,0.14)' }}>
+                  <td className="px-4 py-2 border-b border-r border-[rgba(128,105,176,0.2)]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8069B0' }}>Copy day →</p>
+                    <p className="text-[9px] text-ink-faint leading-tight mt-0.5">
+                      Fills all other days<br />with that day&apos;s schedule
+                    </p>
+                  </td>
+                  {DAYS.map((day, i) => {
+                    const dayNum   = i + 1
+                    const dayFilled = periods.filter(p => p.dayOfWeek === dayNum).length
+                    const isCopying = copyingDay === dayNum
+                    return (
+                      <td key={day} className="px-2 py-2 text-center border-b border-r border-[rgba(128,105,176,0.2)] last:border-r-0">
+                        {dayFilled > 0 ? (
+                          <button
+                            onClick={() => copyDayToAll(dayNum)}
+                            disabled={!!copyingDay}
+                            title={`Copy all of ${day}'s schedule to the other 5 days`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-40 hover:opacity-80"
+                            style={{ background: 'rgba(199,183,232,0.45)', color: '#31215C' }}
+                          >
+                            {isCopying
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Copy className="w-3 h-3" />}
+                            Copy {DAY_SHORT[i]}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-ink-faint opacity-60">—</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </thead>
+
+              <tbody>
+                {slots.map((slot, idx) => {
+
+                  // Break row
+                  if (slot.type === 'break') {
+                    return (
+                      <tr key={idx} style={{ background: 'rgba(234,201,104,0.16)' }}>
+                        <td className="px-4 py-2.5 border-b border-r border-[rgba(173,138,44,0.25)]">
+                          <div className="flex items-center gap-2">
+                            {slot.label.toLowerCase().includes('lunch')
+                              ? <UtensilsCrossed className="w-3.5 h-3.5" style={{ color: '#AD8A2C' }} />
+                              : <Coffee className="w-3.5 h-3.5" style={{ color: '#AD8A2C' }} />}
+                            <div>
+                              <p className="text-xs font-bold" style={{ color: '#4A3809' }}>{slot.label}</p>
+                              <p className="text-[10px]" style={{ color: '#AD8A2C' }}>{slot.startTime}–{slot.endTime}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td colSpan={6} className="border-b border-[rgba(173,138,44,0.25)] text-center">
+                          <p className="text-xs italic py-2.5" style={{ color: '#AD8A2C', opacity: 0.75 }}>{slot.startTime} – {slot.endTime}</p>
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  // Period row
                   return (
-                    <td key={day} className="px-2 py-2 text-center border-b border-r border-purple-100 last:border-r-0">
-                      {dayFilled > 0 ? (
-                        <button
-                          onClick={() => copyDayToAll(dayNum)}
-                          disabled={!!copyingDay}
-                          title={`Copy all of ${day}'s schedule to the other 5 days`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-colors disabled:opacity-40 hover:opacity-80"
-                          style={{ background: '#ede9fe', color: '#6d28d9' }}
-                        >
-                          {isCopying
-                            ? <Loader2 className="w-3 h-3 animate-spin" />
-                            : <Copy className="w-3 h-3" />}
-                          Copy {DAY_SHORT[i]}
-                        </button>
-                      ) : (
-                        <span className="text-[10px] text-gray-300">—</span>
-                      )}
-                    </td>
-                  )
-                })}
-              </tr>
-            </thead>
+                    <tr key={idx} className="hover:bg-black/[0.02] transition-colors">
 
-            <tbody>
-              {slots.map((slot, idx) => {
-
-                // Break row
-                if (slot.type === 'break') {
-                  return (
-                    <tr key={idx} style={{ background: '#fffbeb' }}>
-                      <td className="px-4 py-2.5 border-b border-r border-amber-100">
+                      {/* Period label — click to fill ALL days */}
+                      <td
+                        className="px-4 py-3 border-b border-r border-[rgba(58,44,30,0.12)] align-middle group/period cursor-pointer"
+                        style={{ background: 'rgba(58,44,30,0.04)' }}
+                        onClick={() => openModal(slot, 1, true)}
+                        title="Click to assign this period across all days at once"
+                      >
                         <div className="flex items-center gap-2">
-                          {slot.label.toLowerCase().includes('lunch')
-                            ? <UtensilsCrossed className="w-3.5 h-3.5 text-amber-500" />
-                            : <Coffee className="w-3.5 h-3.5 text-amber-400" />}
+                          <span
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 transition-colors group-hover/period:bg-[rgba(58,44,30,0.16)]"
+                            style={{ background: 'rgba(58,44,30,0.08)', color: 'var(--ink)' }}
+                          >
+                            {slot.periodNumber}
+                          </span>
                           <div>
-                            <p className="text-xs font-semibold text-amber-700">{slot.label}</p>
-                            <p className="text-[10px] text-amber-400">{slot.startTime}–{slot.endTime}</p>
+                            <p className="text-[10px] font-bold text-ink-soft">{slot.startTime}</p>
+                            <p className="text-[10px] text-ink-faint">{slot.endTime}</p>
                           </div>
                         </div>
+                        <p className="text-[9px] text-ink-soft mt-1 opacity-0 group-hover/period:opacity-100 transition-opacity flex items-center gap-0.5">
+                          <CalendarCheck className="w-2.5 h-2.5" /> Fill all days
+                        </p>
                       </td>
-                      <td colSpan={6} className="border-b border-amber-100 text-center">
-                        <p className="text-xs text-amber-300 italic py-2.5">{slot.startTime} – {slot.endTime}</p>
-                      </td>
+
+                      {/* Day cells */}
+                      {DAYS.map((_, di) => {
+                        const day       = di + 1
+                        const period    = periodAt(slot, day)
+                        const isDeleting = period && deletingId === period.id
+                        const aIdx      = period
+                          ? assignments.findIndex(a => a.teacherId === period.teacherId && a.subject === period.label)
+                          : -1
+                        const aColor    = aIdx >= 0 ? SUBJECT_COLORS[aIdx % SUBJECT_COLORS.length] : null
+
+                        return (
+                          <td
+                            key={day}
+                            className="px-2 py-2 border-b border-r border-[rgba(58,44,30,0.12)] last:border-r-0 align-middle"
+                            style={{ minWidth: 115 }}
+                          >
+                            {period ? (
+                              <div
+                                className="rounded-xl p-2 relative group/cell"
+                                style={{
+                                  background: aColor?.bg ?? 'rgba(16,185,129,0.12)',
+                                  border: `1.5px solid ${aColor?.border ?? 'rgba(16,185,129,0.35)'}`,
+                                }}
+                              >
+                                <p className="text-xs font-bold leading-tight truncate" style={{ color: aColor?.text ?? '#065f46' }}>
+                                  {period.label ?? '—'}
+                                </p>
+                                <p className="text-[10px] mt-0.5 leading-tight truncate opacity-70" style={{ color: aColor?.text ?? '#065f46' }}>
+                                  {teacherName(period.teacherId ?? '')}
+                                </p>
+                                {/* Hover overlay */}
+                                <div className="absolute inset-0 rounded-xl bg-white/95 flex items-center justify-center gap-1.5 opacity-0 group-hover/cell:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => openModal(slot, day)}
+                                    className="p-1.5 rounded-lg text-ink hover:bg-[rgba(58,44,30,0.08)]"
+                                    title="Edit"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => clearPeriod(slot, day)}
+                                    disabled={!!isDeleting}
+                                    className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                                    title="Clear"
+                                  >
+                                    {isDeleting
+                                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      : <Trash2 className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => openModal(slot, day)}
+                                className="w-full h-12 rounded-xl border-2 border-dashed border-[rgba(58,44,30,0.18)] text-ink-faint
+                                  hover:border-[rgba(58,44,30,0.35)] hover:text-ink-soft hover:bg-[rgba(58,44,30,0.05)] transition-all
+                                  flex items-center justify-center"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        )
+                      })}
                     </tr>
                   )
-                }
-
-                // Period row
-                return (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-
-                    {/* Period label — click to fill ALL days */}
-                    <td
-                      className="px-4 py-3 border-b border-r border-gray-100 align-middle group/period cursor-pointer"
-                      style={{ background: '#f8fafc' }}
-                      onClick={() => openModal(slot, 1, true)}
-                      title="Click to assign this period across all days at once"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 transition-colors group-hover/period:bg-indigo-200"
-                          style={{ background: '#ede9fe', color: '#6d28d9' }}
-                        >
-                          {slot.periodNumber}
-                        </span>
-                        <div>
-                          <p className="text-[10px] font-medium text-gray-500">{slot.startTime}</p>
-                          <p className="text-[10px] text-gray-400">{slot.endTime}</p>
-                        </div>
-                      </div>
-                      <p className="text-[9px] text-indigo-400 mt-1 opacity-0 group-hover/period:opacity-100 transition-opacity flex items-center gap-0.5">
-                        <CalendarCheck className="w-2.5 h-2.5" /> Fill all days
-                      </p>
-                    </td>
-
-                    {/* Day cells */}
-                    {DAYS.map((_, di) => {
-                      const day       = di + 1
-                      const period    = periodAt(slot, day)
-                      const isDeleting = period && deletingId === period.id
-                      const aIdx      = period
-                        ? assignments.findIndex(a => a.teacherId === period.teacherId && a.subject === period.label)
-                        : -1
-                      const aColor    = aIdx >= 0 ? SUBJECT_COLORS[aIdx % SUBJECT_COLORS.length] : null
-
-                      return (
-                        <td
-                          key={day}
-                          className="px-2 py-2 border-b border-r border-gray-100 last:border-r-0 align-middle"
-                          style={{ minWidth: 115 }}
-                        >
-                          {period ? (
-                            <div
-                              className="rounded-xl p-2 relative group/cell"
-                              style={{
-                                background: aColor?.bg ?? '#f0fdf4',
-                                border: `1px solid ${aColor?.border ?? '#bbf7d0'}`,
-                              }}
-                            >
-                              <p className="text-xs font-semibold leading-tight truncate" style={{ color: aColor?.text ?? '#065f46' }}>
-                                {period.label ?? '—'}
-                              </p>
-                              <p className="text-[10px] mt-0.5 leading-tight truncate opacity-70" style={{ color: aColor?.text ?? '#065f46' }}>
-                                {teacherName(period.teacherId ?? '')}
-                              </p>
-                              {/* Hover overlay */}
-                              <div className="absolute inset-0 rounded-xl bg-white/90 flex items-center justify-center gap-1.5 opacity-0 group-hover/cell:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => openModal(slot, day)}
-                                  className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => clearPeriod(slot, day)}
-                                  disabled={!!isDeleting}
-                                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-50"
-                                  title="Clear"
-                                >
-                                  {isDeleting
-                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    : <Trash2 className="w-3.5 h-3.5" />}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => openModal(slot, day)}
-                              className="w-full h-12 rounded-xl border-2 border-dashed border-gray-200 text-gray-300
-                                hover:border-indigo-300 hover:text-indigo-400 hover:bg-indigo-50 transition-all
-                                flex items-center justify-center"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {/* ── Assignment modal ── */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6" style={{ border: '1.5px solid rgba(58,44,30,0.16)' }}>
 
             <div className="flex items-start justify-between mb-1">
               <div>
-                <h2 className="text-base font-bold text-gray-900">{modal.slot.label}</h2>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <h2 className="text-base font-display font-bold text-ink">{modal.slot.label}</h2>
+                <p className="text-xs text-ink-faint mt-0.5">
                   {modal.slot.startTime} – {modal.slot.endTime} · {classInfo?.name}
                 </p>
               </div>
-              <button onClick={() => { setModal(null); setConflictErrors([]) }} className="text-gray-300 hover:text-gray-500">
+              <button onClick={() => { setModal(null); setConflictErrors([]) }} className="text-ink-faint hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Apply to all days toggle */}
-            <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-4 mt-3">
+            <div
+              className="flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 mt-3"
+              style={{ background: 'rgba(58,44,30,0.05)', border: '1.5px solid rgba(58,44,30,0.12)' }}
+            >
               <button
                 onClick={() => setApplyToAllDays(v => !v)}
                 className="relative w-10 h-5 rounded-full flex-shrink-0 transition-colors"
-                style={{ background: applyToAllDays ? '#4338ca' : '#cbd5e1' }}
+                style={{ background: applyToAllDays ? 'var(--ink)' : 'rgba(58,44,30,0.18)' }}
               >
                 <span
-                  className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"
+                  className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all"
                   style={{ left: applyToAllDays ? '22px' : '2px' }}
                 />
               </button>
               <div>
-                <p className="text-xs font-semibold text-indigo-800">Apply to all days (Mon – Sat)</p>
-                <p className="text-[10px] text-indigo-400 mt-0.5">
+                <p className="text-xs font-bold text-ink">Apply to all days (Mon – Sat)</p>
+                <p className="text-[10px] text-ink-soft mt-0.5">
                   {applyToAllDays ? 'Will fill all 6 days for this period' : 'Will fill only ' + DAYS[modal.day - 1]}
                 </p>
               </div>
             </div>
 
-            <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
-              Subject Label <span className="text-gray-400 normal-case font-normal">(optional)</span>
+            <label className="block text-xs font-bold text-ink-soft mb-2 uppercase tracking-widest">
+              Select Subject &amp; Teacher
             </label>
-            <input
-              type="text"
-              value={selectedLabel}
-              onChange={e => setSelectedLabel(e.target.value)}
-              placeholder="e.g. Mathematics, English, Science…"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-4"
-            />
-
-            <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
-              Select Teacher
-            </label>
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
-              {teachers.map((t, i) => {
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+              {assignments.map((a, i) => {
                 const color    = SUBJECT_COLORS[i % SUBJECT_COLORS.length]
-                const selected = selectedTeacherId === t.id
+                const selected = selectedAssignmentIdx === i
                 return (
                   <button
-                    key={t.id}
-                    onClick={() => { setSelectedTeacherId(t.id); setConflictErrors([]) }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all"
+                    key={i}
+                    onClick={() => { setSelectedAssignmentIdx(i); setConflictErrors([]) }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all"
                     style={{
-                      borderColor: selected ? color.text : '#e5e7eb',
+                      borderColor: selected ? color.text : 'rgba(58,44,30,0.14)',
                       background:  selected ? color.bg   : 'white',
                     }}
                   >
                     <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: selected ? color.text : '#f1f5f9' }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: selected ? color.text : 'rgba(58,44,30,0.06)' }}
                     >
-                      <span className="text-xs font-bold" style={{ color: selected ? 'white' : '#64748b' }}>
-                        {t.name[0]?.toUpperCase() ?? 'T'}
+                      <span className="text-xs font-bold" style={{ color: selected ? 'white' : 'var(--ink-soft)' }}>
+                        {(a.subject ?? 'S')[0].toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{t.name}</p>
+                      <p className="text-sm font-bold text-ink truncate">{a.subject ?? 'Unnamed Subject'}</p>
+                      <p className="text-xs text-ink-faint truncate">{teacherName(a.teacherId)}</p>
                     </div>
                     {selected && <Check className="w-4 h-4 flex-shrink-0" style={{ color: color.text }} />}
                   </button>
@@ -532,9 +567,68 @@ export default function ClassTimetablePage() {
               })}
             </div>
 
+            {/* Add a new subject & teacher right here — no need to visit Classes → Assign first */}
+            <div
+              className="rounded-2xl p-3.5 mt-3"
+              style={{ background: 'rgba(58,44,30,0.04)', border: '1.5px dashed rgba(58,44,30,0.18)' }}
+            >
+              <p className="flex items-center gap-1.5 text-xs font-bold text-ink-soft mb-2.5">
+                <UserPlus className="w-3.5 h-3.5" /> Add a subject &amp; teacher
+              </p>
+              <div className="flex flex-col gap-2">
+                <select
+                  value={newTeacherId}
+                  onChange={e => setNewTeacherId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-[rgba(58,44,30,0.16)] text-sm text-ink focus:outline-none bg-white"
+                >
+                  <option value="">Select teacher…</option>
+                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <select
+                  value={subjectChoice}
+                  onChange={e => setSubjectChoice(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-[rgba(58,44,30,0.16)] text-sm text-ink focus:outline-none bg-white"
+                >
+                  <option value="">Select subject…</option>
+                  {availableGradeSubjects.map(gs => (
+                    <option key={gs.subject} value={gs.subject}>
+                      {gs.subject} ({gs.category === 'special' ? 'Special' : 'Core'})
+                    </option>
+                  ))}
+                  <option value={OTHER_SUBJECT}>Other (custom name)…</option>
+                </select>
+                <div className="flex gap-2">
+                  {isOtherSubject && (
+                    <input
+                      value={customSubject}
+                      onChange={e => setCustomSubject(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void addAssignment() }}
+                      placeholder="Custom subject name"
+                      className="flex-1 px-3 py-2.5 rounded-xl border-[1.5px] border-[rgba(58,44,30,0.16)] text-sm text-ink focus:outline-none bg-white"
+                      autoFocus
+                    />
+                  )}
+                  <button
+                    onClick={addAssignment}
+                    disabled={addingAssignment || !newTeacherId || !newSubject}
+                    className={`px-4 rounded-xl text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center ${isOtherSubject ? '' : 'flex-1'}`}
+                    style={{ background: 'var(--ink)' }}
+                  >
+                    {addingAssignment ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                  </button>
+                </div>
+                {availableGradeSubjects.length === 0 && gradeSubjects.length === 0 && (
+                  <p className="text-[11px] text-ink-faint">
+                    No subjects set up for Grade {classInfo?.grade} yet — add them under Classes → Grade {classInfo?.grade} → Subjects, or use &quot;Other&quot; here for now.
+                  </p>
+                )}
+              </div>
+              {addError && <p className="text-xs text-red-600 mt-2">{addError}</p>}
+            </div>
+
             {/* Conflict errors */}
             {conflictErrors.length > 0 && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-1.5">
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 space-y-1.5">
                 <div className="flex items-center gap-2 mb-1">
                   <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                   <p className="text-sm font-bold text-red-700">
@@ -550,15 +644,14 @@ export default function ClassTimetablePage() {
             <div className="flex gap-3 mt-5">
               <button
                 onClick={() => { setModal(null); setConflictErrors([]) }}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600"
+                className="flex-1 py-2.5 rounded-2xl border border-[rgba(58,44,30,0.15)] text-sm font-bold text-ink-soft"
               >
                 Cancel
               </button>
               <button
                 onClick={savePeriod}
-                disabled={saving || !selectedTeacherId}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-                style={{ background: '#4338ca' }}
+                disabled={saving || selectedAssignmentIdx < 0}
+                className="flex-1 paper-btn-primary disabled:opacity-60"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 {applyToAllDays ? 'Save to All Days' : 'Save'}
@@ -571,13 +664,12 @@ export default function ClassTimetablePage() {
   )
 }
 
+// Pastel "sticker" palette — matches the sticker.* tones used across the paper theme
 const SUBJECT_COLORS = [
-  { bg: '#ede9fe', text: '#6d28d9', border: '#c4b5fd' },
-  { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' },
-  { bg: '#dcfce7', text: '#166534', border: '#86efac' },
-  { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
-  { bg: '#fce7f3', text: '#9d174d', border: '#f9a8d4' },
-  { bg: '#cffafe', text: '#164e63', border: '#67e8f9' },
-  { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' },
-  { bg: '#f0fdf4', text: '#14532d', border: '#86efac' },
+  { bg: '#C7B7E8', text: '#31215C', border: '#8069B0' }, // violet
+  { bg: '#AACDEA', text: '#1E3A55', border: '#5B87AD' }, // blue
+  { bg: '#AAD6A0', text: '#234A1D', border: '#5C8F52' }, // green
+  { bg: '#EAC968', text: '#4A3809', border: '#AD8A2C' }, // gold
+  { bg: '#F0AFC6', text: '#5C1F38', border: '#BD6D8B' }, // pink
+  { bg: '#F0A491', text: '#5C2416', border: '#C46B54' }, // coral
 ]

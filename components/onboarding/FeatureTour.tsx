@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   X, ChevronLeft, ChevronRight,
-  Sparkles, BookOpen, Zap, AlertTriangle,
+  Sparkles, BookOpen, AlertTriangle,
   RefreshCw, Activity, FileText, Upload,
   CalendarDays, HelpCircle, type LucideIcon,
 } from 'lucide-react'
@@ -20,8 +20,8 @@ interface TourCard {
 const CARDS: TourCard[] = [
   {
     Icon: Sparkles,
-    accentColor: '#2563eb',
-    accentBg: '#eff6ff',
+    accentColor: '#5B87AD',
+    accentBg: '#DCEBF8',
     feature: 'Morning Briefing',
     location: 'Home screen — refreshes every morning',
     description:
@@ -31,30 +31,19 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: BookOpen,
-    accentColor: '#4f46e5',
-    accentBg: '#f5f3ff',
-    feature: 'Lesson Prep',
-    location: 'Attendance page → tap "Prep for class" before saving',
+    accentColor: '#8069B0',
+    accentBg: '#E9E1F6',
+    feature: 'Prep Material',
+    location: 'Timetable → tap any class period',
     description:
-      'Before you start teaching, tap Prep for class. AI gives you a 2-sentence explanation of the topic, 3 Indian real-life examples (cricket scores, chai prices, auto fares), the most common student mistakes, and a quick 2-minute classroom activity.',
+      'Tap a class on your Weekly Timetable to open Prep Material. Pick the topic and sub-topic for the day and AI generates a full lesson plan as a swipeable slideshow — hook, teaching steps, and a closing activity. It\'s saved automatically so you never have to regenerate the same prep twice, and the topic is recorded on your timetable for the day.',
     example:
       '"For Fractions: Divide a roti into 4 equal pieces — each piece is ¼. Common mistake: students think bigger denominator means bigger fraction."',
   },
   {
-    Icon: Zap,
-    accentColor: '#d97706',
-    accentBg: '#fffbeb',
-    feature: 'Opening Hook',
-    location: 'Attendance page → appears automatically after you save attendance',
-    description:
-      "After you save attendance, AI generates a 60-second class opener using your students' own interests. It connects today's topic to something they already love — cricket, Bollywood, local markets — so students are engaged from the first minute.",
-    example:
-      '"Ask: Virat scored 45, 67, and 23 runs in 3 matches. What fraction of his best score did he get today? That\'s adding and comparing fractions!"',
-  },
-  {
     Icon: AlertTriangle,
-    accentColor: '#dc2626',
-    accentBg: '#fef2f2',
+    accentColor: '#C46B54',
+    accentBg: '#FBE3DC',
     feature: 'Catch-up Plans',
     location: 'Alerts page → tap any Critical or Watch student',
     description:
@@ -64,8 +53,8 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: RefreshCw,
-    accentColor: '#7c3aed',
-    accentBg: '#f5f3ff',
+    accentColor: '#BD6D8B',
+    accentBg: '#FBE1EA',
     feature: 'Recovery Engine',
     location: 'Student Profile → Recovery tab',
     description:
@@ -75,8 +64,8 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: Activity,
-    accentColor: '#0891b2',
-    accentBg: '#ecfeff',
+    accentColor: '#5C8F52',
+    accentBg: '#DFF0DA',
     feature: 'Class Pulse',
     location: 'Classes → tap a class → Pulse tab',
     description:
@@ -86,8 +75,8 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: FileText,
-    accentColor: '#059669',
-    accentBg: '#f0fdf4',
+    accentColor: '#AD8A2C',
+    accentBg: '#F8ECC9',
     feature: 'AI Student Report',
     location: 'Student Profile → AI Report tab',
     description:
@@ -97,8 +86,8 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: Upload,
-    accentColor: '#0284c7',
-    accentBg: '#f0f9ff',
+    accentColor: '#5B87AD',
+    accentBg: '#DCEBF8',
     feature: 'Syllabus Import',
     location: 'Classes → tap a class → Syllabus → Import',
     description:
@@ -108,8 +97,8 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: CalendarDays,
-    accentColor: '#1d4ed8',
-    accentBg: '#eff6ff',
+    accentColor: '#AD8A2C',
+    accentBg: '#F8ECC9',
     feature: 'Year Plan',
     location: 'Classes → tap a class → Syllabus → Year Plan',
     description:
@@ -119,8 +108,8 @@ const CARDS: TourCard[] = [
   },
   {
     Icon: HelpCircle,
-    accentColor: '#7c3aed',
-    accentBg: '#faf5ff',
+    accentColor: '#8069B0',
+    accentBg: '#E9E1F6',
     feature: 'AI Question Generator',
     location: 'Classes → tap a class → Marks → Create Test → Generate Questions',
     description:
@@ -182,15 +171,15 @@ export default function FeatureTour({ teacherId, open, onClose }: Props) {
     <div
       className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
       style={{
-        background: `rgba(7,21,58,${animateIn ? '0.72' : '0'})`,
-        backdropFilter: 'blur(4px)',
+        background: `rgba(58,44,30,${animateIn ? '0.6' : '0'})`,
         transition: 'background 0.28s ease',
       }}
       onClick={e => { if (e.target === e.currentTarget) handleClose() }}
     >
       <div
-        className="w-full md:max-w-md bg-white md:rounded-3xl overflow-hidden"
+        className="w-full md:max-w-md overflow-hidden"
         style={{
+          background: 'var(--paper-soft)',
           borderRadius: '24px 24px 0 0',
           maxHeight: '92vh',
           transform: animateIn ? 'translateY(0)' : 'translateY(100%)',
@@ -202,20 +191,20 @@ export default function FeatureTour({ teacherId, open, onClose }: Props) {
         {/* ── HEADER ─────────────────────────────── */}
         <div
           className="px-5 pt-5 pb-4 flex items-center justify-between shrink-0"
-          style={{ background: 'linear-gradient(135deg, #07153a 0%, #1d4ed8 100%)' }}
+          style={{ background: 'var(--ink)' }}
         >
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300/60 mb-0.5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-0.5">
               App Guide
             </p>
-            <p className="text-white/50 text-xs font-semibold">
+            <p className="text-white/70 text-xs font-semibold">
               {current + 1} of {CARDS.length} features
             </p>
           </div>
           <button
             onClick={handleClose}
             className="w-8 h-8 flex items-center justify-center rounded-full active:scale-90 transition-transform"
-            style={{ background: 'rgba(255,255,255,0.1)' }}
+            style={{ background: 'rgba(255,255,255,0.12)' }}
             title="Close guide"
           >
             <X size={15} className="text-white/70" />
@@ -231,7 +220,7 @@ export default function FeatureTour({ teacherId, open, onClose }: Props) {
               className="h-1.5 rounded-full transition-all duration-300"
               style={{
                 width: i === current ? '22px' : '6px',
-                background: i === current ? card.accentColor : '#e2e8f0',
+                background: i === current ? card.accentColor : 'rgba(58,44,30,0.14)',
               }}
             />
           ))}
@@ -248,7 +237,7 @@ export default function FeatureTour({ teacherId, open, onClose }: Props) {
               <Icon size={26} style={{ color: card.accentColor }} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-black text-slate-900 leading-tight">{card.feature}</h3>
+              <h3 className="font-display font-bold text-xl text-ink leading-tight">{card.feature}</h3>
               <p className="text-[11px] font-semibold mt-0.5 leading-snug" style={{ color: card.accentColor }}>
                 {card.location}
               </p>
@@ -256,7 +245,7 @@ export default function FeatureTour({ teacherId, open, onClose }: Props) {
           </div>
 
           {/* Description */}
-          <p className="text-sm text-slate-600 leading-relaxed mb-4">
+          <p className="text-sm text-ink-soft leading-relaxed mb-4">
             {card.description}
           </p>
 
@@ -271,27 +260,27 @@ export default function FeatureTour({ teacherId, open, onClose }: Props) {
             >
               Example
             </p>
-            <p className="text-xs text-slate-600 leading-relaxed italic">
+            <p className="text-xs text-ink-soft leading-relaxed italic">
               {card.example}
             </p>
           </div>
         </div>
 
         {/* ── NAVIGATION ─────────────────────────── */}
-        <div className="px-5 pt-4 pb-8 flex items-center gap-3 shrink-0 border-t border-slate-100">
+        <div className="px-5 pt-4 pb-8 flex items-center gap-3 shrink-0" style={{ borderTop: '1px solid rgba(58,44,30,0.1)' }}>
           <button
             onClick={handlePrev}
             disabled={current === 0}
             className="w-11 h-11 flex items-center justify-center rounded-2xl disabled:opacity-25 active:scale-90 transition-all"
-            style={{ background: '#f1f5f9' }}
+            style={{ background: 'rgba(58,44,30,0.06)' }}
           >
-            <ChevronLeft size={18} className="text-slate-600" />
+            <ChevronLeft size={18} className="text-ink-soft" />
           </button>
 
           <button
             onClick={handleNext}
             className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-2xl font-bold text-sm text-white active:scale-95 transition-all"
-            style={{ background: `linear-gradient(135deg, ${card.accentColor} 0%, ${card.accentColor}cc 100%)` }}
+            style={{ background: 'var(--ink)' }}
           >
             {isLast ? "Got it, let's go!" : (
               <>Next <ChevronRight size={13} strokeWidth={3} /></>

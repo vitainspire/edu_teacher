@@ -2,11 +2,12 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Trophy, TrendingUp, TrendingDown, Minus,
+  Trophy, TrendingUp, TrendingDown, Minus,
   AlertTriangle, CheckCircle2, Users, RefreshCw,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { getMasteryLabel, getMasteryColor } from '@/lib/logic/mastery'
+import PageHeader from '@/components/theme/PageHeader'
 import clsx from 'clsx'
 
 export default function YearSummaryPage() {
@@ -92,57 +93,41 @@ export default function YearSummaryPage() {
   }), [classes, getClassStudents, getClassSyllabus, getStudentAvgMastery, getStudentAttendanceRate])
 
   return (
-    <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
-      {/* Header */}
-      <div className="gradient-header-violet px-4 pt-8 pb-16 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full"
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)' }} />
-        </div>
-        <div className="relative z-10 flex items-center gap-3">
-          <button onClick={() => router.back()}
-            className="w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform"
-            style={{ background: 'rgba(255,255,255,0.15)' }}>
-            <ArrowLeft size={18} className="text-white" />
-          </button>
-          <div>
-            <h2 className="text-xl font-black text-white">Year Summary</h2>
-            <p className="text-xs text-violet-300/80 font-medium mt-0.5">
-              {teacher?.academicYearStart
-                ? `Started ${new Date(teacher.academicYearStart + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                : 'Academic year overview'}
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="paper-page pb-20">
+      <PageHeader
+        title="Year Summary"
+        subtitle={teacher?.academicYearStart
+          ? `Started ${new Date(teacher.academicYearStart + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`
+          : 'Academic year overview'}
+      />
 
-      <div className="-mt-8 px-4 py-4 space-y-4 pb-20 relative z-10">
+      <div className="px-4 pt-2 space-y-4 relative z-10">
 
         {/* Class summaries */}
         <div className="space-y-3">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Classes</p>
+          <p className="text-xs font-bold text-ink-soft uppercase tracking-wide">Classes</p>
           {classSummaries.map(({ cls, done, total, avgMastery, avgAttendance, count }) => (
-            <div key={cls.id} className="bg-white rounded-3xl px-4 py-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+            <div key={cls.id} className="paper-card px-4 py-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-bold text-slate-800">Grade {cls.grade} · Sec {cls.section}</p>
+                <p className="font-bold text-ink">Grade {cls.grade} · Sec {cls.section}</p>
                 <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', getMasteryColor(avgMastery))}>
                   {getMasteryLabel(avgMastery)}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-slate-50 rounded-xl py-2">
-                  <p className="text-sm font-black text-slate-800">{count}</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Students</p>
+                <div className="rounded-xl py-2" style={{ background: 'rgba(58,44,30,0.05)' }}>
+                  <p className="text-sm font-black text-ink">{count}</p>
+                  <p className="text-[10px] text-ink-soft font-semibold">Students</p>
                 </div>
-                <div className="bg-slate-50 rounded-xl py-2">
-                  <p className="text-sm font-black text-slate-800">{done}/{total}</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Topics done</p>
+                <div className="rounded-xl py-2" style={{ background: 'rgba(58,44,30,0.05)' }}>
+                  <p className="text-sm font-black text-ink">{done}/{total}</p>
+                  <p className="text-[10px] text-ink-soft font-semibold">Topics done</p>
                 </div>
-                <div className={clsx('rounded-xl py-2', count > 0 && avgAttendance < 0.75 ? 'bg-red-50' : 'bg-slate-50')}>
-                  <p className={clsx('text-sm font-black', count > 0 && avgAttendance < 0.75 ? 'text-red-700' : 'text-slate-800')}>
+                <div className="rounded-xl py-2" style={{ background: count > 0 && avgAttendance < 0.75 ? 'rgba(220,38,38,0.08)' : 'rgba(58,44,30,0.05)' }}>
+                  <p className={clsx('text-sm font-black', count > 0 && avgAttendance < 0.75 ? 'text-red-700' : 'text-ink')}>
                     {count === 0 ? '—' : `${Math.round(avgAttendance * 100)}%`}
                   </p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Attendance</p>
+                  <p className="text-[10px] text-ink-soft font-semibold">Attendance</p>
                 </div>
               </div>
             </div>
@@ -151,17 +136,21 @@ export default function YearSummaryPage() {
 
         {/* Class filter */}
         <div>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Students</p>
+          <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">Students</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button onClick={() => setFilterClass('all')}
-              className={clsx('shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all',
-                filterClass === 'all' ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-slate-600 border-slate-200')}>
+              className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
+              style={filterClass === 'all'
+                ? { background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' }
+                : { background: '#fff', color: 'var(--ink-soft)', borderColor: 'rgba(58,44,30,0.15)' }}>
               All
             </button>
             {classes.map(c => (
               <button key={c.id} onClick={() => setFilterClass(c.id)}
-                className={clsx('shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all',
-                  filterClass === c.id ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-slate-600 border-slate-200')}>
+                className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
+                style={filterClass === c.id
+                  ? { background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' }
+                  : { background: '#fff', color: 'var(--ink-soft)', borderColor: 'rgba(58,44,30,0.15)' }}>
                 Gr {c.grade}·{c.section}
               </button>
             ))}
@@ -171,24 +160,24 @@ export default function YearSummaryPage() {
         {/* Student cards */}
         <div className="space-y-2">
           {displayStudents.map(({ student, className, marks: mCount, attendance, avgMastery, criticals, termAverages, trend }, rank) => (
-            <div key={student.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 shadow-sm">
+            <div key={student.id} className="paper-card px-4 py-3">
               <div className="flex items-center gap-3 mb-2">
                 <div className={clsx(
                   'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0',
                   rank === 0 ? 'bg-amber-100 text-amber-700' :
-                  rank === 1 ? 'bg-slate-200 text-slate-700' :
-                  rank === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500',
+                  rank === 1 ? 'bg-black/[0.1] text-ink' :
+                  rank === 2 ? 'bg-orange-100 text-orange-700' : 'bg-black/[0.05] text-ink-soft',
                 )}>
-                  {rank < 3 ? ['🥇','🥈','🥉'][rank] : rank + 1}
+                  {rank + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-800 truncate">{student.name}</p>
-                  <p className="text-xs text-slate-400">{className} · Roll #{student.rollNumber}</p>
+                  <p className="font-bold text-ink truncate">{student.name}</p>
+                  <p className="text-xs text-ink-soft">{className} · Roll #{student.rollNumber}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {trend > 0.05  && <TrendingUp  size={14} className="text-emerald-500" />}
                   {trend < -0.05 && <TrendingDown size={14} className="text-red-500" />}
-                  {Math.abs(trend) <= 0.05 && <Minus size={14} className="text-slate-400" />}
+                  {Math.abs(trend) <= 0.05 && <Minus size={14} className="text-ink-faint" />}
                   <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', getMasteryColor(avgMastery))}>
                     {getMasteryLabel(avgMastery)}
                   </span>
@@ -196,19 +185,19 @@ export default function YearSummaryPage() {
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center mb-2">
-                <div className="bg-slate-50 rounded-xl py-1.5">
-                  <p className="text-sm font-black text-slate-800">{Math.round(avgMastery * 100)}%</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Avg score</p>
+                <div className="rounded-xl py-1.5" style={{ background: 'rgba(58,44,30,0.05)' }}>
+                  <p className="text-sm font-black text-ink">{Math.round(avgMastery * 100)}%</p>
+                  <p className="text-[10px] text-ink-soft font-semibold">Avg score</p>
                 </div>
-                <div className={clsx('rounded-xl py-1.5', attendance < 0.75 ? 'bg-red-50' : 'bg-slate-50')}>
-                  <p className={clsx('text-sm font-black', attendance < 0.75 ? 'text-red-700' : 'text-slate-800')}>
+                <div className="rounded-xl py-1.5" style={{ background: attendance < 0.75 ? 'rgba(220,38,38,0.08)' : 'rgba(58,44,30,0.05)' }}>
+                  <p className={clsx('text-sm font-black', attendance < 0.75 ? 'text-red-700' : 'text-ink')}>
                     {Math.round(attendance * 100)}%
                   </p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Attendance</p>
+                  <p className="text-[10px] text-ink-soft font-semibold">Attendance</p>
                 </div>
-                <div className="bg-slate-50 rounded-xl py-1.5">
-                  <p className="text-sm font-black text-slate-800">{mCount}</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Tests</p>
+                <div className="rounded-xl py-1.5" style={{ background: 'rgba(58,44,30,0.05)' }}>
+                  <p className="text-sm font-black text-ink">{mCount}</p>
+                  <p className="text-[10px] text-ink-soft font-semibold">Tests</p>
                 </div>
               </div>
 
@@ -216,7 +205,7 @@ export default function YearSummaryPage() {
               {termAverages.length > 0 && (
                 <div className="flex gap-2 flex-wrap mt-1">
                   {termAverages.map(ta => (
-                    <span key={ta.term} className="text-[10px] bg-violet-50 text-violet-700 font-bold px-2 py-0.5 rounded-full">
+                    <span key={ta.term} className="text-[10px] bg-[#E9E1F6] text-[#8069B0] font-bold px-2 py-0.5 rounded-full">
                       {ta.term}: {Math.round(ta.avg * 100)}%
                     </span>
                   ))}
@@ -234,8 +223,8 @@ export default function YearSummaryPage() {
 
           {displayStudents.length === 0 && (
             <div className="text-center py-12">
-              <Users size={32} className="text-slate-300 mx-auto mb-3" />
-              <p className="font-semibold text-slate-600">No students yet</p>
+              <Users size={32} className="text-ink-faint mx-auto mb-3" />
+              <p className="font-semibold text-ink-soft">No students yet</p>
             </div>
           )}
         </div>
@@ -259,7 +248,7 @@ export default function YearSummaryPage() {
               <p className="text-sm font-bold text-red-700 text-center">Are you sure? This cannot be undone.</p>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setConfirmReset(false)}
-                  className="flex-1 py-3 rounded-2xl bg-slate-200 text-slate-700 font-bold text-sm">
+                  className="flex-1 py-3 rounded-2xl bg-black/[0.08] text-ink font-bold text-sm">
                   Cancel
                 </button>
                 <button type="button" onClick={handleReset} disabled={resetting}
@@ -272,8 +261,8 @@ export default function YearSummaryPage() {
         </div>
 
         {/* Proficiency legend */}
-        <div className="bg-white rounded-2xl border border-slate-100 px-4 py-3">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Score legend</p>
+        <div className="paper-card px-4 py-3">
+          <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">Score legend</p>
           <div className="flex gap-3 flex-wrap">
             {[
               { label: 'Strong', range: '≥75%', color: 'bg-emerald-100 text-emerald-700' },

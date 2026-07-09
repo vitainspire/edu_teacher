@@ -3,11 +3,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import {
   PenLine, Plus, ArrowLeft,
-  Sparkles, RefreshCw, X, ChevronDown, ChevronUp, Lock,
+  Sparkles, RefreshCw, X, ChevronDown, ChevronUp, Lock, Printer,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import type { AiQuestion } from '@/lib/types'
 import MarkEntry from '@/components/marks/MarkEntry'
+import QuestionPaperModal from '@/components/marks/QuestionPaperModal'
 import { aiKey, getAiCache, setAiCache, TTL } from '@/lib/ai-cache'
 import clsx from 'clsx'
 
@@ -56,6 +57,8 @@ export default function ClassMarksPage() {
   const [aiQLoading, setAiQLoading]         = useState(false)
   const [aiQOpen, setAiQOpen]               = useState(false)
   const [paperOpen, setPaperOpen]           = useState(true)
+  const [paperPreviewOpen, setPaperPreviewOpen] = useState(false)
+  const [printPaperOpen, setPrintPaperOpen]     = useState(false)
 
   // Test analysis panel
   const [analysisTestId, setAnalysisTestId] = useState<string | null>(null)
@@ -193,11 +196,11 @@ export default function ClassMarksPage() {
   if (step === 'new-test') {
     return (
       <div>
-        <div className="bg-white px-4 pt-4 pb-4 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-10">
-          <button onClick={() => setStep('list')} className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100">
-            <ArrowLeft size={18} className="text-slate-600" />
+        <div className="bg-paper-soft px-4 pt-4 pb-4 border-b border-black/5 flex items-center gap-3 sticky top-0 z-10">
+          <button onClick={() => setStep('list')} className="w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform" style={{ background: 'rgba(58,44,30,0.08)' }}>
+            <ArrowLeft size={18} className="text-ink" />
           </button>
-          <h2 className="text-lg font-bold text-slate-900">New Test</h2>
+          <h2 className="text-lg font-display font-bold text-ink">New Test</h2>
         </div>
 
         <div className="px-4 py-4 space-y-5">
@@ -211,8 +214,9 @@ export default function ClassMarksPage() {
                   onClick={() => setTotalMarks(n)}
                   className={clsx(
                     'flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors',
-                    totalMarks === n ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-700',
+                    totalMarks === n ? 'text-white' : 'text-ink-soft',
                   )}
+                  style={{ background: totalMarks === n ? 'var(--ink)' : 'rgba(58,44,30,0.06)' }}
                 >
                   {n}
                 </button>
@@ -232,7 +236,7 @@ export default function ClassMarksPage() {
                   placeholder="e.g. Fractions, Photosynthesis, World War II…"
                   className="input-field"
                 />
-                <p className="text-xs text-slate-400">No syllabus set up — type the topic directly.</p>
+                <p className="text-xs text-ink-soft">No syllabus set up — type the topic directly.</p>
               </div>
             ) : (
               <div className="space-y-2 mt-1">
@@ -257,22 +261,22 @@ export default function ClassMarksPage() {
                         }}
                         className={clsx(
                           'w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all',
-                          isSelected  ? 'border-blue-500 bg-blue-50' :
+                          isSelected  ? 'border-[#AACDEA] bg-[#DCEBF8]' :
                           isBlocked   ? 'border-red-200 bg-red-50' :
-                          !taught     ? 'border-slate-100 bg-slate-50 opacity-70' :
-                                        'border-slate-200 bg-white',
+                          !taught     ? 'border-black/10 bg-black/[0.03] opacity-70' :
+                                        'border-black/10 bg-white',
                         )}
                       >
                         <div className="flex-1">
                           <p className={clsx(
                             'font-semibold text-sm',
-                            isSelected ? 'text-blue-800' :
-                            !taught    ? 'text-slate-400' :
-                                         'text-slate-800',
+                            isSelected ? 'text-[#1E3A55]' :
+                            !taught    ? 'text-ink-soft' :
+                                         'text-ink',
                           )}>
                             {t.topic}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5">
+                          <p className="text-xs text-ink-soft mt-0.5">
                             {taught
                               ? `${sessionCount} session${sessionCount > 1 ? 's' : ''} taught`
                               : 'No class recorded yet'}
@@ -281,12 +285,12 @@ export default function ClassMarksPage() {
                         {taught ? (
                           <span className={clsx(
                             'text-xs font-semibold px-2 py-0.5 rounded-full shrink-0',
-                            isSelected ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700',
+                            isSelected ? 'bg-[#DCEBF8] text-[#1E3A55]' : 'bg-emerald-100 text-emerald-700',
                           )}>
                             {sessionCount} session{sessionCount > 1 ? 's' : ''}
                           </span>
                         ) : (
-                          <Lock size={14} className="text-slate-300 shrink-0" />
+                          <Lock size={14} className="text-ink-faint shrink-0" />
                         )}
                       </button>
 
@@ -308,29 +312,34 @@ export default function ClassMarksPage() {
 
           {/* Step 3 — AI Question Suggestions (auto-shown after topic pick) */}
           {topicId && aiQOpen && (
-            <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+            <div className="bg-[#E9E1F6] border border-[#C7B7E8] rounded-2xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={15} className="text-violet-600" />
-                  <p className="text-sm font-bold text-violet-900">
+                  <Sparkles size={15} className="text-[#8069B0]" />
+                  <p className="text-sm font-bold text-[#31215C]">
                     Exam Questions — {selectedSyllabusTopic?.topic}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!aiQLoading && (
-                    <button onClick={() => fetchAiQuestions()} className="p-1 rounded-lg hover:bg-violet-100" title="Regenerate">
-                      <RefreshCw size={13} className="text-violet-400" />
+                  {!aiQLoading && aiQuestions.length > 0 && (
+                    <button onClick={() => setPaperPreviewOpen(true)} className="p-1 rounded-lg hover:bg-[#E9E1F6]" title="Print as question paper">
+                      <Printer size={13} className="text-[#8069B0]" />
                     </button>
                   )}
-                  <button onClick={() => setAiQOpen(false)} className="p-1 rounded-lg hover:bg-violet-100">
-                    <X size={14} className="text-violet-400" />
+                  {!aiQLoading && (
+                    <button onClick={() => fetchAiQuestions()} className="p-1 rounded-lg hover:bg-[#E9E1F6]" title="Regenerate">
+                      <RefreshCw size={13} className="text-[#8069B0]" />
+                    </button>
+                  )}
+                  <button onClick={() => setAiQOpen(false)} className="p-1 rounded-lg hover:bg-[#E9E1F6]">
+                    <X size={14} className="text-[#8069B0]" />
                   </button>
                 </div>
               </div>
 
               {aiQLoading && (
                 <div className="space-y-2 mt-2">
-                  {[1,2,3,4,5].map(i => <div key={i} className="h-10 bg-violet-100 rounded-xl animate-pulse" />)}
+                  {[1,2,3,4,5].map(i => <div key={i} className="h-10 bg-[#E9E1F6] rounded-xl animate-pulse" />)}
                 </div>
               )}
 
@@ -338,7 +347,7 @@ export default function ClassMarksPage() {
                 type QType = 'mcq' | 'fill-in-blank' | 'short-answer' | 'long-answer'
                 const TYPE_ORDER: QType[] = ['mcq', 'fill-in-blank', 'short-answer', 'long-answer']
                 const SECTION_META: Record<QType, { label: string; letter: string; badge: string; border: string }> = {
-                  'mcq':           { label: 'Multiple Choice',   letter: 'A', badge: 'bg-blue-100 text-blue-700',   border: 'border-blue-200' },
+                  'mcq':           { label: 'Multiple Choice',   letter: 'A', badge: 'bg-[#DCEBF8] text-[#1E3A55]',   border: 'border-[#AACDEA]' },
                   'fill-in-blank': { label: 'Fill in the Blank', letter: 'B', badge: 'bg-green-100 text-green-700', border: 'border-green-200' },
                   'short-answer':  { label: 'Short Answer',      letter: 'C', badge: 'bg-amber-100 text-amber-700', border: 'border-amber-200' },
                   'long-answer':   { label: 'Long Answer',       letter: 'D', badge: 'bg-purple-100 text-purple-700', border: 'border-purple-200' },
@@ -364,16 +373,16 @@ export default function ClassMarksPage() {
                             </div>
                             <span className="text-xs font-bold">{section.reduce((s, q) => s + q.marks, 0)} marks</span>
                           </div>
-                          <div className="divide-y divide-slate-100 bg-white">
+                          <div className="divide-y divide-black/10 bg-white">
                             {section.map((q) => {
                               const idx = ++globalIdx
                               return (
                                 <div key={idx} className="px-3 py-2.5 space-y-2">
                                   <div className="flex items-start gap-2">
-                                    <span className="w-5 h-5 bg-violet-600 text-white rounded-full text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
+                                    <span className="w-5 h-5 bg-[#31215C] text-white rounded-full text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
                                       {idx}
                                     </span>
-                                    <p className="text-sm text-slate-700 leading-relaxed">{q.text}</p>
+                                    <p className="text-sm text-ink leading-relaxed">{q.text}</p>
                                   </div>
                                   {/* MCQ options */}
                                   {type === 'mcq' && q.options && q.options.length > 0 && (
@@ -383,7 +392,7 @@ export default function ClassMarksPage() {
                                           'text-xs px-2 py-1 rounded-lg border',
                                           opt.startsWith(q.answer)
                                             ? 'bg-green-50 border-green-300 text-green-800 font-semibold'
-                                            : 'bg-slate-50 border-slate-200 text-slate-600',
+                                            : 'bg-black/[0.03] border-black/10 text-ink-soft',
                                         )}>
                                           {opt}
                                         </div>
@@ -393,7 +402,7 @@ export default function ClassMarksPage() {
                                   {/* Fill-in-blank: answer always visible */}
                                   {type === 'fill-in-blank' && q.answer && (
                                     <div className="flex items-center gap-2 ml-7">
-                                      <span className="text-xs text-slate-400">Answer:</span>
+                                      <span className="text-xs text-ink-soft">Answer:</span>
                                       <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-lg">
                                         {q.answer}
                                       </span>
@@ -409,7 +418,7 @@ export default function ClassMarksPage() {
                                   )}
                                   <div className="flex items-center gap-2 ml-7">
                                     <span className={clsx('px-2 py-0.5 rounded-full text-xs font-bold', DIFF_COLOR[q.difficulty])}>{q.difficulty}</span>
-                                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">{q.marks}m</span>
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-black/[0.05] text-ink-soft">{q.marks}m</span>
                                   </div>
                                 </div>
                               )
@@ -418,7 +427,7 @@ export default function ClassMarksPage() {
                         </div>
                       )
                     })}
-                    <p className="text-xs text-violet-400">
+                    <p className="text-xs text-[#8069B0]">
                       Reference only · Total: {aiQuestions.reduce((s, q) => s + (q.marks ?? 0), 0)} marks
                     </p>
                   </div>
@@ -432,13 +441,13 @@ export default function ClassMarksPage() {
             <label className="label">Exam Type</label>
 
             {/* Type toggle */}
-            <div className="flex gap-1 p-1 rounded-2xl" style={{ background: '#f1f5f9' }}>
+            <div className="flex gap-1 p-1 rounded-2xl" style={{ background: 'rgba(58,44,30,0.06)' }}>
               {(['unit', 'term'] as const).map(type => (
                 <button key={type} type="button"
                   onClick={() => setExamType(type)}
                   className={clsx(
                     'flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-200',
-                    examType === type ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500',
+                    examType === type ? 'bg-white text-ink' : 'text-ink-soft',
                   )}>
                   {type === 'unit' ? 'Unit Exam' : 'Term Exam'}
                 </button>
@@ -452,8 +461,9 @@ export default function ClassMarksPage() {
                   <button key={t} type="button" onClick={() => setSelectedTerm(t)}
                     className={clsx(
                       'flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors',
-                      selectedTerm === t ? 'bg-violet-700 text-white' : 'bg-slate-100 text-slate-700',
-                    )}>
+                      selectedTerm === t ? 'bg-[#31215C] text-white' : 'text-ink-soft',
+                    )}
+                    style={selectedTerm !== t ? { background: 'rgba(58,44,30,0.06)' } : undefined}>
                     {t}
                   </button>
                 ))}
@@ -464,7 +474,7 @@ export default function ClassMarksPage() {
             {examType === 'unit' && (
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 mb-1.5">Unit Number</p>
+                  <p className="text-xs font-semibold text-ink-soft mb-1.5">Unit Number</p>
                   <input
                     type="number"
                     min="1"
@@ -475,8 +485,8 @@ export default function ClassMarksPage() {
                   />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 mb-1.5">
-                    Unit Name / Topic <span className="font-normal text-slate-400">(optional)</span>
+                  <p className="text-xs font-semibold text-ink-soft mb-1.5">
+                    Unit Name / Topic <span className="font-normal text-ink-soft">(optional)</span>
                   </p>
                   <input
                     type="text"
@@ -502,9 +512,9 @@ export default function ClassMarksPage() {
           </div>
 
           {selectedSyllabusTopic && getTopicSessions(topicId).length > 0 && (
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
-              <p className="text-sm text-blue-800 font-semibold">AI analysis will compare scores with attendance.</p>
-              <p className="text-xs text-blue-600 mt-0.5">
+            <div className="bg-[#DCEBF8] border border-[#AACDEA] rounded-2xl px-4 py-3">
+              <p className="text-sm text-[#1E3A55] font-semibold">AI analysis will compare scores with attendance.</p>
+              <p className="text-xs text-[#5B87AD] mt-0.5">
                 Self-learners (absent + high score) and critical cases (absent + low score) will be flagged automatically.
               </p>
             </div>
@@ -513,11 +523,22 @@ export default function ClassMarksPage() {
           <button
             onClick={handleCreateTest}
             disabled={!effectiveTopic || saving}
-            className="btn-primary w-full"
+            className="paper-btn-primary w-full disabled:opacity-40"
           >
             {saving ? 'Saving…' : 'Save Test'}
           </button>
         </div>
+
+        <QuestionPaperModal
+          open={paperPreviewOpen}
+          onClose={() => setPaperPreviewOpen(false)}
+          questions={aiQuestions}
+          subject={teacher?.subject ?? 'Subject'}
+          topic={effectiveTopic || 'Topic'}
+          className={cls?.name}
+          totalMarks={parseInt(totalMarks) || 10}
+          conductedOn={conductedOn}
+        />
       </div>
     )
   }
@@ -526,13 +547,13 @@ export default function ClassMarksPage() {
   if (step === 'enter-marks' && currentTest) {
     return (
       <div>
-        <div className="bg-white px-4 pt-4 pb-4 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-10">
-          <button onClick={() => setStep('list')} className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 shrink-0">
-            <ArrowLeft size={18} className="text-slate-600" />
+        <div className="bg-paper-soft px-4 pt-4 pb-4 border-b border-black/5 flex items-center gap-3 sticky top-0 z-10">
+          <button onClick={() => setStep('list')} className="w-9 h-9 flex items-center justify-center rounded-full shrink-0 active:scale-90 transition-transform" style={{ background: 'rgba(58,44,30,0.08)' }}>
+            <ArrowLeft size={18} className="text-ink" />
           </button>
           <div>
-            <h2 className="text-lg font-bold text-slate-900 leading-tight">{currentTest.topic}</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-lg font-display font-bold text-ink leading-tight">{currentTest.topic}</h2>
+            <p className="text-xs text-ink-soft">
               {new Date(currentTest.conductedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
               {' · '}Out of {currentTest.totalMarks}
             </p>
@@ -541,36 +562,43 @@ export default function ClassMarksPage() {
         <div className="px-4 py-4 space-y-4">
           {/* Question paper reference — collapsible */}
           {currentTest.questions && currentTest.questions.length > 0 && (
-            <div className="bg-violet-50 border border-violet-100 rounded-2xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setPaperOpen(p => !p)}
-                className="w-full flex items-center justify-between px-4 py-3"
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles size={14} className="text-violet-600" />
-                  <span className="text-sm font-bold text-violet-900">
+            <div className="bg-[#E9E1F6] border border-[#C7B7E8] rounded-2xl overflow-hidden">
+              <div className="w-full flex items-center justify-between px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setPaperOpen(p => !p)}
+                  className="flex items-center gap-2"
+                >
+                  <Sparkles size={14} className="text-[#8069B0]" />
+                  <span className="text-sm font-bold text-[#31215C]">
                     Question Paper · {currentTest.questions.length} questions
                   </span>
-                </div>
-                {paperOpen ? <ChevronUp size={15} className="text-violet-400" /> : <ChevronDown size={15} className="text-violet-400" />}
-              </button>
+                  {paperOpen ? <ChevronUp size={15} className="text-[#8069B0]" /> : <ChevronDown size={15} className="text-[#8069B0]" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintPaperOpen(true)}
+                  className="flex items-center gap-1.5 bg-[#31215C] text-white text-xs font-bold px-3 py-1.5 rounded-lg"
+                >
+                  <Printer size={12} /> Print
+                </button>
+              </div>
               {paperOpen && (
                 <div className="px-4 pb-4 space-y-2">
                   {currentTest.questions.map((q, i) => (
-                    <div key={i} className="bg-white rounded-xl px-3 py-2.5 border border-violet-100">
+                    <div key={i} className="bg-white rounded-xl px-3 py-2.5 border border-[#C7B7E8]">
                       <div className="flex items-start gap-2">
-                        <span className="w-5 h-5 bg-violet-600 text-white rounded-full text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="w-5 h-5 bg-[#31215C] text-white rounded-full text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
                           {i + 1}
                         </span>
                         <div className="flex-1">
-                          <p className="text-sm text-slate-700">{q.text}</p>
+                          <p className="text-sm text-ink">{q.text}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={clsx('px-2 py-0.5 rounded-full text-xs font-bold', DIFF_COLOR[q.difficulty])}>
                               {q.difficulty}
                             </span>
                             {q.marks != null && (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-black/[0.05] text-ink-soft">
                                 {q.marks} mark{q.marks !== 1 ? 's' : ''}
                               </span>
                             )}
@@ -579,7 +607,7 @@ export default function ClassMarksPage() {
                       </div>
                     </div>
                   ))}
-                  <p className="text-xs text-violet-400 pt-1">
+                  <p className="text-xs text-[#8069B0] pt-1">
                     Total: {currentTest.questions.reduce((s, q) => s + (q.marks ?? 0), 0)} marks
                   </p>
                 </div>
@@ -599,6 +627,18 @@ export default function ClassMarksPage() {
             onCancel={() => setStep('list')}
           />
         </div>
+
+        <QuestionPaperModal
+          open={printPaperOpen}
+          onClose={() => setPrintPaperOpen(false)}
+          questions={currentTest.questions ?? []}
+          subject={currentTest.subject}
+          topic={currentTest.topic}
+          className={cls?.name}
+          term={currentTest.term}
+          totalMarks={currentTest.totalMarks}
+          conductedOn={currentTest.conductedOn}
+        />
       </div>
     )
   }
@@ -630,12 +670,13 @@ export default function ClassMarksPage() {
     <div>
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-sm text-slate-500">{classTests.length} test{classTests.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-ink-soft">{classTests.length} test{classTests.length !== 1 ? 's' : ''}</p>
           <button
             onClick={async () => { setSyncing(true); await forceSync(); setSyncing(false) }}
             disabled={syncing || syncStatus === 'offline'}
             title="Refresh scores from cloud"
-            className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500 disabled:opacity-40"
+            className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg text-ink-soft disabled:opacity-40"
+            style={{ background: 'rgba(58,44,30,0.06)' }}
           >
             <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
             {syncing ? 'Syncing…' : 'Refresh'}
@@ -643,7 +684,8 @@ export default function ClassMarksPage() {
         </div>
         <button
           onClick={() => setStep('new-test')}
-          className="flex items-center gap-1.5 bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm"
+          className="flex items-center gap-1.5 text-white font-semibold px-4 py-2 rounded-xl text-sm active:scale-95 transition-transform"
+          style={{ background: 'var(--ink)' }}
         >
           <Plus size={15} /> New Test
         </button>
@@ -673,10 +715,10 @@ export default function ClassMarksPage() {
       <div className="px-4 space-y-2 pb-4">
         {classTests.length === 0 ? (
           <div className="text-center py-14">
-            <PenLine size={32} className="text-slate-300 mx-auto mb-3" />
-            <p className="font-semibold text-slate-700">No tests yet</p>
-            <p className="text-sm text-slate-400 mt-1">Create a test to start entering marks</p>
-            <button onClick={() => setStep('new-test')} className="mt-4 bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-xl text-sm">
+            <PenLine size={32} className="text-ink-faint mx-auto mb-3" />
+            <p className="font-semibold text-ink">No tests yet</p>
+            <p className="text-sm text-ink-soft mt-1">Create a test to start entering marks</p>
+            <button onClick={() => setStep('new-test')} className="mt-4 text-white font-semibold px-6 py-2.5 rounded-xl text-sm active:scale-95 transition-transform" style={{ background: 'var(--ink)' }}>
               Create First Test
             </button>
           </div>
@@ -724,7 +766,7 @@ export default function ClassMarksPage() {
                 <button
                   type="button"
                   onClick={() => { setCurrentTestId(t.id); setStep('enter-marks') }}
-                  className="card flex items-center gap-3 w-full text-left active:scale-[0.98] transition-transform"
+                  className="paper-card p-4 flex items-center gap-3 w-full text-left active:scale-[0.98] transition-transform"
                 >
                   <div className={clsx(
                     'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
@@ -733,8 +775,8 @@ export default function ClassMarksPage() {
                     <PenLine size={18} className={allDone ? 'text-emerald-600' : 'text-amber-500'} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900">{t.topic}</p>
-                    <p className="text-sm text-slate-500">
+                    <p className="font-semibold text-ink">{t.topic}</p>
+                    <p className="text-sm text-ink-soft">
                       {new Date(t.conductedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       {t.term ? ` · ${t.term}` : ''}
                       {' · '}{t.totalMarks} marks
@@ -744,7 +786,7 @@ export default function ClassMarksPage() {
                   <span className={clsx(
                     'text-xs font-semibold px-2.5 py-1 rounded-full shrink-0',
                     allDone  ? 'bg-emerald-100 text-emerald-700' :
-                    started  ? 'bg-blue-100 text-blue-700' :
+                    started  ? 'bg-[#DCEBF8] text-[#1E3A55]' :
                                'bg-amber-100 text-amber-700',
                   )}>
                     {allDone ? 'Done' : started ? 'In progress' : 'Marks pending'}
@@ -758,8 +800,8 @@ export default function ClassMarksPage() {
                     className={clsx(
                       'w-full flex items-center justify-center gap-2 py-2 rounded-2xl text-xs font-bold transition-all',
                       isAnalysisOpen
-                        ? 'bg-violet-100 text-violet-700'
-                        : 'bg-slate-50 text-slate-500 border border-slate-100 hover:bg-violet-50 hover:text-violet-600',
+                        ? 'bg-[#E9E1F6] text-[#31215C]'
+                        : 'bg-black/[0.03] text-ink-soft border border-black/10 hover:bg-[#E9E1F6] hover:text-[#8069B0]',
                     )}
                   >
                     <Sparkles size={12} />
@@ -769,18 +811,18 @@ export default function ClassMarksPage() {
                 )}
 
                 {isAnalysisOpen && (
-                  <div className="rounded-2xl bg-violet-50 border border-violet-100 px-4 py-4 space-y-3">
+                  <div className="rounded-2xl bg-[#E9E1F6] border border-[#C7B7E8] px-4 py-4 space-y-3">
                     {!analysis && analysisLoading && (
                       <div className="space-y-2">
-                        {[1,2,3,4].map(i => <div key={i} className="h-4 bg-violet-100 rounded-lg animate-pulse" />)}
+                        {[1,2,3,4].map(i => <div key={i} className="h-4 bg-[#E9E1F6] rounded-lg animate-pulse" />)}
                       </div>
                     )}
                     {!analysis && !analysisLoading && (
-                      <p className="text-xs text-violet-500 text-center">Could not load analysis — tap Analyse Class to retry</p>
+                      <p className="text-xs text-[#8069B0] text-center">Could not load analysis — tap Analyse Class to retry</p>
                     )}
                     {analysis && (
                       <>
-                        <p className="text-xs text-slate-700 leading-relaxed">{analysis.summary}</p>
+                        <p className="text-xs text-ink leading-relaxed">{analysis.summary}</p>
                         <div className="space-y-2">
                           <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
                             <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wide mb-1">Top Performers</p>
@@ -790,9 +832,9 @@ export default function ClassMarksPage() {
                             <p className="text-[10px] font-black text-red-600 uppercase tracking-wide mb-1">Needs Help</p>
                             <p className="text-xs text-red-800 leading-snug">{analysis.needHelp}</p>
                           </div>
-                          <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-wide mb-1">Next Action</p>
-                            <p className="text-xs text-blue-800 leading-snug">{analysis.action}</p>
+                          <div className="bg-[#DCEBF8] border border-[#AACDEA] rounded-xl px-3 py-2.5">
+                            <p className="text-[10px] font-black text-[#5B87AD] uppercase tracking-wide mb-1">Next Action</p>
+                            <p className="text-xs text-[#1E3A55] leading-snug">{analysis.action}</p>
                           </div>
                         </div>
                       </>
@@ -800,8 +842,8 @@ export default function ClassMarksPage() {
 
                     {/* Question-level class analysis — only shown when scanner breakdown data exists */}
                     {questionStats && questionStats.length > 0 && (
-                      <div className="bg-white border border-violet-100 rounded-xl px-3 py-3 space-y-2.5">
-                        <p className="text-[10px] font-black text-violet-700 uppercase tracking-wide">
+                      <div className="bg-white border border-[#C7B7E8] rounded-xl px-3 py-3 space-y-2.5">
+                        <p className="text-[10px] font-black text-[#31215C] uppercase tracking-wide">
                           Questions Most Students Got Wrong
                         </p>
                         {questionStats.map(q => {
@@ -810,8 +852,8 @@ export default function ClassMarksPage() {
                             : q.dominant === 'procedural'
                             ? 'bg-amber-100 text-amber-700'
                             : q.dominant === 'careless'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-[#DCEBF8] text-[#1E3A55]'
+                            : 'bg-black/[0.05] text-ink-soft'
                           const recommendation = q.dominant === 'conceptual'
                             ? 'Re-explain core concept from scratch'
                             : q.dominant === 'procedural'
@@ -822,25 +864,25 @@ export default function ClassMarksPage() {
                           return (
                             <div key={q.qNum} className="space-y-1.5">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-slate-700 shrink-0">Q{q.qNum}</span>
-                                <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                <span className="text-xs font-bold text-ink shrink-0">Q{q.qNum}</span>
+                                <div className="flex-1 bg-black/10 rounded-full h-2 overflow-hidden">
                                   <div
-                                    className={`h-2 rounded-full ${q.wrongPct >= 70 ? 'bg-red-500' : q.wrongPct >= 50 ? 'bg-amber-500' : 'bg-violet-400'}`}
+                                    className={`h-2 rounded-full ${q.wrongPct >= 70 ? 'bg-red-500' : q.wrongPct >= 50 ? 'bg-amber-500' : 'bg-[#8069B0]'}`}
                                     style={{ width: `${q.wrongPct}%` }}
                                   />
                                 </div>
-                                <span className="text-xs font-black text-slate-600 shrink-0 w-10 text-right">{q.wrongPct}%</span>
+                                <span className="text-xs font-black text-ink-soft shrink-0 w-10 text-right">{q.wrongPct}%</span>
                                 {q.dominant && (
                                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${errorColor}`}>
                                     {q.dominant}
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[10px] text-slate-500 pl-7">{recommendation}</p>
+                              <p className="text-[10px] text-ink-soft pl-7">{recommendation}</p>
                             </div>
                           )
                         })}
-                        <p className="text-[10px] text-violet-400 pt-1">
+                        <p className="text-[10px] text-[#8069B0] pt-1">
                           Showing questions where 30%+ of students lost marks · {questionStats[0]?.total ?? 0} papers scanned
                         </p>
                       </div>

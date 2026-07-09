@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { X, Printer, Key, Sparkles, PenLine, Check } from 'lucide-react'
+import { X, Printer, Key, Sparkles, PenLine, Check, Save } from 'lucide-react'
 import type { WsSection } from '@/lib/types'
 
 type KeyStage = 'prompt' | 'manual' | 'ai-loading' | 'done'
@@ -61,9 +61,9 @@ export default function WorksheetRenderer({
   function BottomPanel() {
     if (keyStage === 'prompt') {
       return (
-        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ background: 'var(--ink)', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Key size={15} color="#fbbf24" />
+            <Key size={15} color="#EAC968" />
             <p style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>Would you like an answer key?</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -72,12 +72,12 @@ export default function WorksheetRenderer({
               <PenLine size={14} /> I'll enter answers myself
             </button>
             <button onClick={generateAiKey}
-              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '13px 0', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px rgba(79,70,229,.5)' }}>
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '13px 0', borderRadius: 14, border: 'none', background: '#C7B7E8', color: '#31215C', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Sparkles size={14} /> Generate with AI
             </button>
           </div>
           <button onClick={() => setKeyStage('done')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,.35)', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,.4)', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>
             Skip — save without answer key
           </button>
         </div>
@@ -86,9 +86,9 @@ export default function WorksheetRenderer({
 
     if (keyStage === 'ai-loading') {
       return (
-        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2.5px solid #7c3aed', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#c4b5fd' }}>AI is generating answer key…</p>
+        <div style={{ background: 'var(--ink)', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2.5px solid #C7B7E8', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#C7B7E8' }}>AI is generating answer key…</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
         </div>
       )
@@ -96,7 +96,7 @@ export default function WorksheetRenderer({
 
     // manual or done — show the compact editor + save row
     return (
-      <div style={{ background: '#0f172a', padding: '0 0 0 0', maxHeight: keyStage === 'manual' ? 320 : 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: 'var(--ink)', padding: '0 0 0 0', maxHeight: keyStage === 'manual' ? 320 : 'auto', display: 'flex', flexDirection: 'column' }}>
         {keyStage === 'manual' && (
           <div style={{ overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
             {sections.map((sec, si) => {
@@ -104,22 +104,22 @@ export default function WorksheetRenderer({
               for (let i = 0; i < si; i++) sectionPrev += sections[i].questions.length
               return (
                 <div key={si}>
-                  <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>{sec.label}</p>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,.45)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>{sec.label}</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {sec.questions.map((q, qi) => {
                       const k = `${si}-${qi}`
                       const isMcq = sec.type === 'mcq'
                       return (
                         <div key={qi} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', minWidth: 22 }}>{sectionPrev + qi + 1}.</span>
-                          <p style={{ fontSize: 11, color: '#94a3b8', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.text}</p>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.6)', minWidth: 22 }}>{sectionPrev + qi + 1}.</span>
+                          <p style={{ fontSize: 11, color: 'rgba(255,255,255,.45)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.text}</p>
                           {isMcq ? (
                             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                               {['A', 'B', 'C', 'D'].map(l => (
                                 <button key={l} onClick={() => setAnswerKey(p => ({ ...p, [k]: l }))}
                                   style={{ width: 26, height: 26, borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 11, fontFamily: 'inherit',
-                                    background: answerKey[k] === l ? '#7c3aed' : 'rgba(255,255,255,.08)',
-                                    color: answerKey[k] === l ? '#fff' : '#94a3b8' }}>
+                                    background: answerKey[k] === l ? '#C7B7E8' : 'rgba(255,255,255,.08)',
+                                    color: answerKey[k] === l ? '#31215C' : 'rgba(255,255,255,.45)' }}>
                                   {l}
                                 </button>
                               ))}
@@ -128,7 +128,7 @@ export default function WorksheetRenderer({
                             <input value={answerKey[k] ?? ''} onChange={e => setAnswerKey(p => ({ ...p, [k]: e.target.value }))}
                               placeholder="Answer…"
                               style={{ fontSize: 11, border: '1px solid rgba(255,255,255,.12)', borderRadius: 8, padding: '5px 10px', width: 200, flexShrink: 0, fontFamily: 'inherit',
-                                background: 'rgba(255,255,255,.05)', color: '#e2e8f0' }} />
+                                background: 'rgba(255,255,255,.05)', color: '#fff' }} />
                           )}
                         </div>
                       )
@@ -141,13 +141,13 @@ export default function WorksheetRenderer({
         )}
 
         {/* Save row */}
-        <div style={{ display: 'flex', gap: 10, padding: '14px 24px', borderTop: '1px solid rgba(255,255,255,.06)', background: 'rgba(0,0,0,.3)' }}>
+        <div style={{ display: 'flex', gap: 10, padding: '14px 24px', borderTop: '1px solid rgba(255,255,255,.08)', background: 'rgba(0,0,0,.15)' }}>
           <button onClick={handleSave} disabled={saving}
             style={{ flex: 1, padding: '12px 0', borderRadius: 14, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 800, fontSize: 13, fontFamily: 'inherit',
-              background: saveSuccess ? '#16a34a' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              background: saveSuccess ? '#AAD6A0' : 'var(--paper-soft)',
+              color: saveSuccess ? '#234A1D' : 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               opacity: saving ? 0.7 : 1, transition: 'background .3s' }}>
-            {saveSuccess ? <><Check size={14} /> Saved!</> : saving ? 'Saving…' : '💾 Save Worksheet'}
+            {saveSuccess ? <><Check size={14} /> Saved!</> : saving ? 'Saving…' : <><Save size={14} /> Save Worksheet</>}
           </button>
           <button onClick={() => window.print()}
             style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '12px 20px', borderRadius: 14, border: '2px solid rgba(255,255,255,.15)', background: 'transparent', color: 'rgba(255,255,255,.7)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
@@ -171,13 +171,13 @@ export default function WorksheetRenderer({
         }
       `}</style>
 
-      <div id="ws-print-root" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: 'rgba(15,23,42,.7)' }}>
+      <div id="ws-print-root" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: 'rgba(58,44,30,.6)' }}>
 
         {/* ── Top toolbar ── */}
-        <div className="ws-no-print" style={{ background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div className="ws-no-print" style={{ background: 'var(--ink)', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>
             {topic} — Worksheet
-            {className && <span style={{ color: 'rgba(255,255,255,.4)', fontWeight: 500, fontSize: 12, marginLeft: 8 }}>· {className}</span>}
+            {className && <span style={{ color: 'rgba(255,255,255,.5)', fontWeight: 500, fontSize: 12, marginLeft: 8 }}>· {className}</span>}
           </p>
           <button onClick={onClose}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
@@ -187,7 +187,7 @@ export default function WorksheetRenderer({
 
         {/* ── Scrollable paper area ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '28px 16px' }}>
-          <div className="ws-print-page" style={{ background: '#fff', width: '100%', maxWidth: 760, margin: '0 auto', borderRadius: 10, boxShadow: '0 8px 48px rgba(0,0,0,.4)', padding: '48px 56px', fontFamily: 'Georgia, serif', color: '#1e293b' }}>
+          <div className="ws-print-page" style={{ background: '#fff', width: '100%', maxWidth: 760, margin: '0 auto', borderRadius: 10, border: '1px solid rgba(0,0,0,.12)', padding: '48px 56px', fontFamily: 'Georgia, serif', color: '#1e293b' }}>
 
             {/* Header */}
             <div style={{ textAlign: 'center', borderBottom: '2.5px solid #1e293b', paddingBottom: 20, marginBottom: 28 }}>

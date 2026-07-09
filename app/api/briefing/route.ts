@@ -5,6 +5,9 @@ import { BriefingSchema, parseBody } from '@/lib/schemas'
 import { callAI } from '@/lib/ai'
 import { withCache, ck } from '@/lib/server-cache'
 
+// callAI's primary+fallback retry chain can take up to ~90s on failure.
+export const maxDuration = 60
+
 interface ClassPoint {
   label: string
   lastTopic: string | null

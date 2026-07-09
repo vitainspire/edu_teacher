@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { gradeMcq, gradeFib, gradeShortAnswer } from "@/lib/graders";
 import type { AiQuestion } from "@/lib/types";
 import { getClientIp } from "@/lib/logger";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkVisionRateLimit } from "@/lib/rate-limit";
+import { getScannerSchoolId, verifyTestInSchool, verifyWorksheetInSchool } from "@/lib/scanner-auth";
+import { getConsistentLongAnswerGrade } from "@/lib/grading-cache";
+import { assessPaperConfidence } from "@/lib/grade-review";
 
 export const maxDuration = 90;
 
@@ -95,9 +98,14 @@ function parseExtractionResult(raw: string): ExtractionResult {
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const { allowed } = await checkRateLimit(ip);
+  const { allowed } = await checkVisionRateLimit(ip);
   if (!allowed) {
     return NextResponse.json({ error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
+  }
+
+  const schoolId = getScannerSchoolId(request);
+  if (!schoolId) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   let body: {
@@ -108,17 +116,29 @@ export async function POST(request: NextRequest) {
     topic: string
     subject: string
     questions: AiQuestion[]
+    testId?: string
+    worksheetId?: string
   };
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { images, studentId, studentName, totalMarks, topic, subject, questions } = body;
+  const { images, studentId, studentName, totalMarks, topic, subject, questions, testId, worksheetId } = body;
 
   if (!Array.isArray(images) || images.length === 0) {
     return NextResponse.json({ error: 'images array is required' }, { status: 400 });
   }
   if (!studentId) {
     return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
+  }
+  if (!testId && !worksheetId) {
+    return NextResponse.json({ error: 'testId or worksheetId is required' }, { status: 400 });
+  }
+
+  const owns = testId
+    ? await verifyTestInSchool(schoolId, testId)
+    : await verifyWorksheetInSchool(schoolId, worksheetId!);
+  if (!owns) {
+    return NextResponse.json({ error: 'Not authorized for this test or worksheet' }, { status: 403 });
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -179,7 +199,7 @@ export async function POST(request: NextRequest) {
     (result.longAnswerGrades ?? []).map(g => [g.questionIndex, g])
   );
 
-  const breakdown = safeQuestions.map((q, i) => {
+  const breakdown = await Promise.all(safeQuestions.map(async (q, i) => {
     const scanned = answerMap.get(i) ?? '';
     const type    = q.type ?? 'long-answer';
     const max     = q.marks ?? 0;
@@ -201,24 +221,36 @@ export async function POST(request: NextRequest) {
         errorType = marksAwarded === 0 ? 'conceptual' : 'procedural';
       }
     } else {
+      // long-answer — memoized so a re-submitted scan of the same paper can
+      // never disagree with itself.
       const llmGrade = longGradeMap.get(i);
-      marksAwarded = llmGrade ? Math.max(0, Math.min(llmGrade.marksAwarded ?? 0, max)) : 0;
-      feedback     = llmGrade?.feedback ?? (scanned ? 'Graded by AI' : 'No answer written');
-      errorType    = marksAwarded < max ? (llmGrade?.errorType ?? null) : null;
+      const graded = await getConsistentLongAnswerGrade(q.text, q.answer, scanned, max, () => ({
+        marksAwarded: llmGrade ? Math.max(0, Math.min(llmGrade.marksAwarded ?? 0, max)) : 0,
+        feedback: llmGrade?.feedback ?? (scanned ? 'Graded by AI' : 'No answer written'),
+        errorType: llmGrade?.errorType ?? null,
+      }));
+      marksAwarded = graded.marksAwarded;
+      feedback     = graded.feedback;
+      errorType    = marksAwarded < max ? (graded.errorType ?? null) : null;
     }
 
     return { question: i + 1, awarded: marksAwarded, max, note: feedback, errorType };
-  });
+  }));
 
   const score = Math.min(
     breakdown.reduce((s, b) => s + b.awarded, 0),
     totalMarks,
   );
 
+  const extractedAnswers = safeQuestions.map((_, i) => answerMap.get(i) ?? '');
+  const { needsReview, reviewReason } = assessPaperConfidence(breakdown, extractedAnswers);
+
   return NextResponse.json({
     studentId,
     studentName,
     score,
+    needsReview,
+    reviewReason,
     breakdown,
     feedback: result.generalFeedback ?? null,
   });

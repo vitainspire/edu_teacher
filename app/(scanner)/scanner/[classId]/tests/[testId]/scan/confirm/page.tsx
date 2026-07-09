@@ -6,10 +6,14 @@ import Link from "next/link";
 import { ArrowLeft, AlertCircle, CheckCircle2, Save } from "lucide-react";
 import { Spinner } from "@/components/scanner/spinner";
 import { BreadcrumbBar } from "@/components/scanner/breadcrumb-bar";
+import { ReviewFlag } from "@/components/scanner/review-flag";
 import { cn } from "@/lib/utils";
 
 interface Student { id: string; name: string; roll_number: number; }
-interface ScanResult { matchedStudent: Student | null; score: number | null; students: Student[]; totalMarks: number; imageUrl?: string; }
+interface ScanResult {
+  matchedStudent: Student | null; score: number | null; students: Student[]; totalMarks: number; imageUrl?: string;
+  needsReview?: boolean; reviewReason?: string | null;
+}
 
 export default function ConfirmPage() {
   const params = useParams<{ classId: string; testId: string }>();
@@ -77,6 +81,10 @@ export default function ConfirmPage() {
           <AlertCircle size={24} className="text-amber-500 shrink-0" />
           <div><p className="text-xs font-bold uppercase tracking-wide text-amber-600">AI could not read the paper</p><p className="text-sm text-gray-500 mt-0.5">Please enter the score manually and select the student below.</p></div>
         </div>
+      )}
+
+      {scanResult.needsReview && scanResult.reviewReason && (
+        <ReviewFlag reason={scanResult.reviewReason} />
       )}
 
       <div className="space-y-2">

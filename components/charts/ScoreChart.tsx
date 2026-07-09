@@ -8,13 +8,13 @@ interface Props {
 }
 
 const BAND = [
-  { min: 0.7, label: 'Good',       color: '#10b981' },
-  { min: 0.5, label: 'Average',    color: '#f59e0b' },
-  { min: 0,   label: 'Struggling', color: '#ef4444' },
+  { min: 0.7, label: 'Good',       color: '#5C8F52' },
+  { min: 0.5, label: 'Average',    color: '#AD8A2C' },
+  { min: 0,   label: 'Struggling', color: '#C46B54' },
 ]
 
 function bandColor(pct: number) {
-  return BAND.find(b => pct >= b.min)?.color ?? '#ef4444'
+  return BAND.find(b => pct >= b.min)?.color ?? '#C46B54'
 }
 
 export default function ScoreChart({ points, height = 160 }: Props) {
@@ -53,9 +53,9 @@ export default function ScoreChart({ points, height = 160 }: Props) {
           return (
             <g key={v}>
               <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
-                stroke="#e2e8f0" strokeWidth={1} strokeDasharray={v === 1 ? '0' : '4 3'} />
+                stroke="rgba(58,44,30,0.14)" strokeWidth={1} strokeDasharray={v === 1 ? '0' : '4 3'} />
               <text x={PAD_L - 4} y={y + 4} textAnchor="end"
-                fontSize={8} fill="#94a3b8" fontWeight="600">
+                fontSize={8} fill="#A8977F" fontWeight="600">
                 {Math.round(v * 100)}
               </text>
             </g>
@@ -66,8 +66,8 @@ export default function ScoreChart({ points, height = 160 }: Props) {
         {n > 1 && (
           <polygon
             points={`${linePoints} ${xOf(n - 1)},${yOf(0)} ${xOf(0)},${yOf(0)}`}
-            fill={trend >= 0 ? '#10b981' : '#ef4444'}
-            fillOpacity={0.08}
+            fill={trend >= 0 ? '#5C8F52' : '#C46B54'}
+            fillOpacity={0.12}
           />
         )}
 
@@ -76,7 +76,7 @@ export default function ScoreChart({ points, height = 160 }: Props) {
           <polyline
             points={linePoints}
             fill="none"
-            stroke={trend >= 0 ? '#10b981' : '#f59e0b'}
+            stroke={trend >= 0 ? '#5C8F52' : '#AD8A2C'}
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -96,7 +96,7 @@ export default function ScoreChart({ points, height = 160 }: Props) {
                 x={cx} y={H - 4}
                 textAnchor="middle"
                 fontSize={7}
-                fill="#94a3b8"
+                fill="#A8977F"
                 fontWeight="600"
               >
                 {p.label}
@@ -111,11 +111,11 @@ export default function ScoreChart({ points, height = 160 }: Props) {
         {BAND.map(b => (
           <div key={b.label} className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full" style={{ background: b.color }} />
-            <span className="text-[10px] text-slate-400 font-semibold">{b.label}</span>
+            <span className="text-[10px] text-ink-faint font-semibold">{b.label}</span>
           </div>
         ))}
         {trend !== 0 && (
-          <span className={`text-[10px] font-bold ml-auto ${trend > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          <span className="text-[10px] font-bold ml-auto" style={{ color: trend > 0 ? '#5C8F52' : '#C46B54' }}>
             {trend > 0 ? '▲' : '▼'} {Math.round(Math.abs(trend) * 100)}% {trend > 0 ? 'improving' : 'declining'}
           </span>
         )}

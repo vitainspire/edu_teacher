@@ -9,6 +9,7 @@ import { buildFingerprint } from './logic/fingerprint'
 import { detectHiddenPotential } from './logic/potential'
 import { computeBriefingFindings } from './logic/briefing'
 import * as sbq from './supabase-queries'
+import { genStudentCode } from './studentCode'
 import { useStudentActions }   from './hooks/useStudentActions'
 import { useMarksActions }     from './hooks/useMarksActions'
 import { useAttendanceActions } from './hooks/useAttendanceActions'
@@ -18,7 +19,7 @@ import type {
   Teacher, Student, Test, Mark, TopicMastery, Attendance, Session, LessonSnapshot,
   Class, SyllabusTopic, SyllabusSubTopic, TopicCoverageStatus, ClassBriefingData,
   Warning, Fingerprint, PotentialSignal, BriefingFinding, EnrichedMark, TimetableEntry, CatchupMaterial,
-  TeacherClassAssignment, Worksheet,
+  TeacherClassAssignment, Worksheet, PrepMaterial, GapTopic, SmartLesson, TaughtTopic,
 } from './types'
 
 interface SignUpData {
@@ -99,6 +100,14 @@ interface AppContextType {
   updateCatchupStatus: (id: string, status: CatchupMaterial['status']) => Promise<void>
   getCatchupForStudent: (studentId: string) => CatchupMaterial[]
 
+  prepMaterials: PrepMaterial[]
+  savePrepMaterial: (data: { classId: string; subject: string; grade: string; topic: string; subtopic?: string; gapTopics: GapTopic[]; lesson: SmartLesson }) => Promise<PrepMaterial>
+  getPrepMaterial: (classId: string, topic: string, subtopic?: string) => PrepMaterial | null
+
+  taughtTopics: TaughtTopic[]
+  saveTaughtTopic: (data: { classId: string; topic: string; subtopic?: string }) => Promise<TaughtTopic>
+  getTaughtTopicToday: (classId: string) => TaughtTopic | null
+
   worksheets: Worksheet[]
   saveWorksheet: (data: Omit<Worksheet, 'id' | 'teacherId' | 'createdAt'>) => Promise<string>
   updateWorksheetAnswerKey: (id: string, answerKey: Record<string, string>) => Promise<void>
@@ -141,6 +150,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syllabusSubTopics, setSyllabusSubTopics] = useState<SyllabusSubTopic[]>([])
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([])
   const [catchupMaterials, setCatchupMaterials] = useState<CatchupMaterial[]>([])
+  const [prepMaterials, setPrepMaterials] = useState<PrepMaterial[]>([])
+  const [taughtTopics, setTaughtTopics] = useState<TaughtTopic[]>([])
   const [assignments, setAssignments] = useState<TeacherClassAssignment[]>([])
   const [worksheets, setWorksheets] = useState<Worksheet[]>([])
   const [isLoading, setIsLoading]       = useState(true)
@@ -192,7 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]
       const classIds = allClasses.map(c => c.id)
 
-      const [syl, ses, s, t, m, ma, att, sub, tt, cu, sbAsgn, ws] = await Promise.all([
+      const [syl, ses, s, t, m, ma, att, sub, tt, cu, sbAsgn, ws, pm, tth] = await Promise.all([
         sbq.fetchSyllabusTopics(teacherId, classIds),
         sbq.fetchSessions(teacherId),
         sbq.fetchStudentsByClasses(classIds),
@@ -205,6 +216,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sbq.fetchCatchupMaterials(teacherId),
         sbq.fetchAssignments(teacherId),
         sbq.fetchWorksheets(teacherId),
+        sbq.fetchPrepMaterials(teacherId),
+        sbq.fetchTaughtTopics(teacherId),
       ])
 
       // Backfill classCode for classes that predate the feature
@@ -222,11 +235,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       for (const mk of sortedMarks) latestByKey.set(`${mk.testId}|${mk.studentId}`, mk)
       const dedupedMarks = [...latestByKey.values()]
 
+      // Backfill studentCode for students that predate the feature (e.g. added by a
+      // teacher before student-login codes existed — admin-created students already
+      // get one server-side on creation, so only teacher-owned rows need this).
+      const takenCodes = new Set(s.map((st: Student) => st.studentCode).filter((c): c is string => !!c))
+      const studentsWithCodes = s.map((st: Student) => {
+        if (st.studentCode) return st
+        let studentCode = genStudentCode()
+        while (takenCodes.has(studentCode)) studentCode = genStudentCode()
+        takenCodes.add(studentCode)
+        const updated = { ...st, studentCode }
+        sbq.upsertStudent(updated).catch(console.error)
+        return updated
+      })
+
       // Merge admin's students (admin-created students have a different teacher_id;
       // if RLS blocks fetchStudentsByClasses for those rows, schoolData fills the gap)
-      const ownStudentIds = new Set(s.map((st: Student) => st.id))
+      const ownStudentIds = new Set(studentsWithCodes.map((st: Student) => st.id))
       const allStudents = [
-        ...s,
+        ...studentsWithCodes,
         ...(schoolData.students as Student[] ?? []).filter((st: Student) => !ownStudentIds.has(st.id)),
       ]
 
@@ -262,6 +289,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCatchupMaterials(cu)
       setAssignments(mergedAssignments)
       setWorksheets(ws)
+      setPrepMaterials(pm)
+      setTaughtTopics(tth)
     } catch (err) {
       console.error('loadFromSupabase failed:', err)
     }
@@ -297,6 +326,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setClasses([]); setStudents([]); setTests([]); setMarks([])
         setMastery([]); setAttendance([]); setSessions([]); setSyllabusTopics([])
         setSyllabusSubTopics([])
+        setPrepMaterials([])
+        setTaughtTopics([])
         localStorage.removeItem('eduteach_teacher')
       }
     })
@@ -470,7 +501,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setClasses([]); setStudents([]); setTests([]); setMarks([])
     setMastery([]); setAttendance([]); setSessions([]); setSyllabusTopics([])
     setSyllabusSubTopics([])
-    setTimetableEntries([]); setCatchupMaterials([]); setAssignments([]); setWorksheets([])
+    setPrepMaterials([])
+    setTaughtTopics([])
     localStorage.removeItem('eduteach_teacher')
     const expired = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict'
     document.cookie = `edu-session=; ${expired}`
@@ -550,6 +582,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('syllabus_sub_topics').delete().eq('teacher_id', tid),
         supabase.from('timetable').delete().eq('teacher_id', tid),
         supabase.from('catchup_materials').delete().eq('teacher_id', tid),
+        supabase.from('prep_materials').delete().eq('teacher_id', tid),
+        supabase.from('taught_topics').delete().eq('teacher_id', tid),
         supabase.from('teacher_class_assignments').delete().eq('teacher_id', tid),
         testIds.length         ? supabase.from('marks').delete().in('test_id', testIds)                            : Promise.resolve(),
         ownedClassIds.length   ? supabase.from('attendance').delete().in('class_id', ownedClassIds)                : Promise.resolve(),
@@ -560,6 +594,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setClasses([]); setStudents([]); setTests([]); setMarks([])
     setAttendance([]); setSessions([]); setSyllabusTopics([]); setSyllabusSubTopics([])
     setMastery([]); setTimetableEntries([]); setCatchupMaterials([]); setAssignments([])
+    setPrepMaterials([]); setTaughtTopics([])
     try { localStorage.removeItem('eduteach_briefing_v7') } catch { /* ignore */ }
   }, [teacher, classes, tests, students])
 
@@ -743,6 +778,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await sbq.deleteWorksheet(id).catch(console.error)
   }, [])
 
+  // ─── Prep materials ───────────────────────────────────────────────────────────
+
+  const getPrepMaterial = useCallback((classId: string, topic: string, subtopic?: string): PrepMaterial | null => {
+    const sub = (subtopic ?? '').trim()
+    return prepMaterials.find(p =>
+      p.classId === classId &&
+      p.topic.trim().toLowerCase() === topic.trim().toLowerCase() &&
+      (p.subtopic ?? '').trim().toLowerCase() === sub.toLowerCase()
+    ) ?? null
+  }, [prepMaterials])
+
+  const savePrepMaterial = useCallback(async (data: {
+    classId: string; subject: string; grade: string; topic: string; subtopic?: string
+    gapTopics: GapTopic[]; lesson: SmartLesson
+  }): Promise<PrepMaterial> => {
+    if (!teacher) throw new Error('Not logged in')
+    const existing = getPrepMaterial(data.classId, data.topic, data.subtopic)
+    const record: PrepMaterial = {
+      ...data,
+      id: existing?.id ?? crypto.randomUUID(),
+      teacherId: teacher.id,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    }
+    setPrepMaterials(prev => [...prev.filter(p => p.id !== record.id), record])
+    await sbq.upsertPrepMaterial(record).catch(console.error)
+    return record
+  }, [teacher, getPrepMaterial])
+
+  // ─── Taught topics (per-day, shown on the timetable) ──────────────────────────
+
+  const getTaughtTopicToday = useCallback((classId: string): TaughtTopic | null => {
+    const today = new Date().toISOString().split('T')[0]
+    return taughtTopics.find(t => t.classId === classId && t.date === today) ?? null
+  }, [taughtTopics])
+
+  const saveTaughtTopic = useCallback(async (data: {
+    classId: string; topic: string; subtopic?: string
+  }): Promise<TaughtTopic> => {
+    if (!teacher) throw new Error('Not logged in')
+    const today = new Date().toISOString().split('T')[0]
+    const existing = getTaughtTopicToday(data.classId)
+    const record: TaughtTopic = {
+      id: existing?.id ?? crypto.randomUUID(),
+      teacherId: teacher.id,
+      classId: data.classId,
+      date: today,
+      topic: data.topic,
+      subtopic: data.subtopic,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    }
+    setTaughtTopics(prev => [...prev.filter(t => t.id !== record.id), record])
+    await sbq.upsertTaughtTopic(record).catch(console.error)
+    return record
+  }, [teacher, getTaughtTopicToday])
+
   const forceSync = useCallback(async () => {
     if (!teacher) return
     setSyncStatus('syncing')
@@ -763,6 +853,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...syllabusActions,
       ...scheduleActions,
       syllabusSubTopics, timetableEntries, catchupMaterials,
+      prepMaterials, savePrepMaterial, getPrepMaterial,
+      taughtTopics, saveTaughtTopic, getTaughtTopicToday,
       worksheets, saveWorksheet, updateWorksheetAnswerKey, removeWorksheet,
       clearAllData, updateTeacherSettings, forceSync,
       getStudentMastery, getStudentWarnings, getStudentMarks,

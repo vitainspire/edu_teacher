@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useAdmin } from '@/lib/admin-context'
 import { ScanLine, Trash2, Loader2, UserPlus, X, Eye, EyeOff } from 'lucide-react'
+ import PageHeader from '@/components/theme/PageHeader'
+import { Sticker } from '@/components/theme/StickerIcon'
 
 interface Scanner {
   id: string
@@ -72,99 +74,106 @@ export default function ScannersPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <ScanLine className="w-5 h-5 text-indigo-600" /> Scanner Staff
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {scanners.length} scanner account{scanners.length !== 1 ? 's' : ''} in {school?.name}
-          </p>
-        </div>
-        <button
-          onClick={() => { setShowModal(true); setCreateError('') }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-          style={{ background: '#4338ca' }}
-        >
-          <UserPlus className="w-4 h-4" /> Add Scanner
-        </button>
-      </div>
+    <div className="paper-page pb-16">
 
-      {/* Info banner */}
-      <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4">
-        <p className="text-sm font-semibold text-indigo-800 mb-1">How scanner accounts work</p>
-        <p className="text-xs text-indigo-600 leading-relaxed">
-          Create an account for each staff member who scans answer sheets. Give them the email and password you set here.
-          They log in at the Scanner portal — no school code needed. Their account is automatically linked to <strong>{school?.name}</strong>.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Admin Portal"
+        title="Scanner Staff"
+        subtitle={`${scanners.length} scanner account${scanners.length !== 1 ? 's' : ''} in ${school?.name ?? 'your school'}`}
+        back={false}
+        action={(
+          <button
+            onClick={() => { setShowModal(true); setCreateError('') }}
+            className="flex items-center gap-1.5 font-bold px-3.5 py-2.5 rounded-2xl text-xs active:scale-95 transition-transform"
+            style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}
+          >
+            <UserPlus size={14} strokeWidth={2.5} /> Add Scanner
+          </button>
+        )}
+      />
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-        </div>
-      ) : scanners.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3">
-            <ScanLine className="w-7 h-7 text-indigo-300" />
+      <div className="px-5 pt-3 relative z-10 max-w-4xl mx-auto">
+
+        {/* Info banner */}
+        <div className="paper-card flex items-start gap-3 px-5 py-4 mb-6">
+          <Sticker tone="gold" size={36} radius={12} style={{ marginTop: 1 }}>
+            <ScanLine size={18} className="text-ink" />
+          </Sticker>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-ink mb-1">How scanner accounts work</p>
+            <p className="text-xs text-ink-soft leading-relaxed">
+              Create an account for each staff member who scans answer sheets. Give them the email and password you set here.
+              They log in at the Scanner portal — no school code needed. Their account is automatically linked to <strong>{school?.name}</strong>.
+            </p>
           </div>
-          <p className="text-gray-500 font-medium">No scanner accounts yet</p>
-          <p className="text-sm text-gray-400 mt-1">Click "Add Scanner" to create an account for scanning staff</p>
         </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Name</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Email</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Added</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {scanners.map(s => (
-                <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                        style={{ background: 'linear-gradient(135deg, #0d1b3e, #1e3a8a)' }}>
-                        {s.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-gray-800">{s.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-sm text-gray-600">{s.email}</td>
-                  <td className="px-5 py-3 text-sm text-gray-400">
-                    {new Date(s.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      onClick={() => removeScanner(s.id)}
-                      disabled={removing === s.id}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                    >
-                      {removing === s.id
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <Trash2 className="w-4 h-4" />}
-                    </button>
-                  </td>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-6 h-6 animate-spin text-ink-soft" />
+          </div>
+        ) : scanners.length === 0 ? (
+          <div className="paper-card text-center py-16 px-6">
+            <Sticker tone="cream" size={56} radius={18} style={{ margin: '0 auto 12px' }}>
+              <ScanLine size={26} className="text-ink-soft" />
+            </Sticker>
+            <p className="text-ink font-bold">No scanner accounts yet</p>
+            <p className="text-sm text-ink-soft mt-1">Click &quot;Add Scanner&quot; to create an account for scanning staff</p>
+          </div>
+        ) : (
+          <div className="paper-card overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr style={{ borderBottom: '1.5px solid rgba(58,44,30,0.1)' }}>
+                  <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Name</th>
+                  <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Email</th>
+                  <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Added</th>
+                  <th className="px-5 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {scanners.map(s => (
+                  <tr key={s.id} className="last:[&>td]:pb-4" style={{ borderBottom: '1px solid rgba(58,44,30,0.06)' }}>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{ background: 'var(--ink)' }}>
+                          {s.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm font-bold text-ink">{s.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-sm text-ink-soft">{s.email}</td>
+                    <td className="px-5 py-3 text-sm text-ink-faint">
+                      {new Date(s.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        onClick={() => removeScanner(s.id)}
+                        disabled={removing === s.id}
+                        className="p-1.5 rounded-lg text-ink-faint hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {removing === s.id
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Trash2 className="w-4 h-4" />}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Create Scanner Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+          <div className="paper-card w-full max-w-md p-6" style={{ background: 'var(--paper-soft)' }}>
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">Add Scanner Account</h2>
+              <h2 className="font-display text-lg font-bold text-ink">Add Scanner Account</h2>
               <button onClick={() => setShowModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                className="p-1.5 text-ink-faint hover:text-ink rounded-lg hover:bg-black/[0.04]">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -177,7 +186,7 @@ export default function ScannersPage() {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
+                <label className="block text-xs font-bold text-ink-soft mb-1">Full Name *</label>
                 <input
                   type="text"
                   required
@@ -185,24 +194,26 @@ export default function ScannersPage() {
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Ramesh Kumar"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm text-ink bg-white focus:outline-none focus:ring-2"
+                  style={{ border: '1.5px solid rgba(58,44,30,0.16)' }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Email Address *</label>
+                <label className="block text-xs font-bold text-ink-soft mb-1">Email Address *</label>
                 <input
                   type="email"
                   required
                   value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                   placeholder="scanner@school.edu.in"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm text-ink bg-white focus:outline-none focus:ring-2"
+                  style={{ border: '1.5px solid rgba(58,44,30,0.16)' }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Password * (min 6 chars)</label>
+                <label className="block text-xs font-bold text-ink-soft mb-1">Password * (min 6 chars)</label>
                 <div className="relative">
                   <input
                     type={showPw ? 'text' : 'password'}
@@ -210,24 +221,25 @@ export default function ScannersPage() {
                     value={form.password}
                     onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                     placeholder="Give this to the scanning staff"
-                    className="w-full px-3 py-2.5 pr-10 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2.5 pr-10 rounded-xl text-sm text-ink bg-white focus:outline-none focus:ring-2"
+                    style={{ border: '1.5px solid rgba(58,44,30,0.16)' }}
                   />
                   <button type="button" onClick={() => setShowPw(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint">
                     {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Share these credentials with the staff member.</p>
+                <p className="text-xs text-ink-faint mt-1">Share these credentials with the staff member.</p>
               </div>
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-ink-soft hover:bg-black/[0.04] transition-colors"
+                  style={{ border: '1.5px solid rgba(58,44,30,0.16)' }}>
                   Cancel
                 </button>
                 <button type="submit" disabled={creating}
-                  className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60"
-                  style={{ background: '#4338ca' }}>
+                  className="flex-1 paper-btn-primary py-2.5 disabled:opacity-60">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Account'}
                 </button>
               </div>

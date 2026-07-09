@@ -241,7 +241,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
     return (
       <div key={student.id} className={clsx(
         'rounded-2xl border-2 transition-all',
-        hasScore ? 'border-emerald-300 bg-emerald-50' : isActive ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white',
+        hasScore ? 'border-sticker-green bg-sticker-green/20' : isActive ? 'border-sticker-blue bg-sticker-blue/20' : 'border-ink/10 bg-white',
       )}>
         {/* Main row */}
         <div
@@ -251,21 +251,21 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
           {/* Roll badge */}
           <div className={clsx(
             'w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
-            hasScore ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600',
+            hasScore ? 'bg-sticker-greenDark text-white' : 'bg-ink/8 text-ink-soft',
           )}>
             {hasScore ? <Check size={15} /> : student.rollNumber}
           </div>
 
-          <span className="flex-1 font-semibold text-slate-900 min-w-0 truncate">{student.name}</span>
+          <span className="flex-1 font-semibold text-ink min-w-0 truncate">{student.name}</span>
 
           {/* Source badge */}
           {isAi && hasScore && (
             isEdited ? (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sticker-gold/30 text-sticker-goldDark shrink-0">
                 Overridden
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sticker-blue/25 text-sticker-blueDark shrink-0">
                 <ScanLine size={9} /> AI Graded
               </span>
             )
@@ -282,7 +282,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
                 setZoom(1)
                 setRotation(0)
               }}
-              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors shrink-0"
+              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sticker-violet/20 text-sticker-violetDark border border-sticker-violet/40 hover:bg-sticker-violet/30 transition-colors shrink-0"
             >
               <FileImage size={9} /> View Paper
             </button>
@@ -291,7 +291,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
               type="button"
               onClick={e => { e.stopPropagation(); openUpload(student.id) }}
               disabled={isUploading}
-              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 transition-colors shrink-0"
+              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-ink/5 text-ink-faint border border-ink/10 hover:bg-ink/10 transition-colors shrink-0"
             >
               {isUploading
                 ? <><Loader2 size={9} className="animate-spin" /> Uploading…</>
@@ -305,7 +305,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
             onClick={e => { e.stopPropagation(); toggleFeedback(student.id) }}
             className={clsx(
               'text-xs font-semibold px-2 py-1 rounded-lg transition-colors shrink-0',
-              entry.feedback ? 'bg-violet-100 text-violet-700' : 'text-slate-400 hover:bg-slate-100',
+              entry.feedback ? 'bg-sticker-violet/25 text-sticker-violetDark' : 'text-ink-faint hover:bg-ink/10',
             )}
           >
             {entry.feedbackOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
@@ -328,18 +328,18 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
               className={clsx(
                 'w-14 text-center text-xl font-bold rounded-xl border-2 py-1 focus:outline-none transition-all',
                 hasScore
-                  ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
-                  : 'border-slate-300 bg-white text-slate-900 focus:border-blue-500',
+                  ? 'border-sticker-green bg-sticker-green/15 text-sticker-greenDark'
+                  : 'border-ink/20 bg-white text-ink focus:border-ink',
               )}
             />
-            <span className="text-xs text-slate-400">/{totalMarks}</span>
+            <span className="text-xs text-ink-faint">/{totalMarks}</span>
           </div>
 
           {/* Percentage */}
           {pct !== null && (
             <span className={clsx(
               'text-xs font-bold w-9 text-right shrink-0',
-              pct >= 0.75 ? 'text-emerald-600' : pct >= 0.5 ? 'text-amber-600' : 'text-red-600',
+              pct >= 0.75 ? 'text-sticker-greenDark' : pct >= 0.5 ? 'text-sticker-goldDark' : 'text-red-600',
             )}>
               {Math.round(pct * 100)}%
             </span>
@@ -348,18 +348,18 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
 
         {/* AI suggestion info bar */}
         {isAi && hasScore && (
-          <div className="mx-3 mb-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-100 flex items-center gap-2">
-            <ScanLine size={11} className="text-sky-500 shrink-0" />
+          <div className="mx-3 mb-2 px-3 py-2 rounded-xl bg-sticker-blue/15 border border-sticker-blue/30 flex items-center gap-2">
+            <ScanLine size={11} className="text-sticker-blueDark shrink-0" />
             {isEdited ? (
-              <p className="text-xs text-sky-800 font-medium leading-snug">
+              <p className="text-xs text-sticker-blueDark font-medium leading-snug">
                 AI suggested{' '}
-                <span className="font-black line-through text-sky-400">{originalAiScores[student.id]}/{totalMarks}</span>
+                <span className="font-black line-through text-ink-faint">{originalAiScores[student.id]}/{totalMarks}</span>
                 {' → '}
-                <span className="font-black text-amber-700">{entry.score}/{totalMarks}</span>
+                <span className="font-black text-sticker-goldDark">{entry.score}/{totalMarks}</span>
                 {' '}(teacher override)
               </p>
             ) : (
-              <p className="text-xs text-sky-800 font-medium leading-snug">
+              <p className="text-xs text-sticker-blueDark font-medium leading-snug">
                 AI graded · suggested{' '}
                 <span className="font-black">{originalAiScores[student.id]}/{totalMarks}</span>
                 {' '}&mdash; edit the score above to override
@@ -377,7 +377,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
               onChange={e => setFeedback(student.id, e.target.value)}
               placeholder="e.g. confused on Q3, skipped last question, good work…"
               maxLength={120}
-              className="w-full text-sm border border-violet-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 text-slate-700 placeholder:text-slate-300"
+              className="w-full text-sm border border-sticker-violet/40 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sticker-violet text-ink placeholder:text-ink-faint"
             />
           </div>
         )}
@@ -388,35 +388,35 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
             <button
               type="button"
               onClick={() => setBreakdownOpen(prev => ({ ...prev, [student.id]: !bdOpen }))}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-violet-50 border border-violet-100 mb-2"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-sticker-violet/15 border border-sticker-violet/30 mb-2"
             >
               <div className="flex items-center gap-2">
-                <Sparkles size={12} className="text-violet-600" />
-                <span className="text-xs font-bold text-violet-800">
+                <Sparkles size={12} className="text-sticker-violetDark" />
+                <span className="text-xs font-bold text-sticker-violetDark">
                   AI Marking Breakdown · {bdList.reduce((s, b) => s + b.marksAwarded, 0)}/{bdList.reduce((s, b) => s + b.maxMarks, 0)} marks
                 </span>
               </div>
-              {bdOpen ? <ChevronUp size={13} className="text-violet-400" /> : <ChevronDown size={13} className="text-violet-400" />}
+              {bdOpen ? <ChevronUp size={13} className="text-sticker-violetDark" /> : <ChevronDown size={13} className="text-sticker-violetDark" />}
             </button>
             {bdOpen && (
               <div className="space-y-1.5">
                 {bdList.map((b, i) => (
-                  <div key={i} className="flex items-start gap-2 bg-white rounded-xl px-3 py-2 border border-violet-100">
-                    <span className="w-5 h-5 rounded-full bg-violet-600 text-white text-[9px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                  <div key={i} className="flex items-start gap-2 bg-white rounded-xl px-3 py-2 border border-sticker-violet/25">
+                    <span className="w-5 h-5 rounded-full bg-sticker-violetDark text-white text-[9px] font-black flex items-center justify-center shrink-0 mt-0.5">
                       {b.questionIndex + 1}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-slate-600 leading-snug truncate">
+                      <p className="text-[11px] text-ink-soft leading-snug truncate">
                         {questions?.[b.questionIndex]?.text ?? `Q${b.questionIndex + 1}`}
                       </p>
                       {b.feedback && (
-                        <p className="text-[10px] text-slate-400 mt-0.5 italic">{b.feedback}</p>
+                        <p className="text-[10px] text-ink-faint mt-0.5 italic">{b.feedback}</p>
                       )}
                     </div>
                     <span className={clsx(
                       'text-xs font-black shrink-0',
-                      b.marksAwarded === b.maxMarks ? 'text-emerald-600' :
-                      b.marksAwarded === 0 ? 'text-red-500' : 'text-amber-600',
+                      b.marksAwarded === b.maxMarks ? 'text-sticker-greenDark' :
+                      b.marksAwarded === 0 ? 'text-red-500' : 'text-sticker-goldDark',
                     )}>
                       {b.marksAwarded}/{b.maxMarks}
                     </span>
@@ -517,14 +517,14 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
 
       {/* Progress bar */}
       <div className="flex items-center justify-between px-1">
-        <span className="text-sm text-slate-500 font-medium">{enteredCount} of {students.length} entered</span>
-        <div className="flex-1 mx-3 bg-slate-200 rounded-full h-2">
+        <span className="text-sm text-ink-soft font-medium">{enteredCount} of {students.length} entered</span>
+        <div className="flex-1 mx-3 bg-ink/10 rounded-full h-2">
           <div
-            className="bg-blue-600 h-2 rounded-full transition-all"
+            className="bg-ink h-2 rounded-full transition-all"
             style={{ width: `${students.length > 0 ? (enteredCount / students.length) * 100 : 0}%` }}
           />
         </div>
-        <span className="text-sm font-bold text-blue-700">
+        <span className="text-sm font-bold text-ink">
           {Math.round(students.length > 0 ? (enteredCount / students.length) * 100 : 0)}%
         </span>
       </div>
@@ -536,12 +536,19 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
 
       {/* Actions */}
       <div className="flex gap-3 pt-2 pb-4">
-        <button type="button" onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 py-3.5 rounded-2xl text-ink-soft font-bold text-sm active:scale-95 transition-transform"
+          style={{ background: 'rgba(58,44,30,0.06)' }}
+        >
+          Cancel
+        </button>
         <button
           type="button"
           onClick={handleSave}
           disabled={enteredCount === 0 || saving}
-          className="btn-primary flex-1"
+          className="paper-btn-primary flex-1"
         >
           {saving ? 'Saving…' : `Save ${enteredCount} Score${enteredCount !== 1 ? 's' : ''}`}
         </button>

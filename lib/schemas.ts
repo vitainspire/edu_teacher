@@ -145,18 +145,41 @@ export const RecoverySchema = z.object({
   })).max(20).nullish(),
 })
 
-export const UnderstandingCheckSchema = z.object({
-  topic:   reqStr(LEN.topic),
-  subject: reqStr(LEN.topic),
-  grade:   anyStr(LEN.short),
+export const PracticeQuizSchema = z.object({
+  topic:     reqStr(LEN.topic),
+  subject:   reqStr(LEN.topic),
+  grade:     anyStr(LEN.short),
+  interests: z.array(anyStr(LEN.name)).max(20).optional(),
 })
 
-export const PracticeQuizSchema = z.object({
-  topic:           reqStr(LEN.topic),
-  subject:         reqStr(LEN.topic),
-  grade:           anyStr(LEN.short),
-  interests:       z.array(anyStr(LEN.name)).max(20).optional(),
-  difficultyLevel: z.enum(['beginner', 'standard', 'advanced']).optional(),
+export const FlashcardsSchema = z.object({
+  topic:     reqStr(LEN.topic),
+  subject:   reqStr(LEN.topic),
+  grade:     anyStr(LEN.short),
+  interests: z.array(anyStr(LEN.name)).max(20).optional(),
+})
+
+export const TestPrepSchema = z.object({
+  topic:      reqStr(LEN.topic),
+  subject:    reqStr(LEN.topic),
+  grade:      anyStr(LEN.short),
+  totalMarks: z.number().int().positive().max(1000).optional(),
+  interests:  z.array(anyStr(LEN.name)).max(20).optional(),
+})
+
+export const TestStudyGuideSchema = z.object({
+  topic:      reqStr(LEN.topic),
+  subject:    reqStr(LEN.topic),
+  grade:      anyStr(LEN.short),
+  totalMarks: z.number().int().positive().max(1000).optional(),
+  interests:  z.array(anyStr(LEN.name)).max(20).optional(),
+})
+
+export const ConceptGuideSchema = z.object({
+  topic:     reqStr(LEN.topic),
+  subject:   reqStr(LEN.topic),
+  grade:     anyStr(LEN.short),
+  interests: z.array(anyStr(LEN.name)).max(20).optional(),
 })
 
 export const StudentReportSchema = z.object({
@@ -255,6 +278,15 @@ export const ScanStudentsSchema = z.object({
   image: z.string().min(1),   // data URL — payload size limited by Vercel infra
 })
 
+export const ScanAttendanceSchema = z.object({
+  imageBase64: z.string().min(1),
+  students: z.array(z.object({
+    id:         shortId,
+    name:       nameStr,
+    rollNumber: anyStr(LEN.short),
+  })).min(1).max(300),
+})
+
 export const TestAnalysisSchema = z.object({
   topic:      reqStr(LEN.topic),
   totalMarks: z.number().positive().max(1000),
@@ -309,6 +341,28 @@ export const StudentPollSchema = z.object({
   topic:           anyStr(LEN.topic).optional(),
   subject:         anyStr(LEN.topic).optional(),
   response:        z.enum(['understood', 'partial', 'confused']),
+})
+
+export const AnnouncementSchema = z.object({
+  title:    reqStr(LEN.name),
+  body:     reqStr(LEN.text),
+  category: z.enum(['general', 'exam', 'urgent', 'holiday']).optional(),
+})
+
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+
+export const AcademicEventSchema = z.object({
+  title:              reqStr(LEN.name),
+  category:           z.enum(['holiday', 'exam', 'term']),
+  holidaySubtype:      z.enum(['public', 'school', 'cultural']).optional(),
+  countsAsNonWorking: z.boolean().optional(),
+  startDate:          dateStr,
+  endDate:            dateStr,
+  description:        anyStr(LEN.text).optional(),
+}).refine(d => d.endDate >= d.startDate, { message: 'endDate must be on or after startDate', path: ['endDate'] })
+
+export const SeedHolidaysSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
 })
 
 // ─── Parse helper ─────────────────────────────────────────────────────────────

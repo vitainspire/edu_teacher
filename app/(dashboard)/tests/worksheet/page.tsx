@@ -91,8 +91,8 @@ export default function WorksheetPage() {
 
   if (!draft) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9' }}>
-        <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #2563eb', borderTopColor: 'transparent', animation: 'spin .7s linear infinite' }} />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper-bg)' }}>
+        <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--ink)', borderTopColor: 'transparent', animation: 'spin .7s linear infinite' }} />
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     )
@@ -107,9 +107,9 @@ export default function WorksheetPage() {
     if (!draft) return null
     if (keyStage === 'prompt') {
       return (
-        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ background: 'var(--ink)', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Key size={15} color="#fbbf24" />
+            <Key size={15} color="#EAC968" />
             <p style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Would you like an answer key?</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -118,7 +118,7 @@ export default function WorksheetPage() {
               <PenLine size={14} /> I'll enter answers myself
             </button>
             <button onClick={generateAiKey}
-              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 0', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 20px rgba(79,70,229,.45)' }}>
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 0', borderRadius: 14, border: 'none', background: '#8069B0', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Sparkles size={14} /> Generate with AI
             </button>
           </div>
@@ -132,10 +132,10 @@ export default function WorksheetPage() {
 
     if (keyStage === 'ai-loading') {
       return (
-        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', padding: '22px 24px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2.5px solid #7c3aed', borderTopColor: 'transparent', animation: 'spin .7s linear infinite', flexShrink: 0 }} />
+        <div style={{ background: 'var(--ink)', padding: '22px 24px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2.5px solid #8069B0', borderTopColor: 'transparent', animation: 'spin .7s linear infinite', flexShrink: 0 }} />
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#c4b5fd' }}>AI is writing the answer key…</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#C7B7E8' }}>AI is writing the answer key…</p>
             <p style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', marginTop: 2 }}>This takes about 10 seconds</p>
           </div>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -145,7 +145,7 @@ export default function WorksheetPage() {
 
     // manual or done
     return (
-      <div style={{ background: '#0f172a', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
 
         {/* Manual editor */}
         {keyStage === 'manual' && (
@@ -155,22 +155,22 @@ export default function WorksheetPage() {
               for (let i = 0; i < si; i++) prev += draft.sections[i].questions.length
               return (
                 <div key={si}>
-                  <p style={{ fontSize: 10.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>{sec.label}</p>
+                  <p style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>{sec.label}</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {sec.questions.map((q, qi) => {
                       const k = `${si}-${qi}`
                       const isMcq = sec.type === 'mcq'
                       return (
                         <div key={qi} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', minWidth: 22 }}>{prev + qi + 1}.</span>
-                          <p style={{ fontSize: 11, color: '#94a3b8', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.text}</p>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.45)', minWidth: 22 }}>{prev + qi + 1}.</span>
+                          <p style={{ fontSize: 11, color: 'rgba(255,255,255,.5)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.text}</p>
                           {isMcq ? (
                             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                               {['A', 'B', 'C', 'D'].map(l => (
                                 <button key={l} onClick={() => setAnswerKey(p => ({ ...p, [k]: l }))}
                                   style={{ width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 11, fontFamily: 'inherit',
-                                    background: answerKey[k] === l ? '#7c3aed' : 'rgba(255,255,255,.08)',
-                                    color: answerKey[k] === l ? '#fff' : '#64748b' }}>
+                                    background: answerKey[k] === l ? '#8069B0' : 'rgba(255,255,255,.08)',
+                                    color: answerKey[k] === l ? '#fff' : 'rgba(255,255,255,.45)' }}>
                                   {l}
                                 </button>
                               ))}
@@ -179,7 +179,7 @@ export default function WorksheetPage() {
                             <input value={answerKey[k] ?? ''} onChange={e => setAnswerKey(p => ({ ...p, [k]: e.target.value }))}
                               placeholder="Answer…"
                               style={{ fontSize: 11, border: '1px solid rgba(255,255,255,.12)', borderRadius: 8, padding: '5px 10px', width: 200, flexShrink: 0,
-                                fontFamily: 'inherit', background: 'rgba(255,255,255,.05)', color: '#e2e8f0' }} />
+                                fontFamily: 'inherit', background: 'rgba(255,255,255,.05)', color: 'rgba(255,255,255,.85)' }} />
                           )}
                         </div>
                       )
@@ -196,8 +196,8 @@ export default function WorksheetPage() {
           <div style={{ display: 'flex', gap: 10, padding: '14px 24px', alignItems: 'center' }}>
             <button onClick={handleSave} disabled={saving}
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '13px 0', borderRadius: 14, border: 'none',
-                background: saved ? '#16a34a' : saveError ? '#dc2626' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                color: '#fff', fontWeight: 800, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                background: saved ? '#5C8F52' : saveError ? '#C46B54' : '#EAC968',
+                color: (saved || saveError) ? '#fff' : 'var(--ink)', fontWeight: 800, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                 opacity: saving ? 0.7 : 1, transition: 'background .3s' }}>
               {saved ? <><Check size={14} /> Saved!</> : saving ? 'Saving…' : <><Save size={14} /> Save Worksheet</>}
             </button>
@@ -230,10 +230,10 @@ export default function WorksheetPage() {
       `}</style>
 
       {/* Full-page layout: top bar + scrollable paper + sticky bottom */}
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#e2e8f0' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--paper-bg)' }}>
 
         {/* ── Top bar ── */}
-        <div className="ws-no-print" style={{ background: '#0f172a', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 50, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+        <div className="ws-no-print" style={{ background: 'var(--ink)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 50, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
           <button onClick={() => router.back()}
             style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(255,255,255,.7)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: 'inherit' }}>
             <ArrowLeft size={16} /> Back to Tests
@@ -250,7 +250,7 @@ export default function WorksheetPage() {
 
         {/* ── Paper ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '36px 16px 24px' }}>
-          <div className="ws-paper" style={{ background: '#fff', maxWidth: 820, margin: '0 auto', borderRadius: 12, boxShadow: '0 8px 48px rgba(0,0,0,.18)', padding: '56px 64px', fontFamily: 'Georgia, serif', color: '#1e293b' }}>
+          <div className="ws-paper" style={{ background: '#fff', maxWidth: 820, margin: '0 auto', borderRadius: 12, border: '1px solid rgba(15,23,42,.12)', padding: '56px 64px', fontFamily: 'Georgia, serif', color: '#1e293b' }}>
 
             {/* Header */}
             <div style={{ textAlign: 'center', borderBottom: '2.5px solid #1e293b', paddingBottom: 22, marginBottom: 32 }}>
@@ -352,7 +352,7 @@ export default function WorksheetPage() {
         </div>
 
         {/* ── Sticky answer-key panel ── */}
-        <div className="ws-no-print" style={{ flexShrink: 0, boxShadow: '0 -4px 32px rgba(0,0,0,.35)' }}>
+        <div className="ws-no-print" style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,.12)' }}>
           <KeyPanel />
         </div>
 

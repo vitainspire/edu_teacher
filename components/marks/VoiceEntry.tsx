@@ -111,10 +111,10 @@ export default function VoiceEntry({ students, totalMarks, onConfirm }: Props) {
 
   if (confirmed) {
     return (
-      <div className="flex items-center gap-2 text-green-700 py-2">
+      <div className="flex items-center gap-2 text-sticker-greenDark py-2">
         <CheckCircle size={18} />
         <span className="text-sm font-semibold">{parsed.length} scores applied</span>
-        <button onClick={() => setConfirmed(false)} className="text-xs text-gray-500 ml-auto">Reset</button>
+        <button onClick={() => setConfirmed(false)} className="text-xs text-ink-faint ml-auto">Reset</button>
       </div>
     )
   }
@@ -127,36 +127,36 @@ export default function VoiceEntry({ students, totalMarks, onConfirm }: Props) {
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
             listening
               ? 'bg-red-100 text-red-700 animate-pulse'
-              : 'bg-blue-100 text-blue-700'
+              : 'bg-sticker-gold/30 text-sticker-goldDark'
           }`}
         >
           {listening ? <MicOff size={16} /> : <Mic size={16} />}
           {listening ? 'Stop' : 'Voice Entry'}
         </button>
-        <p className="text-xs text-gray-500 flex-1">
+        <p className="text-xs text-ink-soft flex-1">
           Say: &ldquo;Ravi 7 Priya 4 Suresh 9&rdquo;
         </p>
       </div>
 
       {transcript && (
-        <div className="bg-gray-50 rounded-xl p-3">
-          <p className="text-xs text-gray-500 mb-1">Heard:</p>
-          <p className="text-sm text-gray-800 italic">&ldquo;{transcript}&rdquo;</p>
+        <div className="bg-ink/5 rounded-xl p-3">
+          <p className="text-xs text-ink-soft mb-1">Heard:</p>
+          <p className="text-sm text-ink italic">&ldquo;{transcript}&rdquo;</p>
         </div>
       )}
 
       {parsed.length > 0 && (
-        <div className="bg-blue-50 rounded-xl p-3">
-          <p className="text-xs font-semibold text-blue-800 mb-2">Parsed ({parsed.length} students):</p>
+        <div className="bg-sticker-green/20 rounded-xl p-3">
+          <p className="text-xs font-semibold text-sticker-greenDark mb-2">Parsed ({parsed.length} students):</p>
           <div className="space-y-1">
             {parsed.map((e) => (
               <div key={e.studentId} className="flex justify-between text-sm">
-                <span className="text-gray-700">{e.name}</span>
-                <span className="font-bold text-blue-700">{e.score} / {totalMarks}</span>
+                <span className="text-ink">{e.name}</span>
+                <span className="font-bold text-sticker-greenDark">{e.score} / {totalMarks}</span>
               </div>
             ))}
           </div>
-          <button onClick={handleConfirm} className="btn-primary w-full mt-3">
+          <button onClick={handleConfirm} className="paper-btn-primary w-full mt-3">
             Apply These Scores
           </button>
         </div>

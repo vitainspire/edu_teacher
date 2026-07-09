@@ -31,6 +31,10 @@ function extractJSON(raw: string): string {
   return raw
 }
 
+// The AI call below uses a 90s timeoutMs — without a matching maxDuration the
+// platform could kill the function before that timeout ever fires.
+export const maxDuration = 90
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()

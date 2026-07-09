@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getClientIp } from '@/lib/logger'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getScannerSchoolId, verifyWorksheetInSchool } from '@/lib/scanner-auth'
 
 // Scanner portal — save a worksheet mark using service role key (no Supabase session needed).
-// Verifies teacher ownership of the worksheet before saving.
+// Authorization is via the signed school-scoped token from /api/scanner/connect,
+// not a client-supplied teacherId (which anyone could guess/forge).
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = await checkRateLimit(ip)
   if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded.' }, { status: 429 })
 
+  const schoolId = getScannerSchoolId(req)
+  if (!schoolId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   let body: {
-    teacherId: string
     worksheetId: string
     studentId: string
     score: number
@@ -23,27 +27,20 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }
 
-  const { teacherId, worksheetId, studentId, score, totalMarks, breakdown, feedback, imageUrl } = body
-  if (!teacherId || !worksheetId || !studentId || score === undefined || !totalMarks) {
+  const { worksheetId, studentId, score, totalMarks, breakdown, feedback, imageUrl } = body
+  if (!worksheetId || !studentId || score === undefined || !totalMarks) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
   if (score < 0 || score > totalMarks) {
     return NextResponse.json({ error: 'score out of range' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
-
-  // Verify teacher owns the worksheet
-  const { data: ws, error: wsErr } = await admin
-    .from('worksheets')
-    .select('teacher_id')
-    .eq('id', worksheetId)
-    .single()
-  if (wsErr || !ws) return NextResponse.json({ error: 'Worksheet not found' }, { status: 404 })
-  if ((ws as { teacher_id: string }).teacher_id !== teacherId) {
+  // Verify the worksheet belongs to a class in the authenticated school
+  if (!(await verifyWorksheetInSchool(schoolId, worksheetId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const admin = createAdminClient()
   const { error } = await admin.from('worksheet_marks').upsert(
     {
       id: crypto.randomUUID(),

@@ -11,30 +11,30 @@ interface Props {
 const LEVEL_CONFIG = {
   critical: {
     icon: AlertTriangle,
-    bg: 'bg-red-50 border-red-200',
-    iconBg: 'bg-red-100',
-    iconColor: 'text-red-600',
-    titleColor: 'text-red-800',
-    actionColor: 'text-red-700',
-    dot: 'bg-red-500',
+    bg: 'bg-sticker-coral/15 border-sticker-coral/40',
+    iconBg: 'bg-sticker-coral/30',
+    iconColor: 'text-sticker-coralDark',
+    titleColor: 'text-sticker-coralDark',
+    actionColor: 'text-sticker-coralDark',
+    dot: 'bg-sticker-coralDark',
   },
   watch: {
     icon: Eye,
-    bg: 'bg-yellow-50 border-yellow-200',
-    iconBg: 'bg-yellow-100',
-    iconColor: 'text-yellow-600',
-    titleColor: 'text-yellow-800',
-    actionColor: 'text-yellow-700',
-    dot: 'bg-yellow-500',
+    bg: 'bg-sticker-gold/15 border-sticker-gold/40',
+    iconBg: 'bg-sticker-gold/30',
+    iconColor: 'text-sticker-goldDark',
+    titleColor: 'text-sticker-goldDark',
+    actionColor: 'text-sticker-goldDark',
+    dot: 'bg-sticker-goldDark',
   },
   info: {
     icon: Info,
-    bg: 'bg-blue-50 border-blue-200',
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
-    titleColor: 'text-blue-800',
-    actionColor: 'text-blue-700',
-    dot: 'bg-blue-500',
+    bg: 'bg-sticker-blue/15 border-sticker-blue/40',
+    iconBg: 'bg-sticker-blue/30',
+    iconColor: 'text-sticker-blueDark',
+    titleColor: 'text-sticker-blueDark',
+    actionColor: 'text-sticker-blueDark',
+    dot: 'bg-sticker-blueDark',
   },
 }
 
@@ -55,15 +55,15 @@ export default function WarningCard({ studentName, rollNumber, warnings }: Props
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={clsx('font-bold text-base', cfg.titleColor)}>{studentName}</span>
-            <span className="text-xs text-gray-500">#{rollNumber}</span>
+            <span className="font-bold text-base text-ink">{studentName}</span>
+            <span className="text-xs text-ink-soft">#{rollNumber}</span>
             {warnings.length > 1 && (
               <span className={clsx('text-xs font-bold px-1.5 py-0.5 rounded-full text-white', cfg.dot)}>
                 +{warnings.length - 1}
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-700 font-medium">{topWarning.reason}</p>
+          <p className="text-sm text-ink font-medium">{topWarning.reason}</p>
           <p className={clsx('text-sm mt-1.5 font-semibold', cfg.actionColor)}>
             → {topWarning.action}
           </p>
@@ -71,13 +71,13 @@ export default function WarningCard({ studentName, rollNumber, warnings }: Props
       </div>
 
       {warnings.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-current border-opacity-20 space-y-2">
+        <div className="mt-3 pt-3 border-t border-black/10 space-y-2">
           {warnings.slice(1).map((w, i) => {
             const c2 = LEVEL_CONFIG[w.level]
             return (
               <div key={i} className="flex gap-2">
                 <span className={clsx('w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0', c2.dot)} />
-                <p className="text-xs text-gray-600">{w.reason}</p>
+                <p className="text-xs text-ink-soft">{w.reason}</p>
               </div>
             )
           })}

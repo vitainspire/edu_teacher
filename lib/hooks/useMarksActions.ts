@@ -53,11 +53,7 @@ export function useMarksActions(
     for (const entry of entries) {
       const studentTopicMarks = updatedMarks.filter(m => {
         const t = testsRef.current!.find(t => t.id === m.testId)
-        if (!t) return false
-        // Match by syllabusTopicId when available — avoids string mismatch between test and syllabus
-        if (test.syllabusTopicId && t.syllabusTopicId)
-          return m.studentId === entry.studentId && t.syllabusTopicId === test.syllabusTopicId
-        return m.studentId === entry.studentId && t.topic === test.topic
+        return m.studentId === entry.studentId && t?.topic === test.topic
       })
       const scores = studentTopicMarks.map(m => m.score)
       const totals = studentTopicMarks.map(m => testsRef.current!.find(t => t.id === m.testId)?.totalMarks ?? 10)

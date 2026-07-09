@@ -3,6 +3,11 @@ import { callAI } from '@/lib/ai'
 import { createServerComponentClient } from '@/lib/supabase-server'
 import { parseBody, ExtractSyllabusSchema } from '@/lib/schemas'
 import { apiLog, getClientIp } from '@/lib/logger'
+import { checkVisionRateLimit } from '@/lib/rate-limit'
+
+// Accepts an optional image (vision call), so it's gated by the tighter vision
+// rate limit even though it also requires an authenticated teacher.
+export const maxDuration = 60
 
 const SYSTEM = `You are a school syllabus parser for Indian curriculum (CBSE/State boards).
 Parse the input and return structured topics with their sub-topics.
@@ -40,6 +45,12 @@ function extractJSON(raw: string): string {
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()
+
+  const { allowed } = await checkVisionRateLimit(ip)
+  if (!allowed) {
+    apiLog({ route: 'extract-syllabus', ip, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
+    return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
+  }
 
   const supabase = await createServerComponentClient()
   const { data: { user } } = await supabase.auth.getUser()

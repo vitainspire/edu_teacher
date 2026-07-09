@@ -207,8 +207,8 @@ export default function StudentDetailPage() {
 
   if (!student) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Student not found</p>
+      <div className="paper-page flex items-center justify-center">
+        <p className="text-ink-soft">Student not found</p>
       </div>
     )
   }
@@ -285,43 +285,40 @@ export default function StudentDetailPage() {
   ] as const
 
   const avatarGradients = [
-    'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-    'linear-gradient(135deg, #059669 0%, #34d399 100%)',
-    'linear-gradient(135deg, #2563eb 0%, #60a5fa 100%)',
-    'linear-gradient(135deg, #d97706 0%, #fbbf24 100%)',
-    'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)',
-    'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
+    '#5B87AD',
+    '#5C8F52',
+    '#C46B54',
+    '#AD8A2C',
+    '#8069B0',
+    '#BD6D8B',
   ]
   let hash = 0
   for (let i = 0; i < student.name.length; i++) hash = student.name.charCodeAt(i) + ((hash << 5) - hash)
   const avatarBg = warnings.some(w => w.level === 'critical')
-    ? 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'
+    ? '#dc2626'
     : avatarGradients[Math.abs(hash) % avatarGradients.length]
 
   return (
-    <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
+    <div className="paper-page">
       {/* Header */}
-      <div className="bg-white px-4 pt-5 pb-0" style={{ boxShadow: '0 1px 12px rgba(15,23,42,0.06)' }}>
+      <div className="px-4 pt-5 pb-0 relative z-10">
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => router.back()}
             className="w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform"
-            style={{ background: '#f1f5f9' }}
+            style={{ background: 'rgba(58,44,30,0.08)' }}
           >
-            <ArrowLeft size={18} className="text-slate-600" />
+            <ArrowLeft size={18} className="text-ink" />
           </button>
           <div
             className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0"
-            style={{ background: avatarBg, boxShadow: '0 3px 10px rgba(79,70,229,0.3)' }}
+            style={{ background: avatarBg }}
           >
             {student.name[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-black text-slate-900 leading-tight truncate">{student.name}</h1>
-            <p className="text-xs text-slate-400 font-medium">Roll #{student.rollNumber} · {marks.length} assessments</p>
-            {student.studentCode && (
-              <p className="text-[10px] text-slate-400 mt-0.5">Student Portal Code: <span className="font-black text-indigo-500 tracking-wider">{student.studentCode}</span></p>
-            )}
+            <h1 className="font-display text-base font-bold text-ink leading-tight truncate">{student.name}</h1>
+            <p className="text-xs text-ink-soft font-medium">Roll #{student.rollNumber} · {marks.length} assessments</p>
           </div>
           <div className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${getMasteryColor(avgMastery)}`}>
             {getMasteryLabel(avgMastery)}
@@ -339,9 +336,10 @@ export default function StudentDetailPage() {
               }}
               className={`shrink-0 px-4 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
                 activeTab === t.key
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-slate-400'
+                  ? 'text-ink'
+                  : 'border-transparent text-ink-faint'
               }`}
+              style={activeTab === t.key ? { borderBottomColor: 'var(--ink)' } : undefined}
             >
               {t.label}
             </button>
@@ -349,7 +347,7 @@ export default function StudentDetailPage() {
         </div>
       </div>
 
-      <div className="px-4 py-4 space-y-3 pb-24">
+      <div className="px-4 py-4 space-y-3 pb-24 relative z-10">
 
         {/* OVERVIEW */}
         {activeTab === 'overview' && (
@@ -358,34 +356,34 @@ export default function StudentDetailPage() {
               <WarningCard studentName={student.name} rollNumber={student.rollNumber} warnings={warnings} />
             )}
             {(signal || loadingPotential) && (
-              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
-                <p className="text-sm font-semibold text-purple-800 flex items-center gap-2 mb-1">
+              <div className="rounded-2xl p-4" style={{ background: '#E9E1F6', border: '1px solid rgba(49,33,92,0.15)' }}>
+                <p className="text-sm font-semibold flex items-center gap-2 mb-1" style={{ color: '#31215C' }}>
                   <Sparkles size={14} /> Hidden Potential Detected
                 </p>
                 {loadingPotential ? (
-                  <div className="flex items-center gap-2 text-purple-600">
+                  <div className="flex items-center gap-2" style={{ color: '#5B4A85' }}>
                     <RefreshCw size={14} className="animate-spin" />
                     <span className="text-sm">Analysing…</span>
                   </div>
                 ) : (
-                  <p className="text-sm text-purple-700">{potentialSentence}</p>
+                  <p className="text-sm" style={{ color: '#4A3A73' }}>{potentialSentence}</p>
                 )}
               </div>
             )}
             {/* Score progress chart */}
             {scorePoints.length > 0 && (
-              <div className="card">
-                <p className="font-semibold text-gray-900 mb-1">Score Progress</p>
-                <p className="text-xs text-slate-400 mb-3">{scorePoints.length} test{scorePoints.length !== 1 ? 's' : ''} this year</p>
+              <div className="paper-card p-4">
+                <p className="font-semibold text-ink mb-1">Score Progress</p>
+                <p className="text-xs text-ink-soft mb-3">{scorePoints.length} test{scorePoints.length !== 1 ? 's' : ''} this year</p>
                 <ScoreChart points={scorePoints} />
               </div>
             )}
 
             {/* Attendance trend chart */}
             {weekBars.length > 0 && (
-              <div className="card">
+              <div className="paper-card p-4">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="font-semibold text-gray-900">Attendance by Week</p>
+                  <p className="font-semibold text-ink">Attendance by Week</p>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                     attendanceRate >= 0.9 ? 'bg-emerald-100 text-emerald-700' :
                     attendanceRate >= 0.75 ? 'bg-amber-100 text-amber-700' :
@@ -400,22 +398,22 @@ export default function StudentDetailPage() {
 
             {/* Recent assessments list */}
             {marks.length > 0 ? (
-              <div className="card">
-                <p className="font-semibold text-gray-900 mb-3">Recent Assessments</p>
+              <div className="paper-card p-4">
+                <p className="font-semibold text-ink mb-3">Recent Assessments</p>
                 <div className="space-y-3">
                   {marks.slice(-5).reverse().map((m) => {
                     const pct = m.score / m.totalMarks
                     return (
                       <div key={m.id} className="flex items-center gap-3">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-800">{m.topic}</p>
-                          <p className="text-xs text-gray-500">{new Date(m.conductedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                          <p className="text-sm font-medium text-ink">{m.topic}</p>
+                          <p className="text-xs text-ink-soft">{new Date(m.conductedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                         </div>
                         <div className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <p className="font-bold text-gray-900">{m.score}/{m.totalMarks}</p>
+                            <p className="font-bold text-ink">{m.score}/{m.totalMarks}</p>
                             {m.source === 'ai_scanned' && (
-                              <span title="AI Scanned"><ScanLine size={12} className="text-blue-400 shrink-0" /></span>
+                              <span title="AI Scanned"><ScanLine size={12} className="text-ink-faint shrink-0" /></span>
                             )}
                           </div>
                           <p className={`text-xs font-semibold ${pct >= 0.75 ? 'text-green-600' : pct >= 0.5 ? 'text-yellow-600' : 'text-red-600'}`}>
@@ -428,7 +426,7 @@ export default function StudentDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="card text-center py-6 text-gray-500">
+              <div className="paper-card text-center py-6 px-4 text-ink-soft">
                 <p>No assessments yet</p>
                 <p className="text-sm mt-1">Enter marks to see this student&apos;s performance</p>
               </div>
@@ -440,43 +438,36 @@ export default function StudentDetailPage() {
         {activeTab === 'allsubjects' && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <LayoutGrid size={15} className="text-indigo-600" />
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(58,44,30,0.08)' }}>
+                <LayoutGrid size={15} className="text-ink" />
               </div>
               <div>
-                <p className="font-bold text-slate-800">All Subjects</p>
-                <p className="text-xs text-slate-400">Cross-subject view for {student.name.split(' ')[0]}</p>
+                <p className="font-bold text-ink">All Subjects</p>
+                <p className="text-xs text-ink-soft">Cross-subject view for {student.name.split(' ')[0]}</p>
               </div>
             </div>
 
             {subjectOverviewLoading && (
-              <div className="card text-center py-10">
-                <RefreshCw size={22} className="text-indigo-400 mx-auto mb-3 animate-spin" />
-                <p className="text-sm text-slate-500">Loading subject data…</p>
+              <div className="paper-card text-center py-10">
+                <RefreshCw size={22} className="text-ink-soft mx-auto mb-3 animate-spin" />
+                <p className="text-sm text-ink-soft">Loading subject data…</p>
               </div>
             )}
 
             {!subjectOverviewLoading && subjectOverview && subjectOverview.length === 0 && (
-              <div className="card text-center py-10">
-                <Users2 size={28} className="text-slate-300 mx-auto mb-3" />
-                <p className="font-semibold text-slate-700">No other subjects found</p>
-                <p className="text-xs text-slate-400 mt-1">This student appears in only one class.</p>
+              <div className="paper-card text-center py-10">
+                <Users2 size={28} className="text-ink-faint mx-auto mb-3" />
+                <p className="font-semibold text-ink">No other subjects found</p>
+                <p className="text-xs text-ink-soft mt-1">This student appears in only one class.</p>
               </div>
             )}
 
             {!subjectOverviewLoading && subjectOverview && subjectOverview.map((s, idx) => {
               const attColor = s.attendanceRate >= 0.9 ? 'text-emerald-600' : s.attendanceRate >= 0.75 ? 'text-amber-600' : 'text-red-500'
               const scoreColor = s.avgScore >= 0.75 ? 'text-emerald-600' : s.avgScore >= 0.5 ? 'text-amber-600' : 'text-red-500'
-              const SUBJ_COLORS = [
-                'linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)',
-                'linear-gradient(135deg,#059669 0%,#34d399 100%)',
-                'linear-gradient(135deg,#2563eb 0%,#60a5fa 100%)',
-                'linear-gradient(135deg,#d97706 0%,#fbbf24 100%)',
-                'linear-gradient(135deg,#e11d48 0%,#fb7185 100%)',
-                'linear-gradient(135deg,#0891b2 0%,#22d3ee 100%)',
-              ]
+              const SUBJ_COLORS = ['#5B87AD', '#5C8F52', '#C46B54', '#AD8A2C', '#8069B0', '#BD6D8B']
               return (
-                <div key={s.classId} className="card space-y-3">
+                <div key={s.classId} className="paper-card space-y-3 p-4">
                   {/* Subject header */}
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0"
@@ -484,47 +475,47 @@ export default function StudentDetailPage() {
                       {s.subjectName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 text-sm">{s.subjectName}</p>
-                      <p className="text-xs text-slate-400">{s.teacherName}</p>
+                      <p className="font-bold text-ink text-sm">{s.subjectName}</p>
+                      <p className="text-xs text-ink-soft">{s.teacherName}</p>
                     </div>
                   </div>
 
                   {/* Stats row */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
+                    <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(58,44,30,0.06)' }}>
                       <p className={`text-lg font-black ${attColor}`}>
                         {s.totalSessions > 0 ? `${Math.round(s.attendanceRate * 100)}%` : '—'}
                       </p>
-                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Attendance</p>
+                      <p className="text-[10px] font-semibold text-ink-soft mt-0.5">Attendance</p>
                     </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
-                      <p className={`text-lg font-black ${s.totalTests > 0 ? scoreColor : 'text-slate-300'}`}>
+                    <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(58,44,30,0.06)' }}>
+                      <p className={`text-lg font-black ${s.totalTests > 0 ? scoreColor : 'text-ink-faint'}`}>
                         {s.totalTests > 0 ? `${Math.round(s.avgScore * 100)}%` : '—'}
                       </p>
-                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Avg Score</p>
+                      <p className="text-[10px] font-semibold text-ink-soft mt-0.5">Avg Score</p>
                     </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
-                      <p className="text-lg font-black text-slate-800">{s.totalTests}</p>
-                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Tests</p>
+                    <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(58,44,30,0.06)' }}>
+                      <p className="text-lg font-black text-ink">{s.totalTests}</p>
+                      <p className="text-[10px] font-semibold text-ink-soft mt-0.5">Tests</p>
                     </div>
                   </div>
 
                   {/* Recent marks */}
                   {s.recentMarks.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Recent Tests</p>
+                      <p className="text-[10px] font-black text-ink-soft uppercase tracking-wide">Recent Tests</p>
                       {s.recentMarks.slice(0, 3).map((m, mi) => {
                         const pct = m.score / m.totalMarks
                         const bar = pct >= 0.75 ? 'bg-emerald-500' : pct >= 0.5 ? 'bg-amber-400' : 'bg-red-400'
                         return (
                           <div key={mi} className="flex items-center gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-700 truncate">{m.topic}</p>
-                              <div className="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                              <p className="text-xs font-semibold text-ink truncate">{m.topic}</p>
+                              <div className="h-1.5 rounded-full mt-1 overflow-hidden" style={{ background: 'rgba(58,44,30,0.08)' }}>
                                 <div className={`h-1.5 rounded-full ${bar}`} style={{ width: `${Math.round(pct * 100)}%` }} />
                               </div>
                             </div>
-                            <p className="text-xs font-bold text-slate-600 shrink-0">{m.score}/{m.totalMarks}</p>
+                            <p className="text-xs font-bold text-ink-soft shrink-0">{m.score}/{m.totalMarks}</p>
                           </div>
                         )
                       })}
@@ -544,16 +535,16 @@ export default function StudentDetailPage() {
                 <BookX size={15} className="text-red-500" />
               </div>
               <div>
-                <p className="font-bold text-slate-800">Missed Topics</p>
-                <p className="text-xs text-slate-400">Sessions {student.name.split(' ')[0]} was absent for</p>
+                <p className="font-bold text-ink">Missed Topics</p>
+                <p className="text-xs text-ink-soft">Sessions {student.name.split(' ')[0]} was absent for</p>
               </div>
             </div>
 
             {missedTopics.length === 0 ? (
-              <div className="card text-center py-10">
+              <div className="paper-card text-center py-10">
                 <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-3" />
-                <p className="font-semibold text-slate-700">No missed topics</p>
-                <p className="text-sm text-slate-400 mt-1">
+                <p className="font-semibold text-ink">No missed topics</p>
+                <p className="text-sm text-ink-soft mt-1">
                   {student.name.split(' ')[0]} has been present for every recorded session.
                 </p>
               </div>
@@ -567,15 +558,15 @@ export default function StudentDetailPage() {
                 </div>
                 <div className="space-y-2">
                   {missedTopics.map((mt, idx) => (
-                    <div key={mt.id} className="card flex items-center gap-3">
+                    <div key={mt.id} className="paper-card flex items-center gap-3 p-4">
                       <span className="w-7 h-7 bg-red-100 text-red-600 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0">
                         {idx + 1}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-900 text-sm">{mt.topic}</p>
+                        <p className="font-semibold text-ink text-sm">{mt.topic}</p>
                         <div className="flex items-center gap-1 mt-0.5">
-                          <Calendar size={11} className="text-slate-400" />
-                          <p className="text-xs text-slate-400">
+                          <Calendar size={11} className="text-ink-soft" />
+                          <p className="text-xs text-ink-soft">
                             Taught on {new Date(mt.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </p>
                         </div>
@@ -600,9 +591,11 @@ export default function StudentDetailPage() {
         {activeTab === 'recovery' && (
           <>
             {mastery.filter((m) => m.mastery < 0.5).length === 0 ? (
-              <div className="card text-center py-8">
-                <p className="text-green-600 font-semibold text-lg">✓ No struggling topics</p>
-                <p className="text-gray-500 text-sm mt-1">This student is doing well!</p>
+              <div className="paper-card text-center py-8">
+                <p className="text-green-600 font-semibold text-lg flex items-center justify-center gap-2">
+                  <CheckCircle2 size={18} /> No struggling topics
+                </p>
+                <p className="text-ink-soft text-sm mt-1">This student is doing well!</p>
               </div>
             ) : (
               mastery.filter((m) => m.mastery < 0.5).map((m) => (
@@ -626,17 +619,17 @@ export default function StudentDetailPage() {
         {activeTab === 'log' && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <ClipboardList size={15} className="text-indigo-600" />
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(58,44,30,0.08)' }}>
+                <ClipboardList size={15} className="text-ink" />
               </div>
               <div>
-                <p className="font-bold text-slate-800">Intervention Log</p>
-                <p className="text-xs text-slate-400">Record observations, actions, and follow-ups</p>
+                <p className="font-bold text-ink">Intervention Log</p>
+                <p className="text-xs text-ink-soft">Record observations, actions, and follow-ups</p>
               </div>
             </div>
 
             {/* Add note form */}
-            <div className="card space-y-3">
+            <div className="paper-card space-y-3 p-4">
               <div>
                 <label className="label">Date</label>
                 <input
@@ -655,8 +648,9 @@ export default function StudentDetailPage() {
                     className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
                       isRecording
                         ? 'bg-red-100 text-red-600 animate-pulse'
-                        : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+                        : 'text-ink-soft hover:text-ink'
                     }`}
+                    style={!isRecording ? { background: 'rgba(58,44,30,0.06)' } : undefined}
                   >
                     {isRecording ? <MicOff size={12} /> : <Mic size={12} />}
                     {isRecording ? 'Stop' : 'Voice'}
@@ -665,7 +659,7 @@ export default function StudentDetailPage() {
                 <textarea
                   value={noteText}
                   onChange={e => setNoteText(e.target.value)}
-                  placeholder={isRecording ? '🎙 Listening… speak now' : 'What did you try? What did you observe? Any next steps?'}
+                  placeholder={isRecording ? 'Listening… speak now' : 'What did you try? What did you observe? Any next steps?'}
                   rows={3}
                   className={`input-field resize-none transition-all ${isRecording ? 'border-red-300 ring-1 ring-red-100' : ''}`}
                 />
@@ -673,7 +667,8 @@ export default function StudentDetailPage() {
               <button
                 onClick={saveNote}
                 disabled={savingNote || !noteText.trim()}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-indigo-700 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                style={{ background: 'var(--ink)' }}
               >
                 <Plus size={14} />
                 {savingNote ? 'Saving…' : 'Save Note'}
@@ -682,27 +677,27 @@ export default function StudentDetailPage() {
 
             {/* Notes list */}
             {interventionNotes.length === 0 ? (
-              <div className="card text-center py-10">
-                <ClipboardList size={28} className="text-slate-300 mx-auto mb-3" />
-                <p className="font-semibold text-slate-700">No notes yet</p>
-                <p className="text-xs text-slate-400 mt-1">Log interventions, observations, or follow-ups above.</p>
+              <div className="paper-card text-center py-10">
+                <ClipboardList size={28} className="text-ink-faint mx-auto mb-3" />
+                <p className="font-semibold text-ink">No notes yet</p>
+                <p className="text-xs text-ink-soft mt-1">Log interventions, observations, or follow-ups above.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {interventionNotes.map(n => (
-                  <div key={n.id} className="card flex gap-3 items-start">
+                  <div key={n.id} className="paper-card flex gap-3 items-start p-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1.5">
-                        <Calendar size={11} className="text-slate-400" />
-                        <p className="text-xs text-slate-500 font-semibold">
+                        <Calendar size={11} className="text-ink-soft" />
+                        <p className="text-xs text-ink-soft font-semibold">
                           {new Date(n.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
                       </div>
-                      <p className="text-sm text-slate-700 leading-relaxed">{n.note}</p>
+                      <p className="text-sm text-ink leading-relaxed">{n.note}</p>
                     </div>
                     <button
                       onClick={() => deleteNote(n.id)}
-                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-400 transition-colors"
+                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-ink-faint hover:text-red-400 transition-colors"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -720,46 +715,46 @@ export default function StudentDetailPage() {
             {/* ── Snapshot stats ── */}
             <div className="grid grid-cols-2 gap-3">
               {/* Attendance */}
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="paper-card px-4 py-4 text-center">
                 <p className={`text-4xl font-black ${
                   attendanceRate >= 0.9 ? 'text-emerald-600' :
                   attendanceRate >= 0.75 ? 'text-amber-600' : 'text-red-600'
                 }`}>
                   {Math.round(attendanceRate * 100)}%
                 </p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">Attendance</p>
+                <p className="text-xs font-semibold text-ink-soft mt-1">Attendance</p>
               </div>
 
               {/* Avg Score */}
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="paper-card px-4 py-4 text-center">
                 <p className={`text-4xl font-black ${
                   avgMastery >= 0.75 ? 'text-emerald-600' :
                   avgMastery >= 0.5 ? 'text-amber-600' : 'text-red-600'
                 }`}>
                   {Math.round(avgMastery * 100)}%
                 </p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">Avg Score</p>
+                <p className="text-xs font-semibold text-ink-soft mt-1">Avg Score</p>
               </div>
 
               {/* Tests taken */}
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <p className="text-4xl font-black text-slate-800">{marks.length}</p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">Tests Taken</p>
+              <div className="paper-card px-4 py-4 text-center">
+                <p className="text-4xl font-black text-ink">{marks.length}</p>
+                <p className="text-xs font-semibold text-ink-soft mt-1">Tests Taken</p>
               </div>
 
               {/* Status */}
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="paper-card px-4 py-4 text-center">
                 <p className={`text-2xl font-black ${getMasteryColor(avgMastery)}`}>
                   {getMasteryLabel(avgMastery)}
                 </p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">Overall</p>
+                <p className="text-xs font-semibold text-ink-soft mt-1">Overall</p>
               </div>
             </div>
 
             {/* ── Test results per topic ── */}
             {marks.length > 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <p className="text-xs font-black text-slate-500 uppercase tracking-wide mb-3">Test Results</p>
+              <div className="paper-card px-4 py-4">
+                <p className="text-xs font-black text-ink-soft uppercase tracking-wide mb-3">Test Results</p>
                 <div className="space-y-4">
                   {[...marks].sort((a, b) => b.conductedOn.localeCompare(a.conductedOn)).map(m => {
                     const pct = m.score / m.totalMarks
@@ -770,16 +765,16 @@ export default function StudentDetailPage() {
                     return (
                       <div key={m.id}>
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-semibold text-slate-800 flex-1 truncate">{m.topic}</p>
-                          <span className="text-sm font-bold text-slate-700 shrink-0">{m.score}/{m.totalMarks}</span>
+                          <p className="text-sm font-semibold text-ink flex-1 truncate">{m.topic}</p>
+                          <span className="text-sm font-bold text-ink shrink-0">{m.score}/{m.totalMarks}</span>
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${badgeColor}`}>
                             {Math.round(pct * 100)}%
                           </span>
                         </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(58,44,30,0.08)' }}>
                           <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${Math.round(pct * 100)}%` }} />
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-[10px] text-ink-soft mt-0.5">
                           {new Date(m.conductedOn + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           {m.feedback ? ` · ${m.feedback}` : ''}
                         </p>
@@ -789,19 +784,19 @@ export default function StudentDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-6 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <p className="text-sm text-slate-400">No tests recorded yet</p>
+              <div className="paper-card px-4 py-6 text-center">
+                <p className="text-sm text-ink-soft">No tests recorded yet</p>
               </div>
             )}
 
             {/* ── Flags ── */}
             {(warnings.length > 0 || missedTopics.length > 0) && (
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4 space-y-2.5" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <p className="text-xs font-black text-slate-500 uppercase tracking-wide mb-1">Flags</p>
+              <div className="paper-card px-4 py-4 space-y-2.5">
+                <p className="text-xs font-black text-ink-soft uppercase tracking-wide mb-1">Flags</p>
                 {missedTopics.length > 0 && (
                   <div className="flex items-start gap-2">
-                    <span className="text-amber-500 text-sm shrink-0 mt-0.5">⚠</span>
-                    <p className="text-sm text-slate-700">
+                    <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-sm text-ink">
                       Missed {missedTopics.length} session{missedTopics.length > 1 ? 's' : ''} —{' '}
                       <span className="font-semibold">{missedTopics.slice(0, 2).map(t => t.topic).join(', ')}{missedTopics.length > 2 ? ` +${missedTopics.length - 2} more` : ''}</span>
                     </p>
@@ -809,8 +804,8 @@ export default function StudentDetailPage() {
                 )}
                 {warnings.map((w, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className={`text-sm shrink-0 mt-0.5 ${w.level === 'critical' ? 'text-red-500' : 'text-amber-500'}`}>⚠</span>
-                    <p className="text-sm text-slate-700">{w.reason}</p>
+                    <AlertTriangle size={13} className={`shrink-0 mt-0.5 ${w.level === 'critical' ? 'text-red-500' : 'text-amber-500'}`} />
+                    <p className="text-sm text-ink">{w.reason}</p>
                   </div>
                 ))}
               </div>
@@ -818,38 +813,39 @@ export default function StudentDetailPage() {
 
             {/* ── Teacher notes ── */}
             {interventionNotes.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-100 px-4 py-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <p className="text-xs font-black text-slate-500 uppercase tracking-wide mb-3">Teacher Notes</p>
+              <div className="paper-card px-4 py-4">
+                <p className="text-xs font-black text-ink-soft uppercase tracking-wide mb-3">Teacher Notes</p>
                 <div className="space-y-3">
                   {interventionNotes.slice(0, 4).map(n => (
                     <div key={n.id} className="flex gap-3">
-                      <div className="w-0.5 bg-indigo-200 rounded-full shrink-0" />
+                      <div className="w-0.5 rounded-full shrink-0" style={{ background: '#C7B7E8' }} />
                       <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400 font-semibold mb-0.5">
+                        <p className="text-[10px] text-ink-soft font-semibold mb-0.5">
                           {new Date(n.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
-                        <p className="text-sm text-slate-700 leading-snug">{n.note}</p>
+                        <p className="text-sm text-ink leading-snug">{n.note}</p>
                       </div>
                     </div>
                   ))}
                   {interventionNotes.length > 4 && (
-                    <p className="text-xs text-slate-400 pl-3">+{interventionNotes.length - 4} more notes in Log tab</p>
+                    <p className="text-xs text-ink-soft pl-3">+{interventionNotes.length - 4} more notes in Log tab</p>
                   )}
                 </div>
               </div>
             )}
 
             {/* ── AI insight — on demand, one line only ── */}
-            <div className="bg-violet-50 border border-violet-100 rounded-2xl px-4 py-3">
+            <div className="rounded-2xl px-4 py-3" style={{ background: '#E9E1F6', border: '1px solid rgba(49,33,92,0.15)' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-violet-500" />
-                  <p className="text-xs font-black text-violet-700 uppercase tracking-wide">AI Insight</p>
+                  <Sparkles size={12} style={{ color: '#5B4A85' }} />
+                  <p className="text-xs font-black uppercase tracking-wide" style={{ color: '#31215C' }}>AI Insight</p>
                 </div>
                 {!reportLoading && (
                   <button
                     onClick={() => fetchReport(true)}
-                    className="flex items-center gap-1 text-[10px] font-bold text-violet-500 hover:text-violet-700 transition-colors"
+                    className="flex items-center gap-1 text-[10px] font-bold transition-colors"
+                    style={{ color: '#5B4A85' }}
                   >
                     <RefreshCw size={10} className={reportLoading ? 'animate-spin' : ''} />
                     {report ? 'Refresh' : 'Generate'}
@@ -858,13 +854,13 @@ export default function StudentDetailPage() {
               </div>
 
               {reportLoading && (
-                <div className="mt-2 h-3 bg-violet-100 rounded-full animate-pulse w-3/4" />
+                <div className="mt-2 h-3 rounded-full animate-pulse w-3/4" style={{ background: '#D9CDF0' }} />
               )}
               {!reportLoading && report && (
-                <p className="text-sm text-slate-700 mt-1.5 leading-snug">{report.summary}</p>
+                <p className="text-sm text-ink mt-1.5 leading-snug">{report.summary}</p>
               )}
               {!reportLoading && !report && (
-                <p className="text-xs text-violet-400 mt-1">Tap Generate for a one-line AI summary</p>
+                <p className="text-xs mt-1" style={{ color: '#8C7BAE' }}>Tap Generate for a one-line AI summary</p>
               )}
               {!reportLoading && reportError && (
                 <p className="text-xs text-red-500 mt-1">{reportError}</p>

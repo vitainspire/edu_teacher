@@ -354,27 +354,6 @@ class EduTeachDB extends Dexie {
       topicPolls: 'id, studentId, classId, syllabusTopicId, respondedAt',
       syncQueue: 'id, tableName, createdAt',
     })
-    // v18: tests now carry syllabusTopicId — proper FK link to syllabus_topics
-    this.version(18).stores({
-      teachers: 'id, userId, phone, schoolId',
-      students: 'id, teacherId, classId, rollNumber, isActive',
-      tests: 'id, teacherId, classId, syllabusTopicId, subject, topic, conductedOn',
-      marks: 'id, testId, studentId, enteredAt',
-      attendance: 'id, sessionId, studentId, classId, syllabusTopicId, date, status',
-      topicMastery: 'id, studentId, topic, subject',
-      recoveryAttempts: 'id, studentId, topic, generatedAt',
-      classes: 'id, teacherId, schoolName, schoolId, classCode',
-      syllabusTopics: 'id, classId, teacherId, grade, definitionId, orderIndex',
-      sessions: 'id, classId, syllabusTopicId, date, teacherId',
-      syllabusSubTopics: 'id, topicId, classId, teacherId, definitionId, orderIndex',
-      timetable: 'id, teacherId, classId, dayOfWeek',
-      catchupMaterials: 'id, teacherId, studentId, status, createdAt',
-      interventions: 'id, studentId, teacherId, date, createdAt',
-      teacherClassAssignments: 'id, teacherId, classId',
-      studentDoubts: 'id, studentId, classId, status, createdAt',
-      topicPolls: 'id, studentId, classId, syllabusTopicId, respondedAt',
-      syncQueue: 'id, tableName, createdAt',
-    })
   }
 }
 

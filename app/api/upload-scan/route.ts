@@ -9,36 +9,41 @@ export async function POST(request: NextRequest) {
   const ip = getClientIp(request)
   const t  = Date.now()
 
-  const supabase = await createServerComponentClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    apiLog({ route: 'upload-scan', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const supabase = await createServerComponentClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      apiLog({ route: 'upload-scan', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const parsed = parseBody(UploadScanSchema, await request.json().catch(() => null))
+    if (!parsed.ok) {
+      apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
+      return parsed.response
+    }
+    const { imageBase64, mimeType = "image/jpeg", filename = "scan.jpg" } = parsed.data
+
+    const buffer     = Buffer.from(imageBase64, "base64");
+    const uniqueName = `${Date.now()}_${filename}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("scanned-papers")
+      .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
+
+    if (uploadError) {
+      apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: uploadError.message })
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("scanned-papers")
+      .getPublicUrl(uniqueName);
+
+    apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
+    return NextResponse.json({ url: urlData.publicUrl });
+  } catch (err) {
+    apiLog({ route: 'upload-scan', ip, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
-
-  const parsed = parseBody(UploadScanSchema, await request.json().catch(() => null))
-  if (!parsed.ok) {
-    apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
-    return parsed.response
-  }
-  const { imageBase64, mimeType = "image/jpeg", filename = "scan.jpg" } = parsed.data
-
-  const buffer     = Buffer.from(imageBase64, "base64");
-  const uniqueName = `${Date.now()}_${filename}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("scanned-papers")
-    .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
-
-  if (uploadError) {
-    apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'error', error: uploadError.message })
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
-
-  const { data: urlData } = supabase.storage
-    .from("scanned-papers")
-    .getPublicUrl(uniqueName);
-
-  apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
-  return NextResponse.json({ url: urlData.publicUrl });
 }

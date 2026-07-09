@@ -27,14 +27,13 @@ const INTERESTS = [
   { label: 'Animals',  emoji: '🐾' },
 ]
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-  'linear-gradient(135deg, #059669 0%, #34d399 100%)',
-  'linear-gradient(135deg, #2563eb 0%, #60a5fa 100%)',
-  'linear-gradient(135deg, #d97706 0%, #fbbf24 100%)',
-  'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)',
-  'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
-  'linear-gradient(135deg, #7c3aed 0%, #c084fc 100%)',
+const AVATAR_PALETTE = [
+  { bg: '#AACDEA', ink: '#1E3A55' },
+  { bg: '#AAD6A0', ink: '#234A1D' },
+  { bg: '#F0A491', ink: '#5C2416' },
+  { bg: '#EAC968', ink: '#4A3809' },
+  { bg: '#C7B7E8', ink: '#31215C' },
+  { bg: '#F0AFC6', ink: '#5C1F38' },
 ]
 
 export default function ClassStudentsPage() {
@@ -110,29 +109,30 @@ export default function ClassStudentsPage() {
       {/* Class Code Banner */}
       {cls?.classCode && (
         <div className="mx-4 mt-4 mb-1 rounded-2xl px-4 py-3 flex items-center gap-3"
-          style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)' }}>
+          style={{ background: '#AACDEA', border: '2px solid rgba(58,44,30,0.12)' }}>
           <div className="flex-1 min-w-0">
-            <p className="text-blue-300 text-[10px] font-bold uppercase tracking-widest mb-0.5">Class Code — Share with students</p>
-            <p className="text-white font-black text-2xl tracking-[0.18em] leading-none">{cls.classCode}</p>
-            <p className="text-blue-300/70 text-[11px] mt-1">Students enter this code at the Student Portal to log in</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#1E3A55', opacity: 0.7 }}>Class Code — Share with students</p>
+            <p className="font-display font-bold text-2xl tracking-[0.18em] leading-none" style={{ color: '#1E3A55' }}>{cls.classCode}</p>
+            <p className="text-[11px] mt-1" style={{ color: '#1E3A55', opacity: 0.6 }}>Students enter this code at the Student Portal to log in</p>
           </div>
           <button
             type="button"
             onClick={copyCode}
-            className="shrink-0 flex flex-col items-center gap-1 bg-white/15 hover:bg-white/25 active:scale-95 transition-all rounded-xl px-3 py-2.5"
+            className="shrink-0 flex flex-col items-center gap-1 active:scale-95 transition-all rounded-xl px-3 py-2.5"
+            style={{ background: 'rgba(255,255,255,0.5)' }}
           >
             {codeCopied
-              ? <Check size={18} className="text-emerald-400" />
-              : <Copy size={18} className="text-white" />
+              ? <Check size={18} className="text-emerald-600" />
+              : <Copy size={18} style={{ color: '#1E3A55' }} />
             }
-            <span className="text-[10px] font-bold text-white/70">{codeCopied ? 'Copied!' : 'Copy'}</span>
+            <span className="text-[10px] font-bold" style={{ color: '#1E3A55', opacity: 0.7 }}>{codeCopied ? 'Copied!' : 'Copy'}</span>
           </button>
         </div>
       )}
 
       {/* Sub-header */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-500">
+        <p className="text-sm font-semibold text-ink-soft">
           {search.trim()
             ? `${filteredStudents.length} of ${students.length} student${students.length !== 1 ? 's' : ''}`
             : `${students.length} student${students.length !== 1 ? 's' : ''}`}
@@ -143,10 +143,7 @@ export default function ClassStudentsPage() {
         <button
           onClick={() => setAddOpen(true)}
           className="flex items-center gap-1.5 text-white font-bold px-4 py-2 rounded-2xl text-sm active:scale-95 transition-transform"
-          style={{
-            background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-            boxShadow: '0 3px 12px rgba(79,70,229,0.35)',
-          }}
+          style={{ background: 'var(--ink)' }}
         >
           <UserPlus size={15} strokeWidth={2.5} /> Add Student
         </button>
@@ -155,17 +152,17 @@ export default function ClassStudentsPage() {
       {/* Search bar */}
       {students.length > 0 && (
         <div className="px-4 pb-3">
-          <div className="flex items-center gap-2 bg-slate-100 rounded-2xl px-3 py-2">
-            <Search size={15} className="text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: 'rgba(58,44,30,0.05)' }}>
+            <Search size={15} className="text-ink-soft flex-shrink-0" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search students…"
-              className="flex-1 bg-transparent text-sm text-slate-800 placeholder-slate-400 outline-none"
+              className="flex-1 bg-transparent text-sm text-ink placeholder-ink-faint outline-none"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="text-slate-400 active:text-slate-600">
+              <button onClick={() => setSearch('')} className="text-ink-soft active:text-ink">
                 <X size={15} />
               </button>
             )}
@@ -183,30 +180,30 @@ export default function ClassStudentsPage() {
 
       <div className="px-4 space-y-2.5 pb-4">
         {students.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-3xl border border-slate-100">
-            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BookOpen size={26} className="text-blue-500" />
+          <div className="text-center py-16 paper-card">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#DCEBF8' }}>
+              <BookOpen size={26} style={{ color: '#1E3A55' }} />
             </div>
-            <p className="font-bold text-slate-800 text-lg">No students yet</p>
-            <p className="text-sm text-slate-500 mt-1">Add students to start tracking their progress</p>
-            <button onClick={() => setAddOpen(true)} className="mt-5 btn-primary px-8 text-sm mx-auto">
+            <p className="font-bold text-ink text-lg">No students yet</p>
+            <p className="text-sm text-ink-soft mt-1">Add students to start tracking their progress</p>
+            <button onClick={() => setAddOpen(true)} className="paper-btn-primary mt-5 px-8 text-sm mx-auto">
               <UserPlus size={16} /> Add First Student
             </button>
           </div>
         ) : filteredStudents.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-3xl border border-slate-100">
-            <Search size={28} className="text-slate-300 mx-auto mb-3" />
-            <p className="font-bold text-slate-600">No students match &quot;{search}&quot;</p>
-            <button onClick={() => setSearch('')} className="mt-3 text-sm text-blue-600 font-semibold">Clear search</button>
+          <div className="text-center py-12 paper-card">
+            <Search size={28} className="text-ink-faint mx-auto mb-3" />
+            <p className="font-bold text-ink">No students match &quot;{search}&quot;</p>
+            <button onClick={() => setSearch('')} className="mt-3 text-sm text-ink font-semibold underline underline-offset-2">Clear search</button>
           </div>
         ) : (
           filteredStudents.map((student, idx) => {
             const avgMastery    = getStudentAvgMastery(student.id)
             const warnings      = getStudentWarnings(student.id)
             const hasCritical   = warnings.some(w => w.level === 'critical')
-            const avatarBg      = hasCritical
-              ? 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'
-              : AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]
+            const avatar        = hasCritical
+              ? { bg: '#F0A491', ink: '#7A2E1A' }
+              : AVATAR_PALETTE[idx % AVATAR_PALETTE.length]
             const isExpanded    = expandedId === student.id
             const localInterests = editInterests[student.id] ?? student.interests
             const localGoal      = editGoal[student.id] ?? student.goal
@@ -215,12 +212,9 @@ export default function ClassStudentsPage() {
             return (
               <div
                 key={student.id}
-                className="bg-white rounded-3xl transition-all"
+                className="rounded-3xl bg-white transition-all"
                 style={{
-                  boxShadow: isExpanded
-                    ? '0 4px 24px rgba(79,70,229,0.12)'
-                    : 'var(--shadow-card)',
-                  border: isExpanded ? '1px solid #c7d2fe' : '1px solid transparent',
+                  border: isExpanded ? '1.5px solid rgba(58,44,30,0.35)' : '1.5px solid rgba(58,44,30,0.16)',
                 }}
               >
                 {/* Main row: left area → navigate to detail; pencil → expand editor */}
@@ -228,8 +222,8 @@ export default function ClassStudentsPage() {
                   {/* Avatar */}
                   <Link
                     href={`/students/${student.id}`}
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg flex-shrink-0 active:scale-95 transition-transform"
-                    style={{ background: avatarBg, boxShadow: '0 3px 10px rgba(79,70,229,0.25)' }}
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg flex-shrink-0 active:scale-95 transition-transform"
+                    style={{ background: avatar.bg, color: avatar.ink }}
                   >
                     {student.name[0].toUpperCase()}
                   </Link>
@@ -237,15 +231,27 @@ export default function ClassStudentsPage() {
                   {/* Info — tapping name/info navigates to detail */}
                   <Link href={`/students/${student.id}`} className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-bold text-slate-900">{student.name}</p>
+                      <p className="font-bold text-ink">{student.name}</p>
                       {hasCritical && <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />}
                       {isSaved && <Check size={13} className="text-emerald-500 flex-shrink-0" />}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <p className="text-xs text-slate-400 font-medium">Roll #{student.rollNumber}</p>
+                      <p className="text-xs text-ink-soft font-medium">Roll #{student.rollNumber}</p>
+                      {student.studentCode && (
+                        <button
+                          onClick={e => { e.preventDefault(); e.stopPropagation(); copyStudentCode(student.studentCode!, student.id) }}
+                          className="flex items-center gap-1 bg-[#E9E1F6] px-1.5 py-0.5 rounded text-[10px] font-black text-[#8069B0] tracking-wider active:scale-95 transition-transform"
+                          title="Copy Student ID"
+                        >
+                          {student.studentCode}
+                          {copiedStudentId === student.id
+                            ? <Check size={9} className="text-emerald-500" />
+                            : <Copy size={9} className="text-[#8069B0]" />}
+                        </button>
+                      )}
                     </div>
                     {student.interests.length > 0 ? (
-                      <p className="text-xs text-blue-500 mt-0.5">
+                      <p className="text-xs text-[#5B87AD] mt-0.5">
                         {student.interests.slice(0, 3).join(' · ')}
                         {student.interests.length > 3 && ` +${student.interests.length - 3}`}
                       </p>
@@ -264,27 +270,29 @@ export default function ClassStudentsPage() {
                     {/* Edit interests button */}
                     <button
                       onClick={e => openEditor(e, student.id, student.interests, student.goal)}
-                      className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 active:bg-slate-200 transition-colors"
+                      className="w-8 h-8 flex items-center justify-center rounded-xl active:scale-90 transition-transform"
+                      style={{ background: 'rgba(58,44,30,0.06)' }}
                       title="Edit interests"
                     >
-                      {isExpanded ? <ChevronUp size={15} className="text-blue-600" /> : <Pencil size={13} className="text-slate-500" />}
+                      {isExpanded ? <ChevronUp size={15} className="text-ink" /> : <Pencil size={13} className="text-ink-soft" />}
                     </button>
                     {/* Navigate to detail */}
                     <Link
                       href={`/students/${student.id}`}
-                      className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 active:bg-slate-200 transition-colors"
+                      className="w-8 h-8 flex items-center justify-center rounded-xl active:scale-90 transition-transform"
+                      style={{ background: 'rgba(58,44,30,0.06)' }}
                     >
-                      <ChevronRight size={15} className="text-slate-500" />
+                      <ChevronRight size={15} className="text-ink-soft" />
                     </Link>
                   </div>
                 </div>
 
                 {/* Expanded: interest + goal editor */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                  <div className="px-4 pb-4 border-t border-black/5 pt-3 space-y-3">
                     <div>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
-                        Interests <span className="text-violet-500 normal-case font-normal">· AI uses these for class engagement</span>
+                      <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
+                        Interests <span className="text-[#8069B0] normal-case font-normal">· AI uses these for class engagement</span>
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {INTERESTS.map(({ label, emoji }) => (
@@ -294,9 +302,10 @@ export default function ClassStudentsPage() {
                             className={clsx(
                               'px-3 py-1.5 rounded-2xl text-sm font-semibold transition-all active:scale-95',
                               localInterests.includes(label)
-                                ? 'bg-blue-700 text-white'
-                                : 'bg-slate-100 text-slate-600',
+                                ? 'text-white'
+                                : 'text-ink-soft',
                             )}
+                            style={{ background: localInterests.includes(label) ? 'var(--ink)' : 'rgba(58,44,30,0.06)' }}
                           >
                             {emoji} {label}
                           </button>
@@ -305,7 +314,7 @@ export default function ClassStudentsPage() {
                     </div>
 
                     <div>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Goal / Ambition</p>
+                      <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Goal / Ambition</p>
                       <input
                         type="text"
                         value={localGoal}
@@ -319,7 +328,7 @@ export default function ClassStudentsPage() {
                     <button
                       onClick={e => handleSaveProfile(e, student.id)}
                       disabled={saving === student.id}
-                      className="w-full py-2.5 rounded-2xl bg-blue-700 text-white text-sm font-bold active:scale-95 transition-transform"
+                      className="paper-btn-primary w-full text-sm"
                     >
                       {saving === student.id ? 'Saving…' : 'Save Profile'}
                     </button>

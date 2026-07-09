@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-// v2
 
 export async function GET() {
   const checks: Record<string, 'ok' | 'error'> = {}

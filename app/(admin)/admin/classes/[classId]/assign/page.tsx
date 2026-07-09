@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useAdmin } from '@/lib/admin-context'
-import { UserCheck, Loader2, ArrowLeft, Check, X } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
+import { UserCheck, Loader2, Check, X } from 'lucide-react'
+import { useParams } from 'next/navigation'
 import type { Teacher } from '@/lib/types'
+import PageHeader from '@/components/theme/PageHeader'
 
 interface Assignment {
   teacherId: string
@@ -13,7 +14,6 @@ interface Assignment {
 export default function AssignTeacherPage() {
   const { school } = useAdmin()
   const params = useParams()
-  const router = useRouter()
   const classId = params.classId as string
 
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -81,112 +81,114 @@ export default function AssignTeacherPage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5">
-        <ArrowLeft className="w-4 h-4" /> Back to Classes
-      </button>
+    <div className="paper-page pb-16">
 
-      <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-2">
-        <UserCheck className="w-5 h-5 text-indigo-600" /> Assign Teachers
-      </h1>
-      <p className="text-sm text-gray-500 mb-6">Assign teachers to this class and specify which subject each one teaches.</p>
+      <PageHeader
+        title="Assign Teachers"
+        subtitle="Assign teachers to this class and specify which subject each one teaches."
+      />
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
-          {success}
-          <button onClick={() => setSuccess('')}><X className="w-4 h-4" /></button>
-        </div>
-      )}
+      <div className="px-5 pt-2 max-w-2xl mx-auto space-y-4 relative z-10">
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-        </div>
-      ) : teachers.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-          <UserCheck className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No teachers in school yet</p>
-          <p className="text-sm text-gray-400 mt-1">Add teachers first from the Teachers page</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {teachers.map((t, i) => {
-            const assigned_ = isAssigned(t.id)
-            const subject = getSubject(t.id)
-            return (
-              <div key={t.id} className={`flex items-center justify-between px-5 py-4 ${i > 0 ? 'border-t border-gray-50' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ background: '#4338ca' }}>
-                    {t.name.charAt(0).toUpperCase()}
+        {success && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold rounded-2xl px-4 py-3 flex items-center justify-between">
+            {success}
+            <button onClick={() => setSuccess('')} className="text-emerald-600 hover:text-emerald-800"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-6 h-6 animate-spin text-ink-soft" />
+          </div>
+        ) : teachers.length === 0 ? (
+          <div className="text-center py-16 paper-card">
+            <UserCheck className="w-10 h-10 text-ink-faint mx-auto mb-3" />
+            <p className="text-ink font-bold">No teachers in school yet</p>
+            <p className="text-sm text-ink-soft mt-1">Add teachers first from the Teachers page</p>
+          </div>
+        ) : (
+          <div className="paper-card overflow-hidden">
+            {teachers.map((t, i) => {
+              const assigned_ = isAssigned(t.id)
+              const subject = getSubject(t.id)
+              return (
+                <div
+                  key={t.id}
+                  className="flex items-center justify-between px-5 py-4 gap-3"
+                  style={{ borderTop: i > 0 ? '1px solid rgba(58,44,30,0.08)' : 'none' }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-black flex-shrink-0" style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}>
+                      {t.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-ink truncate">{t.name}</p>
+                      {assigned_ && subject ? (
+                        <p className="text-xs font-bold text-ink mt-0.5">{subject}</p>
+                      ) : (
+                        <p className="text-xs text-ink-faint">{t.subject || 'No default subject'}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{t.name}</p>
-                    {assigned_ && subject ? (
-                      <p className="text-xs font-semibold text-indigo-600 mt-0.5">{subject}</p>
-                    ) : (
-                      <p className="text-xs text-gray-400">{t.subject || 'No default subject'}</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {assigned_ && (
+                      <button
+                        onClick={() => openAssign(t)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-ink-soft transition-colors hover:text-ink"
+                        style={{ border: '1.5px solid rgba(58,44,30,0.18)' }}
+                      >
+                        Edit Subject
+                      </button>
                     )}
+                    <button
+                      onClick={() => assigned_ ? removeAssignment(t.id) : openAssign(t)}
+                      disabled={saving === t.id}
+                      className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-60"
+                      style={assigned_
+                        ? { background: 'rgba(16,185,129,0.12)', color: '#047857', border: '1.5px solid rgba(16,185,129,0.35)' }
+                        : { background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)', border: '1.5px solid rgba(58,44,30,0.14)' }}
+                    >
+                      {saving === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : assigned_ ? <Check className="w-3.5 h-3.5" /> : null}
+                      {assigned_ ? 'Assigned' : 'Assign'}
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {assigned_ && (
-                    <button
-                      onClick={() => openAssign(t)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-200 text-indigo-600 hover:bg-indigo-50"
-                    >
-                      Edit Subject
-                    </button>
-                  )}
-                  <button
-                    onClick={() => assigned_ ? removeAssignment(t.id) : openAssign(t)}
-                    disabled={saving === t.id}
-                    className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                    style={{
-                      background: assigned_ ? '#ecfdf5' : '#f3f4f6',
-                      color: assigned_ ? '#059669' : '#6b7280',
-                      border: `1px solid ${assigned_ ? '#6ee7b7' : '#e5e7eb'}`,
-                    }}
-                  >
-                    {saving === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : assigned_ ? <Check className="w-3.5 h-3.5" /> : null}
-                    {assigned_ ? 'Assigned' : 'Assign'}
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Subject modal */}
       {pendingTeacher && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(58,44,30,0.45)' }}>
+          <div className="relative w-full max-w-sm rounded-3xl p-6" style={{ background: 'var(--paper-soft)', border: '1.5px solid rgba(58,44,30,0.18)' }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900">Assign {pendingTeacher.name}</h2>
-              <button onClick={() => setPendingTeacher(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                <X className="w-4 h-4" />
+              <h2 className="font-display text-base font-bold text-ink">Assign {pendingTeacher.name}</h2>
+              <button onClick={() => setPendingTeacher(null)} className="w-9 h-9 flex items-center justify-center rounded-full transition-colors" style={{ background: 'rgba(58,44,30,0.06)' }}>
+                <X className="w-4 h-4 text-ink-soft" />
               </button>
             </div>
             <div className="mb-5">
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Subject they teach in this class</label>
+              <label className="label" style={{ color: 'var(--ink-soft)' }}>Subject they teach in this class</label>
               <input
                 type="text"
                 value={subjectInput}
                 onChange={e => setSubjectInput(e.target.value)}
                 placeholder="e.g. Mathematics, Science, English"
-                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="input-field"
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && confirmAssign()}
               />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setPendingTeacher(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              <button onClick={() => setPendingTeacher(null)} className="flex-1 py-2.5 rounded-2xl text-sm font-bold text-ink-soft transition-colors hover:text-ink" style={{ border: '1.5px solid rgba(58,44,30,0.18)' }}>
                 Cancel
               </button>
               <button
                 onClick={confirmAssign}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium"
-                style={{ background: '#4338ca' }}
+                className="paper-btn-primary flex-1 text-sm py-2.5"
               >
                 Confirm
               </button>

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -11,11 +11,13 @@ import clsx from 'clsx'
 import CatchupModal from '@/components/catchup/CatchupModal'
 import ViewPlanModal from '@/components/catchup/ViewPlanModal'
 import type { CatchupMaterial, Warning } from '@/lib/types'
+import PageHeader from '@/components/theme/PageHeader'
+import { Sticker } from '@/components/theme/StickerIcon'
 
 const LEVEL_CONFIG = {
   critical: {
     icon: AlertTriangle,
-    gradient: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
+    gradient: '#dc2626',
     rowBg: '#fff5f5',
     rowBorder: '#fecaca',
     icon_color: 'text-red-500',
@@ -24,7 +26,7 @@ const LEVEL_CONFIG = {
   },
   watch: {
     icon: Bell,
-    gradient: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+    gradient: '#d97706',
     rowBg: '#fffbeb',
     rowBorder: '#fde68a',
     icon_color: 'text-amber-500',
@@ -33,12 +35,12 @@ const LEVEL_CONFIG = {
   },
   info: {
     icon: Info,
-    gradient: 'linear-gradient(135deg, #2563eb 0%, #60a5fa 100%)',
-    rowBg: '#eff6ff',
-    rowBorder: '#bfdbfe',
-    icon_color: 'text-blue-500',
-    badge: 'bg-blue-100 text-blue-700',
-    accentBar: '#60a5fa',
+    gradient: '#6F9BC4',
+    rowBg: '#eef5fb',
+    rowBorder: '#cfe3f2',
+    icon_color: 'text-[#1E3A55]',
+    badge: 'bg-[#DCEBF8] text-[#1E3A55]',
+    accentBar: '#AACDEA',
   },
 }
 
@@ -107,55 +109,36 @@ export default function AlertsPage() {
   const totalStudents   = classGroups.reduce((n, g) => n + g.students.length, 0)
   const criticalClasses = classGroups.filter(g => g.hasCritical).length
 
+  const HeroIcon = criticalClasses > 0 ? AlertTriangle : classGroups.length > 0 ? Bell : CheckCircle2
+  const heroTone  = criticalClasses > 0 ? 'coral' : classGroups.length > 0 ? 'gold' : 'green'
+
   return (
     <>
-    <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
+    <div className="paper-page pb-28">
 
-      {/* Hero header */}
-      <div
-        className="px-5 pt-10 pb-20 relative overflow-hidden"
-        style={{
-          background: criticalClasses > 0
-            ? 'linear-gradient(145deg, #881337 0%, #be123c 50%, #e11d48 100%)'
-            : classGroups.length > 0
-            ? 'linear-gradient(145deg, #92400e 0%, #b45309 50%, #d97706 100%)'
-            : 'linear-gradient(145deg, #064e3b 0%, #065f46 50%, #059669 100%)',
-        }}
-      >
-        <div className="absolute -right-8 -top-8 w-52 h-52 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)' }} />
-        <p className={clsx(
-          'text-xs font-black uppercase tracking-widest mb-2',
-          criticalClasses > 0 ? 'text-red-300' : classGroups.length > 0 ? 'text-amber-300' : 'text-emerald-300'
-        )}>
-          Early Warnings
-        </p>
-        <h1 className="text-3xl font-black text-white leading-tight">
-          {classGroups.length === 0
-            ? 'All Clear!'
-            : `${totalStudents} Need${totalStudents === 1 ? 's' : ''} Attention`}
-        </h1>
-        <p className={clsx(
-          'text-sm mt-1.5 font-medium',
-          criticalClasses > 0 ? 'text-red-200/80' : classGroups.length > 0 ? 'text-amber-200/80' : 'text-emerald-200/80'
-        )}>
-          {classGroups.length === 0
-            ? 'No alerts right now — great work!'
-            : `${classGroups.length} class${classGroups.length !== 1 ? 'es' : ''} affected${criticalClasses > 0 ? ` · ${criticalClasses} critical` : ''}`}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Early Warnings"
+        title={classGroups.length === 0 ? 'All Clear!' : `${totalStudents} Need${totalStudents === 1 ? 's' : ''} Attention`}
+        subtitle={classGroups.length === 0
+          ? 'No alerts right now — great work!'
+          : `${classGroups.length} class${classGroups.length !== 1 ? 'es' : ''} affected${criticalClasses > 0 ? ` · ${criticalClasses} critical` : ''}`}
+        action={
+          <Sticker tone={heroTone as 'coral' | 'gold' | 'green'} size={44} radius={14}>
+            <HeroIcon size={20} className="text-ink" />
+          </Sticker>
+        }
+      />
 
-      <div className="-mt-10 px-4 pb-32 space-y-3 relative z-10">
+      <div className="px-4 pt-2 space-y-3 relative z-10">
 
         {/* ── All clear ── */}
         {classGroups.length === 0 && (
-          <div className="bg-white rounded-3xl p-8 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5"
-              style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)' }}>
-              <CheckCircle2 size={36} className="text-emerald-600" />
-            </div>
-            <p className="text-xl font-black text-slate-800">All students on track!</p>
-            <p className="text-slate-500 text-sm mt-2 max-w-xs mx-auto leading-relaxed">
+          <div className="paper-card p-8 text-center">
+            <Sticker tone="green" size={80} radius={999} style={{ margin: '0 auto 20px' }}>
+              <CheckCircle2 size={36} className="text-ink" />
+            </Sticker>
+            <p className="text-xl font-display font-bold text-ink">All students on track!</p>
+            <p className="text-ink-soft text-sm mt-2 max-w-xs mx-auto leading-relaxed">
               No warnings right now. Keep up the great teaching work!
             </p>
           </div>
@@ -169,9 +152,8 @@ export default function AlertsPage() {
           return (
             <div
               key={group.classId}
-              className="bg-white rounded-3xl overflow-hidden"
+              className="paper-card overflow-hidden"
               style={{
-                boxShadow: '0 2px 16px rgba(15,23,42,0.06), 0 1px 4px rgba(15,23,42,0.04)',
                 border: `1px solid ${group.hasCritical ? '#fecaca' : '#fde68a'}`,
               }}
             >
@@ -179,7 +161,7 @@ export default function AlertsPage() {
               <button
                 type="button"
                 onClick={() => setExpandedClass(isOpen ? null : group.classId)}
-                className="w-full flex items-center gap-3 px-4 text-left active:bg-slate-50 transition-colors"
+                className="w-full flex items-center gap-3 px-4 text-left active:bg-black/[0.03] transition-colors"
                 style={{ minHeight: 64 }}
               >
                 {/* Coloured accent bar */}
@@ -187,7 +169,7 @@ export default function AlertsPage() {
                   style={{ background: accentColor }} />
 
                 <div className="flex-1 min-w-0 py-3.5">
-                  <p className="font-black text-slate-900 text-base leading-tight">{group.label}</p>
+                  <p className="font-display font-bold text-ink text-base leading-tight">{group.label}</p>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     {group.absenceCount > 0 && (
                       <span className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
@@ -202,16 +184,16 @@ export default function AlertsPage() {
                   </div>
                 </div>
 
-                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100">
+                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl" style={{ background: 'rgba(58,44,30,0.06)' }}>
                   {isOpen
-                    ? <ChevronUp size={16} className="text-slate-500" />
-                    : <ChevronDown size={16} className="text-slate-500" />}
+                    ? <ChevronUp size={16} className="text-ink-soft" />
+                    : <ChevronDown size={16} className="text-ink-soft" />}
                 </div>
               </button>
 
               {/* Expanded body */}
               {isOpen && (
-                <div className="border-t border-slate-100">
+                <div className="border-t" style={{ borderColor: 'rgba(58,44,30,0.08)' }}>
 
                   {/* Absences section */}
                   {group.absenceCount > 0 && (
@@ -245,7 +227,7 @@ export default function AlertsPage() {
 
                   {/* Divider between sections */}
                   {group.absenceCount > 0 && group.lowMarkCount > 0 && (
-                    <div className="mx-4 border-t border-dashed border-slate-200 my-1" />
+                    <div className="mx-4 border-t border-dashed my-1" style={{ borderColor: 'rgba(58,44,30,0.15)' }} />
                   )}
 
                   {/* Low marks section */}
@@ -344,10 +326,10 @@ function StudentWarningRow({
           {(sa.student.name?.[0] ?? "?").toUpperCase()}
         </div>
         <div className="flex-1 min-w-0 text-left">
-          <p className="font-bold text-slate-900 text-sm leading-tight truncate">{sa.student.name}</p>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">Roll #{sa.student.rollNumber}</p>
+          <p className="font-bold text-ink text-sm leading-tight truncate">{sa.student.name}</p>
+          <p className="text-xs text-ink-soft font-medium mt-0.5">Roll #{sa.student.rollNumber}</p>
         </div>
-        <div className="flex items-center gap-1 text-xs font-semibold text-slate-400 flex-shrink-0">
+        <div className="flex items-center gap-1 text-xs font-semibold text-ink-soft flex-shrink-0">
           Profile <ArrowRight size={12} />
         </div>
       </button>
@@ -367,14 +349,14 @@ function StudentWarningRow({
                 <wCfg.icon size={13} className={clsx('mt-0.5 flex-shrink-0', wCfg.icon_color)} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-bold text-slate-800 leading-snug">{w.reason}</p>
+                    <p className="text-sm font-bold text-ink leading-snug">{w.reason}</p>
                     {w.date && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/70 text-slate-500 border border-slate-200">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/70 text-ink-soft border border-black/10">
                         {formatWarningDate(w.date)}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-snug">{w.action}</p>
+                  <p className="text-xs text-ink-soft mt-0.5 leading-snug">{w.action}</p>
                 </div>
               </div>
 
@@ -387,8 +369,8 @@ function StudentWarningRow({
                       onClick={() => onViewPlan(existing)}
                       className="flex-1 py-2.5 rounded-xl text-xs font-bold text-center active:opacity-70 transition-opacity"
                       style={{
-                        background: existing.status === 'done' ? '#d1fae5' : '#dbeafe',
-                        color: existing.status === 'done' ? '#065f46' : '#1d4ed8',
+                        background: existing.status === 'done' ? '#d1fae5' : '#DCEBF8',
+                        color: existing.status === 'done' ? '#065f46' : '#1E3A55',
                       }}
                     >
                       {STATUS_LABEL[existing.status]} — View Plan
@@ -397,7 +379,7 @@ function StudentWarningRow({
                       <button
                         type="button"
                         onClick={() => { updateCatchupStatus(existing.id, STATUS_NEXT_VAL[existing.status]).catch(() => {}) }}
-                        className="py-2.5 px-3 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 active:bg-slate-50"
+                        className="py-2.5 px-3 rounded-xl text-xs font-bold text-ink-soft bg-white border border-black/10 active:bg-black/[0.03]"
                       >
                         {STATUS_NEXT[existing.status]}
                       </button>
@@ -407,7 +389,7 @@ function StudentWarningRow({
                   <button
                     type="button"
                     onClick={() => onCatchup({ studentId: sa.student.id, studentName: sa.student.name, topic: w.topic!, score })}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-blue-700 bg-white border border-blue-200 active:bg-blue-50 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-[#1E3A55] bg-white border border-[#AACDEA] active:bg-[#DCEBF8] transition-colors"
                   >
                     <BookOpen size={13} /> Create Catch-up Plan
                   </button>

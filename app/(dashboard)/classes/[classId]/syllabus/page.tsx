@@ -218,12 +218,12 @@ export default function ClassSyllabusPage() {
 
       {/* ── Shared-across-grade note ──────────────────────── */}
       {gradeSectionCount > 1 && (
-        <div className="rounded-2xl px-4 py-3 mb-4 flex items-start gap-3 bg-indigo-50 border border-indigo-100">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 bg-indigo-100">
-            <Users size={15} className="text-indigo-600" />
+        <div className="rounded-2xl px-4 py-3 mb-4 flex items-start gap-3 bg-[#DCEBF8] border border-[#AACDEA]">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 bg-[#AACDEA]/60">
+            <Users size={15} className="text-[#1E3A55]" />
           </div>
-          <p className="text-xs text-slate-600 font-medium leading-relaxed">
-            This syllabus is shared across all <span className="font-bold text-indigo-700">{gradeSectionCount} Grade {grade} sections</span>.
+          <p className="text-xs text-ink-soft font-medium leading-relaxed">
+            This syllabus is shared across all <span className="font-bold text-[#1E3A55]">{gradeSectionCount} Grade {grade} sections</span>.
             Adding or removing topics updates every section. Ticking a topic complete only affects <span className="font-bold">this section</span>.
           </p>
         </div>
@@ -231,15 +231,15 @@ export default function ClassSyllabusPage() {
 
       {/* ── Progress card ─────────────────────────────────── */}
       {topics.length > 0 && (
-        <div className="card mb-4">
+        <div className="paper-card p-4 mb-4">
           <div className="flex items-center justify-between mb-2.5">
-            <span className="font-bold text-slate-800">Syllabus Progress</span>
-            <span className="text-sm font-black text-blue-700">{pct}% done</span>
+            <span className="font-bold text-ink">Syllabus Progress</span>
+            <span className="text-sm font-black text-[#1E3A55]">{pct}% done</span>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-3">
-            <div className="bg-blue-700 h-3 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+          <div className="w-full rounded-full h-3" style={{ background: 'rgba(58,44,30,0.08)' }}>
+            <div className="bg-[#5B87AD] h-3 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
           </div>
-          <p className="text-xs text-slate-500 mt-2 font-medium">{completed} of {topics.length} topics completed</p>
+          <p className="text-xs text-ink-soft mt-2 font-medium">{completed} of {topics.length} topics completed</p>
         </div>
       )}
 
@@ -249,18 +249,18 @@ export default function ClassSyllabusPage() {
           'rounded-2xl px-4 py-3 mb-4 flex items-start gap-3',
           pacing.status === 'behind'   && 'bg-red-50 border border-red-200',
           pacing.status === 'ahead'    && 'bg-emerald-50 border border-emerald-200',
-          pacing.status === 'on-track' && 'bg-blue-50 border border-blue-100',
+          pacing.status === 'on-track' && 'bg-[#DCEBF8] border border-[#AACDEA]',
         )}>
           <div className={clsx(
             'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
             pacing.status === 'behind'   && 'bg-red-100',
             pacing.status === 'ahead'    && 'bg-emerald-100',
-            pacing.status === 'on-track' && 'bg-blue-100',
+            pacing.status === 'on-track' && 'bg-[#AACDEA]/60',
           )}>
             <CalendarDays size={15} className={clsx(
               pacing.status === 'behind'   && 'text-red-500',
               pacing.status === 'ahead'    && 'text-emerald-600',
-              pacing.status === 'on-track' && 'text-blue-600',
+              pacing.status === 'on-track' && 'text-[#5B87AD]',
             )} />
           </div>
           <div className="flex-1">
@@ -268,7 +268,7 @@ export default function ClassSyllabusPage() {
               'text-sm font-bold',
               pacing.status === 'behind'   && 'text-red-800',
               pacing.status === 'ahead'    && 'text-emerald-800',
-              pacing.status === 'on-track' && 'text-blue-800',
+              pacing.status === 'on-track' && 'text-[#1E3A55]',
             )}>
               Week {pacing.currentWeek} · {
                 pacing.status === 'on-track' ? 'On track' :
@@ -280,7 +280,7 @@ export default function ClassSyllabusPage() {
               'text-xs mt-0.5',
               pacing.status === 'behind'   && 'text-red-600',
               pacing.status === 'ahead'    && 'text-emerald-600',
-              pacing.status === 'on-track' && 'text-blue-600',
+              pacing.status === 'on-track' && 'text-[#5B87AD]',
             )}>
               {pacing.status === 'behind'
                 ? `Should be on "${pacing.expectedTopicName}" by now`
@@ -297,42 +297,42 @@ export default function ClassSyllabusPage() {
         <button
           type="button"
           onClick={() => { setPlanOpen(p => !p); if (!planOpen && !planWeeks.length) generatePlan() }}
-          className="w-full flex items-center justify-between gap-2 bg-violet-50 border border-violet-200 rounded-2xl px-4 py-3 mb-4 active:scale-[0.98] transition-transform"
+          className="w-full flex items-center justify-between gap-2 bg-[#E9E1F6] border border-[#C7B7E8] rounded-2xl px-4 py-3 mb-4 active:scale-[0.98] transition-transform"
         >
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center">
-              <Sparkles size={15} className="text-violet-600" />
+            <div className="w-8 h-8 bg-[#C7B7E8]/50 rounded-xl flex items-center justify-center">
+              <Sparkles size={15} className="text-[#8069B0]" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-bold text-violet-900">AI Lesson Plan</p>
-              <p className="text-xs text-violet-500">4-week plan based on your syllabus</p>
+              <p className="text-sm font-bold text-[#31215C]">AI Lesson Plan</p>
+              <p className="text-xs text-[#8069B0]">4-week plan based on your syllabus</p>
             </div>
           </div>
-          {planOpen ? <ChevronUp size={16} className="text-violet-400" /> : <ChevronDown size={16} className="text-violet-400" />}
+          {planOpen ? <ChevronUp size={16} className="text-[#8069B0]" /> : <ChevronDown size={16} className="text-[#8069B0]" />}
         </button>
       )}
 
       {planOpen && (
-        <div className="card mb-4 border-violet-100 bg-violet-50/30 space-y-3">
+        <div className="rounded-3xl p-4 mb-4 border border-[#E9E1F6] bg-[#E9E1F6]/30 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-violet-900">4-Week Plan</p>
+            <p className="text-sm font-bold text-[#31215C]">4-Week Plan</p>
             <button type="button" onClick={generatePlan} disabled={planLoading}
-              className="flex items-center gap-1 text-xs text-violet-600 font-semibold px-2 py-1 rounded-lg hover:bg-violet-100 transition-colors">
+              className="flex items-center gap-1 text-xs text-[#8069B0] font-semibold px-2 py-1 rounded-lg hover:bg-[#E9E1F6] transition-colors">
               <RefreshCw size={12} className={planLoading ? 'animate-spin' : ''} /> Regenerate
             </button>
           </div>
-          {planLoading && [1,2,3,4].map(i => <div key={i} className="h-16 bg-violet-100 rounded-2xl animate-pulse" />)}
+          {planLoading && [1,2,3,4].map(i => <div key={i} className="h-16 bg-[#E9E1F6] rounded-2xl animate-pulse" />)}
           {!planLoading && planError && <p className="text-sm text-red-600 bg-red-50 rounded-xl p-3">{planError}</p>}
           {!planLoading && planWeeks.map(w => (
-            <div key={w.week} className="bg-white rounded-2xl p-4 border border-violet-100">
+            <div key={w.week} className="bg-white rounded-2xl p-4 border border-[#E9E1F6]">
               <div className="flex items-center gap-2 mb-2">
-                <span className="w-6 h-6 bg-violet-600 text-white rounded-full text-xs font-black flex items-center justify-center shrink-0">{w.week}</span>
-                <p className="font-bold text-slate-800 text-sm">{w.topics.join(', ')}</p>
+                <span className="w-6 h-6 bg-[#8069B0] text-white rounded-full text-xs font-black flex items-center justify-center shrink-0">{w.week}</span>
+                <p className="font-bold text-ink text-sm">{w.topics.join(', ')}</p>
               </div>
-              <p className="text-xs text-violet-700 font-semibold mb-1">Teaching hook</p>
-              <p className="text-sm text-slate-700 mb-2">{w.tip}</p>
+              <p className="text-xs text-[#8069B0] font-semibold mb-1">Teaching hook</p>
+              <p className="text-sm text-ink-soft mb-2">{w.tip}</p>
               <p className="text-xs text-emerald-700 font-semibold mb-1">Activity</p>
-              <p className="text-sm text-slate-600">{w.activity}</p>
+              <p className="text-sm text-ink-soft">{w.activity}</p>
             </div>
           ))}
         </div>
@@ -359,11 +359,11 @@ export default function ClassSyllabusPage() {
       )}
 
       {yearPlanOpen && topics.length > 0 && (
-        <div className="card border-emerald-100 bg-emerald-50/20 mb-4 space-y-4">
+        <div className="rounded-3xl p-4 border border-emerald-100 bg-emerald-50/20 mb-4 space-y-4">
           {/* Config row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Teaching weeks / year</label>
+              <label className="text-xs font-bold text-ink-soft mb-1 block">Teaching weeks / year</label>
               <input
                 type="number" min="10" max="52"
                 value={totalWeeks}
@@ -372,7 +372,7 @@ export default function ClassSyllabusPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Sessions / week</label>
+              <label className="text-xs font-bold text-ink-soft mb-1 block">Sessions / week</label>
               <input
                 type="number" min="1" max="7"
                 value={sessionsPerWeek}
@@ -381,7 +381,7 @@ export default function ClassSyllabusPage() {
               />
             </div>
           </div>
-          <p className="text-xs text-slate-400 -mt-2">
+          <p className="text-xs text-ink-soft -mt-2">
             Total: ~{(parseInt(totalWeeks) || 40) * (parseInt(sessionsPerWeek) || 5)} sessions across {topics.length} topics
           </p>
 
@@ -405,7 +405,7 @@ export default function ClassSyllabusPage() {
 
           {yearPlanResult.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Estimated sessions per topic</p>
+              <p className="text-xs font-bold text-ink-soft uppercase tracking-wide">Estimated sessions per topic</p>
               {yearPlanResult.map(entry => {
                 const topic = topics.find(t => t.id === entry.id)
                 if (!topic) return null
@@ -415,8 +415,8 @@ export default function ClassSyllabusPage() {
                       <span className="text-sm font-black text-emerald-700">{entry.estimatedSessions}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-slate-800 leading-tight">{topic.topic}</p>
-                      {entry.rationale && <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{entry.rationale}</p>}
+                      <p className="font-semibold text-sm text-ink leading-tight">{topic.topic}</p>
+                      {entry.rationale && <p className="text-xs text-ink-soft mt-0.5 leading-relaxed">{entry.rationale}</p>}
                     </div>
                   </div>
                 )
@@ -432,7 +432,7 @@ export default function ClassSyllabusPage() {
                   type="button"
                   onClick={saveYearPlan}
                   disabled={savingPlan}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-50 active:scale-[0.98] transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-50 active:scale-[0.98] transition-all"
                 >
                   {savingPlan
                     ? <><Loader2 size={15} className="animate-spin" /> Saving…</>
@@ -448,22 +448,22 @@ export default function ClassSyllabusPage() {
       <button
         type="button"
         onClick={() => { setImportOpen(p => !p); if (importOpen) resetImport() }}
-        className="w-full flex items-center justify-between gap-2 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 mb-3 active:scale-[0.98] transition-transform"
+        className="w-full flex items-center justify-between gap-2 bg-[#DCEBF8] border border-[#AACDEA] rounded-2xl px-4 py-3 mb-3 active:scale-[0.98] transition-transform"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
-            <Sparkles size={15} className="text-blue-600" />
+          <div className="w-8 h-8 bg-[#AACDEA]/60 rounded-xl flex items-center justify-center">
+            <Sparkles size={15} className="text-[#1E3A55]" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-bold text-blue-900">Import Syllabus via AI</p>
-            <p className="text-xs text-blue-500">Paste text or upload image · AI extracts all topics</p>
+            <p className="text-sm font-bold text-[#1E3A55]">Import Syllabus via AI</p>
+            <p className="text-xs text-[#5B87AD]">Paste text or upload image · AI extracts all topics</p>
           </div>
         </div>
-        {importOpen ? <ChevronUp size={16} className="text-blue-400" /> : <ChevronDown size={16} className="text-blue-400" />}
+        {importOpen ? <ChevronUp size={16} className="text-[#5B87AD]" /> : <ChevronDown size={16} className="text-[#5B87AD]" />}
       </button>
 
       {importOpen && (
-        <div className="card border-blue-100 bg-blue-50/20 mb-4 space-y-4">
+        <div className="rounded-3xl p-4 border border-[#AACDEA] bg-[#DCEBF8]/20 mb-4 space-y-4">
 
           {/* Mode tabs */}
           <div className="flex gap-2">
@@ -473,9 +473,10 @@ export default function ClassSyllabusPage() {
               className={clsx(
                 'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
                 importMode === 'text'
-                  ? 'bg-blue-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200',
+                  ? 'text-white'
+                  : 'bg-white text-ink-soft border border-black/10',
               )}
+              style={importMode === 'text' ? { background: 'var(--ink)' } : undefined}
             >
               <FileText size={14} /> Paste Text
             </button>
@@ -485,9 +486,10 @@ export default function ClassSyllabusPage() {
               className={clsx(
                 'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
                 importMode === 'image'
-                  ? 'bg-blue-700 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200',
+                  ? 'text-white'
+                  : 'bg-white text-ink-soft border border-black/10',
               )}
+              style={importMode === 'image' ? { background: 'var(--ink)' } : undefined}
             >
               <ImageIcon size={14} /> Upload Image
             </button>
@@ -497,7 +499,7 @@ export default function ClassSyllabusPage() {
           {importMode === 'text' && (
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-semibold text-slate-500 mb-1.5">
+                <p className="text-xs font-semibold text-ink-soft mb-1.5">
                   Paste your syllabus — any format works (table, list, plain text)
                 </p>
                 <textarea
@@ -505,14 +507,14 @@ export default function ClassSyllabusPage() {
                   onChange={e => { setImportText(e.target.value); setExtracted([]); setExtractError('') }}
                   placeholder={`Unit\tTopics\nNumbers\tLarge numbers, place value, comparison\nArithmetic\tAddition, subtraction, multiplication\nFractions\tProper fractions, equivalent fractions...`}
                   rows={7}
-                  className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white resize-none font-mono text-slate-700 placeholder:text-slate-300 placeholder:font-sans"
+                  className="w-full border border-black/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#AACDEA] focus:border-transparent bg-white resize-none font-mono text-ink-soft placeholder:text-ink-faint placeholder:font-sans"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleExtract}
                 disabled={!importText.trim() || extracting}
-                className="w-full flex items-center justify-center gap-2 bg-blue-700 text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-[#5B87AD] text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
               >
                 {extracting ? <><Loader2 size={15} className="animate-spin" /> Analysing...</> : <><Sparkles size={15} /> Extract Topics with AI</>}
               </button>
@@ -535,28 +537,28 @@ export default function ClassSyllabusPage() {
                   <img
                     src={imagePreview}
                     alt="Syllabus"
-                    className="w-full rounded-2xl border border-slate-200 object-contain max-h-64"
+                    className="w-full rounded-2xl border border-black/10 object-contain max-h-64"
                   />
                   <button
                     type="button"
                     onClick={() => { setImagePreview(null); setExtracted([]); setExtractError('') }}
-                    className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full shadow-sm flex items-center justify-center border border-slate-200"
+                    className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center border border-black/10"
                   >
-                    <X size={13} className="text-slate-600" />
+                    <X size={13} className="text-ink-soft" />
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => imgInputRef.current?.click()}
-                  className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-blue-300 bg-white text-blue-600 active:bg-blue-50 transition-colors"
+                  className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-[#AACDEA] bg-white text-[#5B87AD] active:bg-[#DCEBF8] transition-colors"
                 >
-                  <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
-                    <Upload size={22} className="text-blue-600" />
+                  <div className="w-12 h-12 bg-[#AACDEA]/60 rounded-2xl flex items-center justify-center">
+                    <Upload size={22} className="text-[#5B87AD]" />
                   </div>
                   <div className="text-center">
                     <p className="font-bold text-sm">Tap to upload syllabus photo</p>
-                    <p className="text-xs text-slate-400 mt-0.5">JPG, PNG — textbook page, printed sheet, handwritten</p>
+                    <p className="text-xs text-ink-soft mt-0.5">JPG, PNG — textbook page, printed sheet, handwritten</p>
                   </div>
                 </button>
               )}
@@ -566,7 +568,7 @@ export default function ClassSyllabusPage() {
                   type="button"
                   onClick={handleExtract}
                   disabled={extracting}
-                  className="w-full flex items-center justify-center gap-2 bg-blue-700 text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
+                  className="w-full flex items-center justify-center gap-2 bg-[#5B87AD] text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
                 >
                   {extracting ? <><Loader2 size={15} className="animate-spin" /> Extracting...</> : <><Sparkles size={15} /> Extract Topics from Image</>}
                 </button>
@@ -586,30 +588,30 @@ export default function ClassSyllabusPage() {
           {extracted.length > 0 && (
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-800">
+                <p className="text-sm font-bold text-ink">
                   {extracted.length} topics extracted · review before saving
                 </p>
-                <button type="button" onClick={() => setExtracted([])} className="text-xs text-slate-400 hover:text-slate-600">
+                <button type="button" onClick={() => setExtracted([])} className="text-xs text-ink-soft hover:text-ink">
                   Clear
                 </button>
               </div>
 
               <div className="space-y-1.5 max-h-64 overflow-y-auto">
                 {extracted.map((t, i) => (
-                  <div key={i} className="flex items-start gap-2 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
-                    <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-lg text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
+                  <div key={i} className="flex items-start gap-2 bg-white rounded-xl border border-black/10 px-3 py-2.5">
+                    <span className="w-5 h-5 bg-[#AACDEA]/60 text-[#1E3A55] rounded-lg text-xs font-black flex items-center justify-center shrink-0 mt-0.5">
                       {t.weekNumber}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-900 leading-tight">{t.topic}</p>
+                      <p className="text-sm font-bold text-ink leading-tight">{t.topic}</p>
                       {t.description && (
-                        <p className="text-xs text-slate-400 mt-0.5 leading-relaxed italic">{t.description}</p>
+                        <p className="text-xs text-ink-soft mt-0.5 leading-relaxed italic">{t.description}</p>
                       )}
                       {t.subTopics && t.subTopics.length > 0 && (
                         <ul className="mt-1 space-y-0.5">
                           {t.subTopics.map((sub, si) => (
-                            <li key={si} className="text-xs text-slate-600 flex items-start gap-1.5">
-                              <span className="text-blue-400 shrink-0 mt-0.5">·</span>
+                            <li key={si} className="text-xs text-ink-soft flex items-start gap-1.5">
+                              <span className="text-[#5B87AD] shrink-0 mt-0.5">·</span>
                               <span>{sub}</span>
                             </li>
                           ))}
@@ -619,7 +621,7 @@ export default function ClassSyllabusPage() {
                     <button
                       type="button"
                       onClick={() => removeExtracted(i)}
-                      className="text-slate-300 hover:text-red-400 transition-colors shrink-0 p-0.5"
+                      className="text-ink-faint hover:text-red-400 transition-colors shrink-0 p-0.5"
                     >
                       <X size={14} />
                     </button>
@@ -631,7 +633,7 @@ export default function ClassSyllabusPage() {
                 type="button"
                 onClick={handleSaveAll}
                 disabled={saving}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-50 active:scale-[0.98] transition-all shadow-sm"
+                className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-50 active:scale-[0.98] transition-all"
               >
                 {saving
                   ? <><Loader2 size={15} className="animate-spin" /> Saving...</>
@@ -644,7 +646,7 @@ export default function ClassSyllabusPage() {
 
       {/* ── Manual add ──────────────────────────────────────── */}
       {showAdd ? (
-        <div className="card border-2 border-slate-200 mb-4 space-y-3">
+        <div className="paper-card p-4 mb-4 space-y-3">
           <input
             type="text"
             value={newTopic}
@@ -665,10 +667,11 @@ export default function ClassSyllabusPage() {
           <div className="flex gap-2.5">
             <button type="button"
               onClick={() => { setShowAdd(false); setNewTopic(''); setWeek('') }}
-              className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-600 font-semibold text-sm active:scale-95 transition-transform">
+              className="flex-1 py-3 rounded-2xl text-ink-soft font-semibold text-sm active:scale-95 transition-transform"
+              style={{ background: 'rgba(58,44,30,0.06)' }}>
               Cancel
             </button>
-            <button type="button" onClick={handleAdd} disabled={!newTopic.trim() || adding} className="flex-1 btn-primary text-sm">
+            <button type="button" onClick={handleAdd} disabled={!newTopic.trim() || adding} className="flex-1 paper-btn-primary text-sm">
               {adding ? 'Adding…' : 'Add Topic'}
             </button>
           </div>
@@ -677,7 +680,8 @@ export default function ClassSyllabusPage() {
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-3xl border-2 border-dashed border-slate-300 text-slate-500 font-semibold text-sm mb-4 active:scale-[0.98] transition-transform"
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-3xl border-2 border-dashed text-ink-soft font-semibold text-sm mb-4 active:scale-[0.98] transition-transform"
+          style={{ borderColor: 'rgba(58,44,30,0.25)' }}
         >
           <Plus size={17} strokeWidth={2.5} /> Add Single Topic Manually
         </button>
@@ -685,12 +689,12 @@ export default function ClassSyllabusPage() {
 
       {/* ── Empty state ─────────────────────────────────────── */}
       {topics.length === 0 && !showAdd && !importOpen && (
-        <div className="text-center py-14 card">
-          <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <BookOpen size={22} className="text-blue-500" />
+        <div className="text-center py-14 paper-card">
+          <div className="w-14 h-14 bg-[#DCEBF8] rounded-full flex items-center justify-center mx-auto mb-4">
+            <BookOpen size={22} className="text-[#5B87AD]" />
           </div>
-          <p className="font-semibold text-slate-700">No syllabus yet</p>
-          <p className="text-sm text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+          <p className="font-semibold text-ink">No syllabus yet</p>
+          <p className="text-sm text-ink-soft mt-1 max-w-xs mx-auto leading-relaxed">
             Use <strong>Import via AI</strong> to add your full year at once, or add topics one by one.
           </p>
         </div>
@@ -721,10 +725,10 @@ export default function ClassSyllabusPage() {
             <div
               key={topic.id}
               className={clsx(
-                'card transition-colors',
-                topic.isCompleted ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-100',
+                'rounded-3xl p-4 border transition-colors',
+                topic.isCompleted ? 'border-emerald-200 bg-emerald-50/50' : 'border-black/[0.06] bg-white',
               )}
-            >
+                         >
               {/* ── Topic header row ── */}
               <div className="flex items-start gap-3">
                 {/* Status indicator */}
@@ -733,55 +737,55 @@ export default function ClassSyllabusPage() {
                     topic.isCompleted ? (
                       <CheckCircle2 size={22} className="text-emerald-500" />
                     ) : doneSubTopics > 0 ? (
-                      <div className="w-[22px] h-[22px] rounded-full bg-violet-100 border-2 border-violet-400 flex items-center justify-center">
-                        <span className="text-[8px] font-black text-violet-600 leading-none">{doneSubTopics}/{subTopics.length}</span>
+                      <div className="w-[22px] h-[22px] rounded-full bg-[#C7B7E8]/50 border-2 border-[#8069B0] flex items-center justify-center">
+                        <span className="text-[8px] font-black text-[#31215C] leading-none">{doneSubTopics}/{subTopics.length}</span>
                       </div>
                     ) : (
-                      <Circle size={22} className="text-slate-200" />
+                      <Circle size={22} className="text-ink-faint" />
                     )
                   ) : (
                     topic.isCompleted ? (
                       <CheckCircle2 size={22} className="text-emerald-500" />
                     ) : sessionCount > 0 ? (
-                      <div className="w-[22px] h-[22px] rounded-full bg-violet-100 border-2 border-violet-400 flex items-center justify-center">
-                        <span className="text-[9px] font-black text-violet-600">{sessionCount}</span>
+                      <div className="w-[22px] h-[22px] rounded-full bg-[#C7B7E8]/50 border-2 border-[#8069B0] flex items-center justify-center">
+                        <span className="text-[9px] font-black text-[#31215C]">{sessionCount}</span>
                       </div>
                     ) : (
-                      <Circle size={22} className="text-slate-200" />
+                      <Circle size={22} className="text-ink-faint" />
                     )
                   )}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className={clsx('font-semibold text-sm', topic.isCompleted ? 'text-slate-400 line-through' : 'text-slate-900')}>
+                  <p className={clsx('font-semibold text-sm', topic.isCompleted ? 'text-ink-soft line-through' : 'text-ink')}>
                     {topic.topic}
                   </p>
                   {topic.description && (
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{topic.description}</p>
+                    <p className="text-xs text-ink-soft mt-0.5 leading-relaxed">{topic.description}</p>
                   )}
                   {topic.weekNumber != null && (
-                    <p className="text-xs text-slate-400 mt-0.5 font-medium">Week {topic.weekNumber}</p>
+                    <p className="text-xs text-ink-soft mt-0.5 font-medium">Week {topic.weekNumber}</p>
                   )}
                   <div className="flex flex-wrap gap-2 mt-1.5">
                     {subTopics.length > 0 ? (
                       <span className={clsx(
                         'text-xs px-2 py-0.5 rounded-full font-semibold',
-                        topic.isCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-violet-50 text-violet-700',
+                        topic.isCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-[#E9E1F6] text-[#31215C]',
                       )}>
                         {doneSubTopics}/{subTopics.length} sub-topics done
                       </span>
                     ) : sessionCount > 0 ? (
-                      <span className="flex items-center gap-1 text-xs text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full font-semibold">
+                      <span className="flex items-center gap-1 text-xs text-[#31215C] bg-[#E9E1F6] px-2 py-0.5 rounded-full font-semibold">
                         <Calendar size={10} />
                         {sessionCount} session{sessionCount !== 1 ? 's' : ''}
                         {latestDate && ` · ${new Date(latestDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
                       </span>
                     ) : topic.estimatedSessions ? (
-                      <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full font-semibold">
+                      <span className="flex items-center gap-1 text-xs text-ink-soft bg-black/[0.04] px-2 py-0.5 rounded-full font-semibold">
                         <Calendar size={10} /> ~{topic.estimatedSessions} sessions planned
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">No sub-topics yet</span>
+                      <span className="text-xs text-ink-soft">No sub-topics yet</span>
                     )}
                     {attendancePct !== null && (
                       <span className={clsx(
@@ -799,13 +803,13 @@ export default function ClassSyllabusPage() {
                 {/* Expand sub-topics */}
                 <button type="button"
                   onClick={() => setExpandedTopicId(isExpanded ? null : topic.id)}
-                  className="p-2 text-slate-400 hover:text-violet-600 transition-colors rounded-xl shrink-0">
+                  className="p-2 text-ink-soft hover:text-[#8069B0] transition-colors rounded-xl shrink-0">
                   {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                 </button>
 
                 <button type="button"
                   onClick={() => deleteSyllabusTopic(topic.id)}
-                  className="p-2 text-slate-300 hover:text-red-400 transition-colors rounded-xl shrink-0">
+                  className="p-2 text-ink-faint hover:text-red-400 transition-colors rounded-xl shrink-0">
                   <Trash2 size={15} />
                 </button>
               </div>
@@ -814,13 +818,13 @@ export default function ClassSyllabusPage() {
               {isExpanded && (
                 <div className="mt-3 ml-8 space-y-1.5">
                   {subTopics.length === 0 && !isAddingHere && (
-                    <p className="text-xs text-slate-400 italic py-1">
+                    <p className="text-xs text-ink-soft italic py-1">
                       No sub-topics yet. Add the specific parts/sections of this topic below.
                     </p>
                   )}
 
                   {subTopics.map(sub => (
-                    <div key={sub.id} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                    <div key={sub.id} className="flex items-center gap-2 bg-black/[0.03] rounded-xl px-3 py-2 border border-black/10">
                       <button
                         type="button"
                         onClick={() => toggleSubTopicComplete(sub.id, !sub.isCompleted)}
@@ -828,18 +832,18 @@ export default function ClassSyllabusPage() {
                       >
                         {sub.isCompleted
                           ? <CheckCircle2 size={17} className="text-emerald-500" />
-                          : <Circle size={17} className="text-slate-300" />}
+                          : <Circle size={17} className="text-ink-faint" />}
                       </button>
                       <span className={clsx(
                         'flex-1 text-sm font-medium',
-                        sub.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700',
+                        sub.isCompleted ? 'text-ink-soft line-through' : 'text-ink',
                       )}>
                         {sub.name}
                       </span>
                       <button
                         type="button"
                         onClick={() => deleteSubTopic(sub.id)}
-                        className="p-1 text-slate-300 hover:text-red-400 transition-colors shrink-0"
+                        className="p-1 text-ink-faint hover:text-red-400 transition-colors shrink-0"
                       >
                         <X size={13} />
                       </button>
@@ -863,7 +867,7 @@ export default function ClassSyllabusPage() {
                           if (e.key === 'Escape') { setAddingSubFor(null); setNewSubName('') }
                         }}
                         placeholder="Sub-topic name (e.g. Natural Numbers)"
-                        className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                        className="flex-1 text-sm border border-black/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#C7B7E8] bg-white"
                       />
                       <button
                         type="button"
@@ -873,12 +877,12 @@ export default function ClassSyllabusPage() {
                           addSubTopic(topic.id, classId, { name: newSubName.trim() })
                             .then(() => { setNewSubName(''); setAddingSubFor(null); setSavingSub(false) })
                         }}
-                        className="px-3 py-2 bg-violet-600 text-white text-xs font-bold rounded-xl disabled:opacity-40 active:scale-95 transition-all"
+                        className="px-3 py-2 bg-[#8069B0] text-white text-xs font-bold rounded-xl disabled:opacity-40 active:scale-95 transition-all"
                       >
                         {savingSub ? '…' : 'Add'}
                       </button>
                       <button type="button" onClick={() => { setAddingSubFor(null); setNewSubName('') }}
-                        className="p-2 text-slate-400 hover:text-slate-600 rounded-xl">
+                        className="p-2 text-ink-soft hover:text-ink rounded-xl">
                         <X size={14} />
                       </button>
                     </div>
@@ -886,7 +890,7 @@ export default function ClassSyllabusPage() {
                     <button
                       type="button"
                       onClick={() => setAddingSubFor(topic.id)}
-                      className="flex items-center gap-1.5 text-xs text-violet-600 font-semibold py-1.5 px-2 rounded-xl hover:bg-violet-50 transition-colors active:scale-95"
+                      className="flex items-center gap-1.5 text-xs text-[#8069B0] font-semibold py-1.5 px-2 rounded-xl hover:bg-[#E9E1F6] transition-colors active:scale-95"
                     >
                       <Plus size={13} strokeWidth={2.5} /> Add sub-topic
                     </button>

@@ -7,10 +7,16 @@ import { ArrowLeft, Camera, RefreshCw, CheckCircle2, AlertCircle, ScanLine, Chev
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { Spinner } from "@/components/scanner/spinner";
+import { QualityWarning } from "@/components/scanner/quality-warning";
+import { ReviewFlag } from "@/components/scanner/review-flag";
+import { compressAndAssess, type ImageQuality } from "@/lib/scan-capture";
 
 interface Student { id: string; name: string; roll_number: number; }
 interface TestInfo { topic: string; total_marks: number; subject: string; questions: unknown[]; }
-interface BatchResult { matchedStudent: Student | null; score: number | null; previewUrl: string; imageUrl?: string; }
+interface BatchResult {
+  matchedStudent: Student | null; score: number | null; previewUrl: string; imageUrl?: string;
+  quality: ImageQuality; needsReview: boolean; reviewReason: string | null;
+}
 type Stage = "capture" | "grading" | "confirm" | "saving";
 
 function BatchScanInner() {
@@ -54,7 +60,7 @@ function BatchScanInner() {
     setStage("grading"); setError(null);
     const previewUrl = URL.createObjectURL(file);
     try {
-      const { base64, mimeType } = await compressImage(file);
+      const { base64, mimeType, quality } = await compressAndAssess(file);
       const filename = `batch_${testId.slice(0, 8)}_${Date.now()}.jpg`;
       const [res, uploadRes] = await Promise.all([
         fetch("/api/grade-scan", {
@@ -69,9 +75,12 @@ function BatchScanInner() {
         }),
       ]);
       if (!res.ok) { const b = (await res.json()) as { error?: string }; throw new Error(b.error ?? `Server error ${res.status}`); }
-      const data = (await res.json()) as { matchedStudent: Student | null; score: number | null };
+      const data = (await res.json()) as { matchedStudent: Student | null; score: number | null; needsReview?: boolean; reviewReason?: string | null };
       const imageUrl: string | undefined = uploadRes.ok ? ((await uploadRes.json()) as { url?: string }).url : undefined;
-      setResult({ matchedStudent: data.matchedStudent, score: data.score, previewUrl, imageUrl });
+      setResult({
+        matchedStudent: data.matchedStudent, score: data.score, previewUrl, imageUrl,
+        quality, needsReview: data.needsReview ?? false, reviewReason: data.reviewReason ?? null,
+      });
       setSelectedStudentId(data.matchedStudent?.id ?? "");
       setScoreInput(data.score !== null ? String(data.score) : "");
       setStage("confirm");
@@ -178,6 +187,12 @@ function BatchScanInner() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={result.previewUrl} alt="Scanned paper" className="w-full h-full object-contain" />
           </div>
+          {!result.quality.ok && result.quality.reason && (
+            <QualityWarning reason={result.quality.reason} onRetake={handleRetake} />
+          )}
+          {result.needsReview && result.reviewReason && (
+            <ReviewFlag reason={result.reviewReason} />
+          )}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             {result.matchedStudent ? (
               <div className="flex items-center gap-3 bg-emerald-50 px-4 py-3 border-b border-emerald-100">
@@ -237,25 +252,3 @@ export default function BatchScanPage() {
   );
 }
 
-function compressImage(file: File): Promise<{ base64: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const MAX_WIDTH = 1600;
-      const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas unavailable")); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-      const comma = dataUrl.indexOf(",");
-      resolve({ base64: dataUrl.slice(comma + 1), mimeType: "image/jpeg" });
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Image load failed")); };
-    img.src = objectUrl;
-  });
-}

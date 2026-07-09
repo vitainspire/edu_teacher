@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getClientIp } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getScannerSchoolId, verifyTestInSchool } from "@/lib/scanner-auth";
 
 // Scanner portal save — bypasses RLS via service role key.
-// Verifies ownership by checking the test's teacher_id matches the supplied teacherId.
+// Authorization is via the signed school-scoped token from /api/scanner/connect,
+// not a client-supplied teacherId (which anyone could guess/forge).
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   const { allowed } = await checkRateLimit(ip);
@@ -12,8 +14,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Rate limit exceeded.' }, { status: 429 });
   }
 
+  const schoolId = getScannerSchoolId(request);
+  if (!schoolId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
   let body: {
-    teacherId: string
     testId: string
     studentId: string
     score: number
@@ -25,31 +29,21 @@ export async function POST(request: NextRequest) {
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { teacherId, testId, studentId, score, totalMarks, breakdown, feedback, imageUrl } = body;
+  const { testId, studentId, score, totalMarks, breakdown, feedback, imageUrl } = body;
 
-  if (!teacherId || !testId || !studentId || score === undefined || !totalMarks) {
+  if (!testId || !studentId || score === undefined || !totalMarks) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
   if (score < 0 || score > totalMarks) {
     return NextResponse.json({ error: 'score out of range' }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-
-  // Verify the test belongs to this teacher
-  const { data: test, error: testErr } = await admin
-    .from('tests')
-    .select('teacher_id')
-    .eq('id', testId)
-    .single();
-
-  if (testErr || !test) {
-    return NextResponse.json({ error: 'Test not found' }, { status: 404 });
-  }
-  if ((test as { teacher_id: string }).teacher_id !== teacherId) {
+  // Verify the test belongs to a class in the authenticated school
+  if (!(await verifyTestInSchool(schoolId, testId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const admin = createAdminClient();
   const { error } = await admin.from('marks').upsert(
     {
       id: crypto.randomUUID(),

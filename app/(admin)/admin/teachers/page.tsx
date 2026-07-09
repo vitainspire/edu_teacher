@@ -1,17 +1,21 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useAdmin } from '@/lib/admin-context'
-import { Users, Trash2, Loader2, UserPlus, X, Eye, EyeOff } from 'lucide-react'
+import { Users, Trash2, Loader2, UserPlus, Eye, EyeOff, Gauge, BookMarked } from 'lucide-react'
 import type { Teacher } from '@/lib/types'
+import PageHeader from '@/components/theme/PageHeader'
+import { Sticker } from '@/components/theme/StickerIcon'
+import Modal from '@/components/ui/Modal'
+import SubjectsTagInput from '@/components/admin/SubjectsTagInput'
 
 interface CreateForm {
   name: string
   email: string
   password: string
-  subject: string
+  subjects: string[]
 }
 
-const EMPTY_FORM: CreateForm = { name: '', email: '', password: '', subject: '' }
+const EMPTY_FORM: CreateForm = { name: '', email: '', password: '', subjects: [] }
 
 export default function TeachersPage() {
   const { school } = useAdmin()
@@ -24,6 +28,14 @@ export default function TeachersPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
   const [showPw, setShowPw] = useState(false)
+
+  const [limitsTeacher, setLimitsTeacher] = useState<Teacher | null>(null)
+  const [limitsForm, setLimitsForm] = useState({ maxPeriodsPerDay: '', maxPeriodsPerWeek: '' })
+  const [savingLimits, setSavingLimits] = useState(false)
+
+  const [subjectsTeacher, setSubjectsTeacher] = useState<Teacher | null>(null)
+  const [subjectsDraft, setSubjectsDraft] = useState<string[]>([])
+  const [savingSubjects, setSavingSubjects] = useState(false)
 
   function load() {
     if (!school) { setLoading(false); return }
@@ -67,160 +79,294 @@ export default function TeachersPage() {
     load()
   }
 
+  function closeModal() {
+    setShowModal(false)
+    setForm(EMPTY_FORM)
+    setCreateError('')
+    setShowPw(false)
+  }
+
+  function openLimits(t: Teacher) {
+    setLimitsTeacher(t)
+    setLimitsForm({
+      maxPeriodsPerDay: t.maxPeriodsPerDay?.toString() ?? '',
+      maxPeriodsPerWeek: t.maxPeriodsPerWeek?.toString() ?? '',
+    })
+  }
+
+  async function saveLimits() {
+    if (!school || !limitsTeacher) return
+    setSavingLimits(true)
+    await fetch(`/api/admin/schools/${school.id}/teachers`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        teacherId: limitsTeacher.id,
+        maxPeriodsPerDay: limitsForm.maxPeriodsPerDay,
+        maxPeriodsPerWeek: limitsForm.maxPeriodsPerWeek,
+      }),
+    })
+    setSavingLimits(false)
+    setLimitsTeacher(null)
+    load()
+  }
+
+  function openSubjects(t: Teacher) {
+    setSubjectsTeacher(t)
+    setSubjectsDraft(t.subjects?.length ? t.subjects : (t.subject ? [t.subject] : []))
+  }
+
+  async function saveSubjects() {
+    if (!school || !subjectsTeacher) return
+    setSavingSubjects(true)
+    await fetch(`/api/admin/schools/${school.id}/teachers`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teacherId: subjectsTeacher.id, subjects: subjectsDraft }),
+    })
+    setSavingSubjects(false)
+    setSubjectsTeacher(null)
+    load()
+  }
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-600" /> Teachers
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''} in {school?.name}</p>
-        </div>
-        <button
-          onClick={() => { setShowModal(true); setCreateError('') }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-          style={{ background: '#4338ca' }}
-        >
-          <UserPlus className="w-4 h-4" /> Add Teacher
-        </button>
+    <div className="paper-page pb-16">
+
+      <PageHeader
+        title="Teachers"
+        back={false}
+        subtitle={`${teachers.length} teacher${teachers.length !== 1 ? 's' : ''} in ${school?.name ?? 'your school'}`}
+        action={
+          <button
+            onClick={() => { setShowModal(true); setCreateError('') }}
+            className="flex items-center gap-1.5 font-bold px-3.5 py-2.5 rounded-2xl text-xs active:scale-95 transition-transform"
+            style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}
+          >
+            <UserPlus size={14} strokeWidth={2.5} /> Add Teacher
+          </button>
+        }
+      />
+
+      <div className="px-5 pt-3 relative z-10">
+
+        {loading ? (
+          <div className="paper-card p-10 text-center">
+            <Loader2 className="w-6 h-6 animate-spin text-ink-soft mx-auto" />
+          </div>
+        ) : teachers.length === 0 ? (
+          <div className="paper-card px-6 py-14 text-center">
+            <Sticker tone="cream" size={72} radius={999} style={{ margin: '0 auto 16px' }}>
+              <Users size={30} className="text-ink-soft" />
+            </Sticker>
+            <p className="font-display font-bold text-ink text-lg">No teachers yet</p>
+            <p className="text-sm text-ink-soft mt-1">Click &quot;Add Teacher&quot; to create their account</p>
+          </div>
+        ) : (
+          <div className="paper-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: '1.5px solid rgba(58,44,30,0.12)' }}>
+                    <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Name</th>
+                    <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Subject</th>
+                    <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Grade</th>
+                    <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Workload Limit</th>
+                    <th className="text-left text-xs font-bold text-ink-soft uppercase tracking-wide px-5 py-3">Code</th>
+                    <th className="px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {teachers.map((t, i) => (
+                    <tr key={t.id} style={i < teachers.length - 1 ? { borderBottom: '1px solid rgba(58,44,30,0.08)' } : undefined}>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}>
+                            {t.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-bold text-ink">{t.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <button
+                          onClick={() => openSubjects(t)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-ink-soft hover:text-ink transition-colors max-w-[200px] text-left"
+                        >
+                          <BookMarked size={13} className="shrink-0" />
+                          <span className="truncate">
+                            {t.subjects?.length ? t.subjects.join(', ') : (t.subject || 'Add subjects')}
+                          </span>
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-ink-soft">{t.grade || '—'}</td>
+                      <td className="px-5 py-3">
+                        <button
+                          onClick={() => openLimits(t)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-ink-soft hover:text-ink transition-colors"
+                        >
+                          <Gauge size={13} />
+                          {t.maxPeriodsPerDay || t.maxPeriodsPerWeek
+                            ? [t.maxPeriodsPerDay && `${t.maxPeriodsPerDay}/day`, t.maxPeriodsPerWeek && `${t.maxPeriodsPerWeek}/wk`].filter(Boolean).join(' · ')
+                            : 'No limit'}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="font-mono text-xs paper-pill">{t.teacherCode ?? '—'}</span>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          onClick={() => removeTeacher(t.id)}
+                          disabled={removing === t.id}
+                          className="p-1.5 rounded-lg text-ink-faint hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          {removing === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-        </div>
-      ) : teachers.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-          <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No teachers yet</p>
-          <p className="text-sm text-gray-400 mt-1">Click "Add Teacher" to create their account</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Name</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Subject</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Grade</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Code</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {teachers.map(t => (
-                <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: '#4338ca' }}>
-                        {t.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-gray-800">{t.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-sm text-gray-600">{t.subject || '—'}</td>
-                  <td className="px-5 py-3 text-sm text-gray-600">{t.grade || '—'}</td>
-                  <td className="px-5 py-3">
-                    <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">{t.teacherCode ?? '—'}</span>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      onClick={() => removeTeacher(t.id)}
-                      disabled={removing === t.id}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                    >
-                      {removing === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
       {/* Create Teacher Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">Add Teacher</h2>
-              <button onClick={() => setShowModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                <X className="w-5 h-5" />
+      <Modal open={showModal} onClose={closeModal} title="Add Teacher">
+        <form onSubmit={handleCreate} className="space-y-4">
+          {createError && (
+            <div className="text-sm px-4 py-3 rounded-2xl" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid rgba(185,28,28,0.15)' }}>
+              {createError}
+            </div>
+          )}
+
+          <div>
+            <label className="label">Full Name *</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Sunita Sharma"
+              className="input-field"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="label">Email Address *</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="teacher@school.edu.in"
+              className="input-field"
+            />
+          </div>
+
+          <div>
+            <label className="label">Subjects (optional)</label>
+            <SubjectsTagInput value={form.subjects} onChange={subjects => setForm(f => ({ ...f, subjects }))} />
+          </div>
+
+          <div>
+            <label className="label">Password * (min 6 chars)</label>
+            <div className="relative">
+              <input
+                type={showPw ? 'text' : 'password'}
+                required
+                value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                placeholder="Give this to the teacher"
+                className="input-field pr-12"
+              />
+              <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-faint">
+                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            <p className="text-xs text-ink-faint mt-1.5">Share these credentials with the teacher so they can log in.</p>
+          </div>
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              {createError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">{createError}</div>
-              )}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={closeModal}
+              className="flex-1 py-3 rounded-2xl text-ink-soft font-bold text-sm active:scale-95 transition-transform"
+              style={{ background: 'rgba(58,44,30,0.06)' }}
+            >
+              Cancel
+            </button>
+            <button type="submit" disabled={creating} className="flex-1 paper-btn-primary" style={{ opacity: creating ? 0.7 : 1 }}>
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Account'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Sunita Sharma"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  placeholder="teacher@school.edu.in"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Subject (optional)</label>
-                <input
-                  type="text"
-                  value={form.subject}
-                  onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                  placeholder="e.g. Mathematics"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Password * (min 6 chars)</label>
-                <div className="relative">
-                  <input
-                    type={showPw ? 'text' : 'password'}
-                    required
-                    value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    placeholder="Give this to the teacher"
-                    className="w-full px-3 py-2.5 pr-10 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Share these credentials with the teacher so they can log in.</p>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">
-                  Cancel
-                </button>
-                <button type="submit" disabled={creating} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60" style={{ background: '#4338ca' }}>
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Account'}
-                </button>
-              </div>
-            </form>
+      {/* Workload limits modal */}
+      <Modal open={!!limitsTeacher} onClose={() => setLimitsTeacher(null)} title="Workload Limit">
+        <p className="text-sm text-ink-soft mb-4">
+          Optional caps on how many periods {limitsTeacher?.name} can be assigned per day/week — used when auto-assigning substitute coverage. Leave blank for no limit.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Max Periods / Day</label>
+            <input
+              type="number"
+              min={0}
+              value={limitsForm.maxPeriodsPerDay}
+              onChange={e => setLimitsForm(f => ({ ...f, maxPeriodsPerDay: e.target.value }))}
+              placeholder="No limit"
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="label">Max Periods / Week</label>
+            <input
+              type="number"
+              min={0}
+              value={limitsForm.maxPeriodsPerWeek}
+              onChange={e => setLimitsForm(f => ({ ...f, maxPeriodsPerWeek: e.target.value }))}
+              placeholder="No limit"
+              className="input-field"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setLimitsTeacher(null)}
+              className="flex-1 py-3 rounded-2xl text-ink-soft font-bold text-sm active:scale-95 transition-transform"
+              style={{ background: 'rgba(58,44,30,0.06)' }}
+            >
+              Cancel
+            </button>
+            <button type="button" onClick={saveLimits} disabled={savingLimits} className="flex-1 paper-btn-primary" style={{ opacity: savingLimits ? 0.7 : 1 }}>
+              {savingLimits ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
+
+      {/* Edit subjects modal */}
+      <Modal open={!!subjectsTeacher} onClose={() => setSubjectsTeacher(null)} title="Subjects">
+        <p className="text-sm text-ink-soft mb-4">
+          Every subject {subjectsTeacher?.name} can teach — not just what they&apos;re currently assigned to a class for. Used when assigning teachers to classes and generating timetables.
+        </p>
+        <SubjectsTagInput value={subjectsDraft} onChange={setSubjectsDraft} />
+        <div className="flex gap-3 pt-4">
+          <button
+            type="button"
+            onClick={() => setSubjectsTeacher(null)}
+            className="flex-1 py-3 rounded-2xl text-ink-soft font-bold text-sm active:scale-95 transition-transform"
+            style={{ background: 'rgba(58,44,30,0.06)' }}
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={saveSubjects} disabled={savingSubjects} className="flex-1 paper-btn-primary" style={{ opacity: savingSubjects ? 0.7 : 1 }}>
+            {savingSubjects ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

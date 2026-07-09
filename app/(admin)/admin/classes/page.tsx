@@ -1,22 +1,75 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useAdmin } from '@/lib/admin-context'
-import { BookOpen, Plus, Trash2, Loader2, Users, UserCheck, ListOrdered } from 'lucide-react'
+import { BookOpen, Plus, Loader2, X, ChevronRight } from 'lucide-react'
 import type { Class } from '@/lib/types'
 import Link from 'next/link'
+import { buildClassCombos } from '@/lib/classCombos'
+import PageHeader from '@/components/theme/PageHeader'
+import { Sticker } from '@/components/theme/StickerIcon'
+import clsx from 'clsx'
 
-interface CreateForm { name: string; grade: string; section: string; academicYear: string }
-const EMPTY: CreateForm = { name: '', grade: '', section: '', academicYear: new Date().getFullYear().toString() }
+const GRADES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+const PRESET_SECTIONS = ['A', 'B', 'C', 'D']
+
+type Tone = 'blue' | 'green' | 'coral' | 'gold' | 'violet' | 'pink'
+const PALETTE: { tone: Tone; stat: string; ink: string }[] = [
+  { tone: 'blue',   stat: 'stat-card-blue',   ink: '#1E3A55' },
+  { tone: 'green',  stat: 'stat-card-green',  ink: '#234A1D' },
+  { tone: 'coral',  stat: 'stat-card-coral',  ink: '#5C2416' },
+  { tone: 'gold',   stat: 'stat-card-gold',   ink: '#4A3809' },
+  { tone: 'violet', stat: 'stat-card-violet', ink: '#31215C' },
+  { tone: 'pink',   stat: 'stat-card-pink',   ink: '#5C1F38' },
+]
 
 export default function ClassesPage() {
   const { school } = useAdmin()
   const [classes, setClasses] = useState<Class[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<CreateForm>(EMPTY)
+  const [grades, setGrades] = useState<string[]>([])
+  const [sections, setSections] = useState<string[]>([])
+  const [customSections, setCustomSections] = useState<string[]>([])
+  const [customInput, setCustomInput] = useState('')
+  const [academicYear, setAcademicYear] = useState(new Date().getFullYear().toString())
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const allSections = [...PRESET_SECTIONS, ...customSections]
+  const allCombos = buildClassCombos(grades, sections)
+
+  function existsAlready(grade: string, section: string) {
+    return classes.some(c => c.grade === grade && c.section.toLowerCase() === section.toLowerCase())
+  }
+  const duplicateCombos = allCombos.filter(c => existsAlready(c.grade, c.section))
+  const combos = allCombos.filter(c => !existsAlready(c.grade, c.section))
+
+  function toggleGrade(g: string) {
+    setGrades(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])
+  }
+
+  function toggleSection(s: string) {
+    setSections(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+  }
+
+  function addCustomSection() {
+    const val = customInput.trim().toUpperCase()
+    if (!val || allSections.includes(val)) { setCustomInput(''); return }
+    setCustomSections(prev => [...prev, val])
+    setSections(prev => [...prev, val])
+    setCustomInput('')
+  }
+
+  function removeCustomSection(s: string) {
+    setCustomSections(prev => prev.filter(x => x !== s))
+    setSections(prev => prev.filter(x => x !== s))
+  }
+
+  function resetForm() {
+    setGrades([]); setSections([]); setCustomSections([]); setCustomInput('')
+    setAcademicYear(new Date().getFullYear().toString())
+    setSaveError(null)
+  }
 
   function load() {
     if (!school) { setLoading(false); return }
@@ -28,24 +81,37 @@ export default function ClassesPage() {
 
   useEffect(() => { load() }, [school])
 
-  async function createClass(e: React.FormEvent) {
+  async function createClasses(e: React.FormEvent) {
     e.preventDefault()
-    if (!school) return
+    if (!school || combos.length === 0) return
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await fetch(`/api/admin/schools/${school.id}/classes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setSaveError(body.error ?? `Error ${res.status}`)
-        return
+      const results = await Promise.allSettled(
+        combos.map(c =>
+          fetch(`/api/admin/schools/${school.id}/classes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: c.name, grade: c.grade, section: c.section, academicYear }),
+          }).then(async res => {
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}))
+              throw new Error(body.error ?? `${c.name}: ${res.status}`)
+            }
+          })
+        )
+      )
+      const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (failed.length > 0) {
+        setSaveError(
+          failed.length === 1
+            ? String(failed[0].reason)
+            : `${failed.length} of ${combos.length} class${combos.length !== 1 ? 'es' : ''} failed to create.`
+        )
+      } else {
+        setShowCreate(false)
+        resetForm()
       }
-      setShowCreate(false)
-      setForm(EMPTY)
       load()
     } catch {
       setSaveError('Network error — please try again')
@@ -54,135 +120,220 @@ export default function ClassesPage() {
     }
   }
 
-  async function deleteClass(classId: string) {
-    if (!school) return
-    if (!confirm('Delete this class and all its students?')) return
-    setDeleting(classId)
-    await fetch(`/api/admin/schools/${school.id}/classes`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ classId }),
-    })
-    setDeleting(null)
-    load()
-  }
-
-  const CLASS_COLORS = ['#2563eb']
+  // Group classes by grade — sections live under their grade
+  const gradeGroups = Object.entries(
+    classes.reduce((acc, c) => {
+      (acc[c.grade] ??= []).push(c)
+      return acc
+    }, {} as Record<string, Class[]>)
+  ).sort(([a], [b]) => Number(a) - Number(b) || a.localeCompare(b))
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-cyan-600" /> Classes
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{classes.length} class{classes.length !== 1 ? 'es' : ''} in {school?.name}</p>
-        </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-          style={{ background: '#4338ca' }}
-        >
-          <Plus className="w-4 h-4" /> Create Class
-        </button>
-      </div>
+    <div className="max-w-5xl mx-auto pb-10">
+      <PageHeader
+        title="Classes"
+        back={false}
+        subtitle={`${gradeGroups.length} grade${gradeGroups.length !== 1 ? 's' : ''} · ${classes.length} section${classes.length !== 1 ? 's' : ''} in ${school?.name ?? 'your school'}`}
+        action={
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 font-bold px-4 py-2.5 rounded-2xl text-xs active:scale-95 transition-transform"
+            style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}
+          >
+            <Plus size={14} strokeWidth={2.5} /> Create Classes
+          </button>
+        }
+      />
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-        </div>
-      ) : classes.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-          <BookOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No classes yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create your first class to get started</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map((cls, i) => {
-            const color = CLASS_COLORS[i % CLASS_COLORS.length]
-            return (
-              <div key={cls.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="h-1.5" style={{ background: color }} />
-                <div className="p-5">
-                  <Link href={`/admin/classes/${cls.id}/students`} className="block mb-3 group">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-800 group-hover:text-indigo-700 transition-colors">{cls.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Grade {cls.grade} · Section {cls.section}</p>
-                      </div>
-                      <button
-                        onClick={e => { e.preventDefault(); deleteClass(cls.id) }}
-                        disabled={deleting === cls.id}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                      >
-                        {deleting === cls.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    {cls.classCode && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Code: <span className="font-mono font-medium text-gray-600">{cls.classCode}</span>
+      <div className="px-5 pt-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-6 h-6 animate-spin text-ink-soft" />
+          </div>
+        ) : gradeGroups.length === 0 ? (
+          <div className="paper-card px-6 py-16 text-center">
+            <Sticker tone="cream" size={72} radius={999} style={{ margin: '0 auto 16px' }}>
+              <BookOpen size={30} className="text-ink-soft" />
+            </Sticker>
+            <p className="font-display font-bold text-ink text-lg">No classes yet</p>
+            <p className="text-sm text-ink-soft mt-1">Create your first class to get started</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {gradeGroups.map(([grade, secs], i) => {
+              const palette = PALETTE[i % PALETTE.length]
+              return (
+                <Link
+                  key={grade}
+                  href={`/admin/classes/grade/${encodeURIComponent(grade)}`}
+                  className={clsx('stat-card', palette.stat, 'block')}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-display font-bold text-xl leading-tight" style={{ color: palette.ink }}>Grade {grade}</p>
+                      <p className="text-xs font-semibold mt-1" style={{ color: palette.ink, opacity: 0.75 }}>
+                        {secs.length} section{secs.length !== 1 ? 's' : ''}
                       </p>
-                    )}
-                  </Link>
-                  <div className="flex gap-2">
-                    <Link
-                      href={`/admin/classes/${cls.id}/students`}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
-                    >
-                      <Users className="w-3.5 h-3.5" /> Students
-                    </Link>
-                    <Link
-                      href={`/admin/classes/${cls.id}/assign`}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
-                    >
-                      <UserCheck className="w-3.5 h-3.5" /> Assign
-                    </Link>
-                    <Link
-                      href={`/admin/classes/${cls.id}/syllabus`}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
-                    >
-                      <ListOrdered className="w-3.5 h-3.5" /> Syllabus
-                    </Link>
+                    </div>
+                    <ChevronRight size={18} style={{ color: palette.ink, opacity: 0.5 }} className="shrink-0 mt-1" />
                   </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {secs.map(s => (
+                      <span
+                        key={s.id}
+                        className="text-xs font-bold px-2 py-1 rounded-full"
+                        style={{ background: 'rgba(255,255,255,0.55)', color: palette.ink }}
+                      >
+                        {s.section || s.name}
+                      </span>
+                    ))}
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Create modal */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-5">Create Class</h2>
-            <form onSubmit={createClass} className="space-y-4">
-              {[
-                { label: 'Class Name', key: 'name', placeholder: 'e.g. Class 10A - Mathematics' },
-                { label: 'Grade', key: 'grade', placeholder: 'e.g. 10' },
-                { label: 'Section', key: 'section', placeholder: 'e.g. A' },
-                { label: 'Academic Year', key: 'academicYear', placeholder: '2025' },
-              ].map(({ label, key, placeholder }) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+          <div className="paper-card bg-[var(--paper-soft)] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="font-display font-bold text-ink text-lg mb-5">Create Classes</h2>
+            <form onSubmit={createClasses} className="space-y-4">
+
+              {/* Grade multiselect */}
+              <div>
+                <label className="block text-sm font-bold text-ink mb-1.5">Grades * <span className="text-ink-faint font-normal">(select one or more)</span></label>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {GRADES.map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => toggleGrade(g)}
+                      className="py-2 rounded-xl text-sm font-bold transition-colors"
+                      style={grades.includes(g)
+                        ? { background: 'var(--ink)', color: 'var(--paper-soft)' }
+                        : { background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section multiselect + custom */}
+              <div>
+                <label className="block text-sm font-bold text-ink mb-1.5">Sections * <span className="text-ink-faint font-normal">(select one or more)</span></label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {allSections.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSection(s)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-bold transition-colors"
+                      style={sections.includes(s)
+                        ? { background: 'var(--ink)', color: 'var(--paper-soft)' }
+                        : { background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}
+                    >
+                      {s}
+                      {customSections.includes(s) && (
+                        <X className="w-3 h-3" onClick={e => { e.stopPropagation(); removeCustomSection(s) }} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
                   <input
                     type="text"
-                    value={form[key as keyof CreateForm]}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    placeholder={placeholder}
-                    required={['name','grade','section'].includes(key)}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={customInput}
+                    onChange={e => setCustomInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomSection())}
+                    placeholder="Custom section e.g. Blue, Ganga…"
+                    className="flex-1 px-4 py-2 rounded-xl border text-sm bg-white focus:outline-none focus:ring-2"
+                    style={{ borderColor: 'rgba(58,44,30,0.18)' }}
                   />
+                  <button
+                    type="button"
+                    onClick={addCustomSection}
+                    disabled={!customInput.trim()}
+                    className="px-3 rounded-xl disabled:opacity-40"
+                    style={{ background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
-              ))}
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-ink mb-1">Academic Year</label>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={e => setAcademicYear(e.target.value)}
+                  placeholder="2025"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm bg-white focus:outline-none focus:ring-2"
+                  style={{ borderColor: 'rgba(58,44,30,0.18)' }}
+                />
+              </div>
+
+              {/* Duplicate warning */}
+              {duplicateCombos.length > 0 && (
+                <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200">
+                  <p className="text-sm font-bold text-amber-800 mb-2">
+                    {duplicateCombos.length} already exist{duplicateCombos.length === 1 ? 's' : ''} — will be skipped
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                    {duplicateCombos.map(c => (
+                      <span key={c.name} className="text-xs font-medium text-amber-700 bg-white px-2 py-1 rounded-full border border-amber-200 line-through">
+                        {c.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Preview */}
+              {combos.length > 0 && (
+                <div className="rounded-2xl p-3" style={{ background: 'rgba(58,44,30,0.05)', border: '1.5px solid rgba(58,44,30,0.14)' }}>
+                  <p className="text-sm font-bold text-ink mb-2">
+                    Will create {combos.length} class{combos.length !== 1 ? 'es' : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {combos.map(c => (
+                      <span key={c.name} className="text-xs font-bold text-ink-soft bg-white px-2 py-1 rounded-full" style={{ border: '1.5px solid rgba(58,44,30,0.12)' }}>
+                        {c.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {allCombos.length > 0 && combos.length === 0 && duplicateCombos.length > 0 && (
+                <p className="text-sm text-amber-700 bg-amber-50 rounded-xl px-3 py-2">
+                  All selected classes already exist — nothing new to create.
+                </p>
+              )}
+
               {saveError && (
-                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{saveError}</p>
+                <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{saveError}</p>
               )}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setShowCreate(false); setSaveError(null) }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600">Cancel</button>
-                <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60" style={{ background: '#4338ca' }}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Class'}
+                <button
+                  type="button"
+                  onClick={() => { setShowCreate(false); resetForm() }}
+                  className="flex-1 py-2.5 rounded-xl border text-sm font-bold text-ink-soft"
+                  style={{ borderColor: 'rgba(58,44,30,0.18)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || combos.length === 0}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : combos.length > 1 ? `Create ${combos.length} Classes` : 'Create Class'}
                 </button>
               </div>
             </form>

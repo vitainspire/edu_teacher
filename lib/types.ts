@@ -12,13 +12,16 @@ export interface Teacher {
   name: string
   schoolName: string
   schoolId?: string    // UUID from schools table — the real SaaS tenant key
-  subject: string
+  subject: string      // primary subject — kept in sync as subjects[0] for backward compat
+  subjects?: string[]  // every subject this teacher can teach (common in staff-scarce schools)
   grade: string
   phone: string
   languagePreference: string
   academicYearStart?: string   // ISO date "2025-06-01" — when this school year started
   currentTerm?: string         // "Term 1" | "Term 2" | "Term 3"
   teacherCode?: string         // short code non-teaching staff type into the scanner app
+  maxPeriodsPerDay?: number    // optional workload cap — undefined/null = no cap
+  maxPeriodsPerWeek?: number
 }
 
 export interface Class {
@@ -63,7 +66,6 @@ export interface Test {
   id: string
   teacherId: string
   classId?: string
-  syllabusTopicId?: string  // FK → syllabus_topics.id — links test to the exact topic taught
   subject: string
   topic: string
   totalMarks: number
@@ -136,6 +138,7 @@ export interface SyllabusTopic {
   classId: string
   teacherId?: string   // which teacher's curriculum this belongs to
   grade?: string       // grade this topic belongs to (= owning class's grade)
+  subject?: string     // which subject's curriculum this belongs to (grade-scoped syllabus is per-subject)
   definitionId?: string // shared across all sections of the same grade; edits/deletes fan out by this
   topic: string
   description: string
@@ -360,6 +363,54 @@ export interface Worksheet {
   createdAt: string
 }
 
+export interface GapTopic {
+  topic: string
+  avgMastery: number
+  weakStudentCount: number
+  totalStudents: number
+}
+
+export interface BridgeNote {
+  concept: string
+  text: string
+}
+
+export interface LessonSection {
+  type: 'teach' | 'check'
+  title: string
+  content: string
+  bridgeNote?: BridgeNote
+}
+
+export interface SmartLesson {
+  hook: string
+  sections: LessonSection[]
+  closingActivity: string
+}
+
+export interface TaughtTopic {
+  id: string
+  teacherId: string
+  classId: string
+  date: string   // YYYY-MM-DD
+  topic: string
+  subtopic?: string
+  createdAt: string
+}
+
+export interface PrepMaterial {
+  id: string
+  teacherId: string
+  classId: string
+  subject: string
+  grade: string
+  topic: string
+  subtopic?: string
+  gapTopics: GapTopic[]
+  lesson: SmartLesson
+  createdAt: string
+}
+
 export interface CatchupMaterial {
   id: string
   teacherId: string
@@ -401,6 +452,19 @@ export interface Admin {
   createdAt: string
 }
 
+export interface GradeSubject {
+  id: string
+  schoolId: string
+  grade: string
+  subject: string
+  periodsPerWeek: number
+  /** 'core' academic subjects vs 'special' activity periods (Sports/Library/Lab/...) — lets the
+   *  timetable generator space core periods apart instead of stacking them back-to-back. */
+  category: 'core' | 'special'
+  orderIndex: number
+  createdAt: string
+}
+
 export interface SchoolTimetablePeriod {
   id: string
   schoolId: string
@@ -412,4 +476,92 @@ export interface SchoolTimetablePeriod {
   teacherId?: string
   label?: string
   createdAt: string
+}
+
+export interface TeacherAvailability {
+  id: string
+  schoolId: string
+  teacherId: string
+  date: string   // YYYY-MM-DD
+  reason: 'on_leave' | 'late_arrival' | 'official_duty' | 'other'
+  note?: string
+  source: 'teacher' | 'admin'   // who set this status — teacher self-report is primary, admin is a fallback override
+}
+
+export interface TimetableSubstitution {
+  id: string
+  schoolId: string
+  date: string   // YYYY-MM-DD
+  dayOfWeek: number
+  periodNumber: number
+  classId: string
+  subject?: string
+  originalTeacherId: string
+  substituteTeacherId?: string
+  status: 'assigned' | 'unresolved' | 'manual'
+}
+
+export interface Announcement {
+  id: string
+  schoolId: string
+  adminId: string
+  adminName: string
+  title: string
+  body: string
+  category: 'general' | 'exam' | 'urgent' | 'holiday'
+  createdAt: string
+}
+
+export interface AcademicEvent {
+  id: string
+  schoolId: string
+  title: string
+  category: 'holiday' | 'exam' | 'term'
+  // Only meaningful when category === 'holiday' — why this day is off.
+  holidaySubtype?: 'public' | 'school' | 'cultural'
+  // Whether this event actually blocks regular class periods. Defaults true
+  // for holidays/exams; a cultural event (Annual Day, Sports Day) may be
+  // set false if classes still run around it.
+  countsAsNonWorking: boolean
+  // Draft (false) until the admin explicitly publishes the calendar — only
+  // published events are visible in the teacher-facing calendar.
+  published: boolean
+  startDate: string   // YYYY-MM-DD
+  endDate: string      // YYYY-MM-DD
+  description?: string
+  createdAt: string
+}
+
+export interface ExamPlanItem {
+  id: string
+  schoolId: string
+  name: string          // e.g. "Unit Test", "Half-Yearly Exam"
+  count: number         // how many times this exam type happens in the year
+  orderIndex: number
+  createdAt: string
+}
+
+export interface PersonalityStoryOption {
+  text: string
+  outcome: string
+  // Internal steering signal — never shown to the student. Decides which of
+  // the three closing scenes the story lands on; not a score, not shown as a grade.
+  leadsToward: 'wise' | 'regret'
+}
+
+export interface PersonalityStoryStep {
+  scene: string
+  question: string
+  options: PersonalityStoryOption[]
+}
+
+export interface PersonalityStory {
+  trait: string
+  title: string
+  steps: PersonalityStoryStep[]
+  endings: {
+    wise: string
+    mixed: string
+    regret: string
+  }
 }

@@ -14,42 +14,57 @@ async function getUser(cookieStore: ReturnType<typeof cookies>) {
 }
 
 export async function GET(_req: Request, { params }: { params: { schoolId: string; classId: string } }) {
-  const cookieStore = cookies()
-  const { data: { user } } = await getUser(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const cookieStore = cookies()
+    const { data: { user } } = await getUser(cookieStore)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const ac = createAdminClient()
-  const admin = await fetchAdmin(user.id, ac)
-  if (!admin || admin.schoolId !== params.schoolId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const ac = createAdminClient()
+    const admin = await fetchAdmin(user.id, ac)
+    if (!admin || admin.schoolId !== params.schoolId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const assignments = await fetchClassAssignments(params.classId, ac)
-  return NextResponse.json({ assignments })
+    const assignments = await fetchClassAssignments(params.classId, ac)
+    return NextResponse.json({ assignments })
+  } catch (err) {
+    console.error('[assign-teacher GET] failed:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }
 
 export async function POST(req: Request, { params }: { params: { schoolId: string; classId: string } }) {
-  const cookieStore = cookies()
-  const { data: { user } } = await getUser(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const cookieStore = cookies()
+    const { data: { user } } = await getUser(cookieStore)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const ac = createAdminClient()
-  const admin = await fetchAdmin(user.id, ac)
-  if (!admin || admin.schoolId !== params.schoolId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const ac = createAdminClient()
+    const admin = await fetchAdmin(user.id, ac)
+    if (!admin || admin.schoolId !== params.schoolId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { teacherId, subject } = await req.json()
-  await assignTeacherToClass(randomUUID(), teacherId, params.classId, ac, subject ?? undefined)
-  return NextResponse.json({ ok: true })
+    const { teacherId, subject } = await req.json()
+    await assignTeacherToClass(randomUUID(), teacherId, params.classId, ac, subject ?? undefined)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[assign-teacher POST] failed:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }
 
 export async function DELETE(req: Request, { params }: { params: { schoolId: string; classId: string } }) {
-  const cookieStore = cookies()
-  const { data: { user } } = await getUser(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const cookieStore = cookies()
+    const { data: { user } } = await getUser(cookieStore)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const ac = createAdminClient()
-  const admin = await fetchAdmin(user.id, ac)
-  if (!admin || admin.schoolId !== params.schoolId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const ac = createAdminClient()
+    const admin = await fetchAdmin(user.id, ac)
+    if (!admin || admin.schoolId !== params.schoolId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { teacherId } = await req.json()
-  await removeTeacherFromClass(teacherId, params.classId, ac)
-  return NextResponse.json({ ok: true })
+    const { teacherId } = await req.json()
+    await removeTeacherFromClass(teacherId, params.classId, ac)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[assign-teacher DELETE] failed:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }

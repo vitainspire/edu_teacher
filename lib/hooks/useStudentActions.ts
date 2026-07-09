@@ -2,6 +2,7 @@
 import { useCallback } from 'react'
 import type { RefObject, Dispatch, SetStateAction } from 'react'
 import * as sbq from '../supabase-queries'
+import { genStudentCode } from '../studentCode'
 import type { Teacher, Student } from '../types'
 
 export function useStudentActions(
@@ -9,12 +10,21 @@ export function useStudentActions(
   studentsRef: RefObject<Student[]>,
   setStudents: Dispatch<SetStateAction<Student[]>>,
 ) {
+  // Generates a code guaranteed not to collide with any student already loaded client-side
+  function uniqueStudentCode(taken: Set<string>): string {
+    let code = genStudentCode()
+    while (taken.has(code)) code = genStudentCode()
+    taken.add(code)
+    return code
+  }
+
   const addStudent = useCallback(async (
     classId: string,
     data: { name: string; rollNumber: string; interests: string[]; goal: string },
   ) => {
     if (!teacher) return
     const classStudents = studentsRef.current!.filter(s => s.classId === classId)
+    const takenCodes = new Set(studentsRef.current!.map(s => s.studentCode).filter((c): c is string => !!c))
     const student: Student = {
       id: crypto.randomUUID(),
       teacherId: teacher.id,
@@ -24,6 +34,7 @@ export function useStudentActions(
       isActive: true,
       interests: data.interests,
       goal: data.goal.trim(),
+      studentCode: uniqueStudentCode(takenCodes),
     }
     setStudents(prev => [...prev, student])
     sbq.upsertStudent(student).catch(console.error)
@@ -32,6 +43,7 @@ export function useStudentActions(
   const addStudentsBulk = useCallback(async (classId: string, names: string[]) => {
     if (!teacher) return
     const base = studentsRef.current!.filter(s => s.classId === classId).length
+    const takenCodes = new Set(studentsRef.current!.map(s => s.studentCode).filter((c): c is string => !!c))
     const newStudents: Student[] = names.map(n => n.trim()).filter(Boolean)
       .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
       .map((name, i) => ({
@@ -43,6 +55,7 @@ export function useStudentActions(
         isActive: true,
         interests: [],
         goal: '',
+        studentCode: uniqueStudentCode(takenCodes),
       }))
     setStudents(prev => [...prev, ...newStudents])
     newStudents.forEach(s => sbq.upsertStudent(s).catch(console.error))

@@ -83,21 +83,21 @@ export default function SmartLessonPage() {
     <div className="px-4 pt-5 pb-10 max-w-lg mx-auto space-y-5">
 
       {/* Explainer card */}
-      <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%)', borderRadius: 20, padding: '18px 20px' }}>
+      <div style={{ background: '#C7B7E8', borderRadius: 20, padding: '18px 20px', border: '2px solid rgba(58,44,30,0.12)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <Zap size={18} color="#a78bfa" />
-          <p style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>Smart Teach</p>
+          <Zap size={18} color="#31215C" />
+          <p style={{ fontSize: 15, fontWeight: 900, color: '#31215C', fontFamily: 'var(--font-serif), Georgia, serif' }}>Smart Teach</p>
         </div>
-        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
+        <p style={{ fontSize: 12, color: 'rgba(49,33,92,0.75)', lineHeight: 1.6 }}>
           Pick today&apos;s topic. The AI checks this class&apos;s past marks, finds what they&apos;re weak on,
-          and writes a lesson that <span style={{ color: '#c4b5fd', fontWeight: 700 }}>naturally fills those gaps
+          and writes a lesson that <span style={{ color: '#31215C', fontWeight: 700 }}>naturally fills those gaps
           while teaching the new topic</span> — no detours, no separate remediation.
         </p>
       </div>
 
       {/* Topic selector */}
-      <div style={{ background: '#fff', borderRadius: 18, padding: '18px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 8px rgba(15,23,42,.05)' }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+      <div className="paper-card" style={{ padding: '18px 20px' }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>
           Today&apos;s Topic
         </p>
 
@@ -106,14 +106,14 @@ export default function SmartLessonPage() {
             <select
               value={selectedTopicId}
               onChange={e => { setSelectedTopicId(e.target.value); setCustomTopic('') }}
-              style={{ width: '100%', padding: '11px 36px 11px 14px', borderRadius: 12, border: '1.5px solid #e2e8f0', fontSize: 14, fontWeight: 600, color: '#1e293b', background: '#f8fafc', appearance: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
+              style={{ width: '100%', padding: '11px 36px 11px 14px', borderRadius: 12, border: '1.5px solid rgba(58,44,30,0.14)', fontSize: 14, fontWeight: 600, color: 'var(--ink)', background: 'rgba(58,44,30,0.04)', appearance: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
             >
               <option value="">— pick from syllabus —</option>
               {syllabus.map(t => (
                 <option key={t.id} value={t.id}>{t.topic}</option>
               ))}
             </select>
-            <ChevronDown size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+            <ChevronDown size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', pointerEvents: 'none' }} />
           </div>
         )}
 
@@ -122,7 +122,7 @@ export default function SmartLessonPage() {
           placeholder={syllabus.length > 0 ? 'Or type a custom topic…' : 'Type today\'s topic…'}
           value={customTopic}
           onChange={e => { setCustomTopic(e.target.value); setSelectedTopicId('') }}
-          style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #e2e8f0', fontSize: 14, fontWeight: 600, color: '#1e293b', background: '#f8fafc', fontFamily: 'inherit', boxSizing: 'border-box' }}
+          style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid rgba(58,44,30,0.14)', fontSize: 14, fontWeight: 600, color: 'var(--ink)', background: 'rgba(58,44,30,0.04)', fontFamily: 'inherit', boxSizing: 'border-box' }}
         />
 
         <button
@@ -130,10 +130,9 @@ export default function SmartLessonPage() {
           disabled={!effectiveTopic || loading}
           style={{
             marginTop: 14, width: '100%', padding: '13px', borderRadius: 14, border: 'none', cursor: effectiveTopic && !loading ? 'pointer' : 'not-allowed',
-            background: effectiveTopic && !loading ? 'linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)' : '#e2e8f0',
-            color: effectiveTopic && !loading ? '#fff' : '#94a3b8',
+            background: effectiveTopic && !loading ? 'var(--ink)' : 'rgba(58,44,30,0.12)',
+            color: effectiveTopic && !loading ? '#fff' : 'var(--ink-faint)',
             fontSize: 14, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'inherit',
-            boxShadow: effectiveTopic && !loading ? '0 4px 16px rgba(124,58,237,.35)' : 'none',
             transition: 'all .15s',
           }}
         >
@@ -178,21 +177,21 @@ export default function SmartLessonPage() {
           )}
 
           {/* Lesson document */}
-          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 12px rgba(15,23,42,.06)' }}>
+          <div className="paper-card" style={{ overflow: 'hidden' }}>
 
             {/* Doc header */}
-            <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', padding: '20px 22px 18px' }}>
-              <p style={{ fontSize: 10, fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 4 }}>Smart Lesson Plan</p>
-              <p style={{ fontSize: 20, fontWeight: 900, color: '#fff', lineHeight: 1.2 }}>{result.topic}</p>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', marginTop: 4 }}>{result.subject} · Grade {result.grade} · {result.totalStudents} students</p>
+            <div style={{ background: '#C7B7E8', padding: '20px 22px 18px' }}>
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#31215C', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 4, opacity: 0.75 }}>Smart Lesson Plan</p>
+              <p className="font-display" style={{ fontSize: 20, fontWeight: 700, color: '#31215C', lineHeight: 1.2 }}>{result.topic}</p>
+              <p style={{ fontSize: 12, color: 'rgba(49,33,92,0.65)', marginTop: 4 }}>{result.subject} · Grade {result.grade} · {result.totalStudents} students</p>
             </div>
 
             <div style={{ padding: '0 22px 22px' }}>
 
               {/* Opening Hook */}
-              <div style={{ borderBottom: '1px solid #f1f5f9', paddingTop: 20, paddingBottom: 20 }}>
-                <p style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>Opening Hook</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', lineHeight: 1.55, fontStyle: 'italic' }}>
+              <div style={{ borderBottom: '1px solid rgba(58,44,30,0.08)', paddingTop: 20, paddingBottom: 20 }}>
+                <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>Opening Hook</p>
+                <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.55, fontStyle: 'italic' }}>
                   &ldquo;{result.lesson.hook}&rdquo;
                 </p>
               </div>
@@ -207,7 +206,7 @@ export default function SmartLessonPage() {
                   const isLast  = i === result.lesson.sections.length - 1
 
                   return (
-                    <div key={i} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9', paddingTop: 20, paddingBottom: 20 }}>
+                    <div key={i} style={{ borderBottom: isLast ? 'none' : '1px solid rgba(58,44,30,0.08)', paddingTop: 20, paddingBottom: 20 }}>
 
                       {/* Row: step label + badge */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -216,12 +215,12 @@ export default function SmartLessonPage() {
                         ) : isCheck ? (
                           <CheckCircle2 size={15} style={{ color: '#16a34a', flexShrink: 0 }} />
                         ) : (
-                          <span style={{ fontSize: 11, fontWeight: 800, color: '#7c3aed' }}>Step {stepNum}</span>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#31215C' }}>Step {stepNum}</span>
                         )}
                         <span style={{
                           fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em',
-                          color: isGap ? '#92400e' : isCheck ? '#15803d' : '#6d28d9',
-                          background: isGap ? '#fef3c7' : isCheck ? '#dcfce7' : '#ede9fe',
+                          color: isGap ? '#92400e' : isCheck ? '#15803d' : '#31215C',
+                          background: isGap ? '#fef3c7' : isCheck ? '#dcfce7' : '#EAE3F7',
                           borderRadius: 6, padding: '2px 8px',
                         }}>
                           {isGap ? 'Gap fill' : isCheck ? 'Check' : 'Teach'}
@@ -229,7 +228,7 @@ export default function SmartLessonPage() {
                       </div>
 
                       {/* Title */}
-                      <p style={{ fontSize: 16, fontWeight: 800, color: isGap ? '#92400e' : isCheck ? '#15803d' : '#1e293b', marginBottom: isGap && sec.gapTopic ? 3 : 8, lineHeight: 1.3 }}>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: isGap ? '#92400e' : isCheck ? '#15803d' : 'var(--ink)', marginBottom: isGap && sec.gapTopic ? 3 : 8, lineHeight: 1.3 }}>
                         {sec.title}
                       </p>
 
@@ -249,8 +248,8 @@ export default function SmartLessonPage() {
             </div>
 
             {/* Closing activity */}
-            <div style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '18px 22px' }}>
-              <p style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
+            <div style={{ background: 'rgba(58,44,30,0.04)', borderTop: '1px solid rgba(58,44,30,0.08)', padding: '18px 22px' }}>
+              <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
                 Closing Activity (2 min)
               </p>
               <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }}>{result.lesson.closingActivity}</p>
@@ -260,13 +259,13 @@ export default function SmartLessonPage() {
           {/* Legend + regenerate */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', paddingTop: 14 }}>
             {[
-              { color: '#6d28d9', bg: '#ede9fe', label: 'Teach' },
+              { color: '#31215C', bg: '#EAE3F7', label: 'Teach' },
               { color: '#92400e', bg: '#fef3c7', label: 'Gap fill' },
               { color: '#15803d', bg: '#dcfce7', label: 'Check' },
             ].map(l => (
               <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 9, height: 9, borderRadius: 3, background: l.bg, border: `1.5px solid ${l.color}` }} />
-                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{l.label}</span>
+                <span style={{ fontSize: 10, color: 'var(--ink-soft)', fontWeight: 600 }}>{l.label}</span>
               </div>
             ))}
           </div>
@@ -274,7 +273,7 @@ export default function SmartLessonPage() {
           <button
             onClick={() => void generate()}
             disabled={loading}
-            style={{ marginTop: 14, width: '100%', padding: '11px', borderRadius: 14, border: '1.5px solid #7c3aed', background: '#fff', color: '#7c3aed', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            style={{ marginTop: 14, width: '100%', padding: '11px', borderRadius: 14, border: '1.5px solid var(--ink)', background: '#fff', color: 'var(--ink)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             className={clsx(loading && 'opacity-50')}
           >
             <Sparkles size={14} /> Regenerate lesson

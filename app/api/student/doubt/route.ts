@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { parseBody, StudentDoubtSchema } from '@/lib/schemas'
 import { apiLog, getClientIp } from '@/lib/logger'
+import { verifyStudentCookie } from '@/lib/student-auth'
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()
 
-  const studentId = req.cookies.get('edu-student-id')?.value
+  const studentId = verifyStudentCookie(req.cookies.get('edu-student-id')?.value)
   if (!studentId) {
     apiLog({ route: 'student/doubt', ip, durationMs: Date.now() - t, fromCache: false, status: 'unauthorized' })
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })

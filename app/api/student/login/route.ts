@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { apiLog, getClientIp } from '@/lib/logger'
-import { checkRateLimit } from '@/lib/rate-limit'
+import { signStudentId } from '@/lib/student-auth'
+import { checkAuthRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()
-  try {
-    const { allowed } = await checkRateLimit(ip)
-    if (!allowed) {
-      apiLog({ route: 'student/login', ip, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
-      return NextResponse.json(
-        { error: 'Too many attempts. Please wait a moment and try again.' },
-        { status: 429 },
-      )
-    }
 
+  const { allowed } = await checkAuthRateLimit(ip)
+  if (!allowed) {
+    apiLog({ route: 'student/login', ip, durationMs: Date.now() - t, fromCache: false, status: 'rate_limited' })
+    return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429 })
+  }
+
+  try {
     const { studentCode } = await req.json()
     if (!studentCode?.trim()) {
       return NextResponse.json({ error: 'Please enter your Student ID.' }, { status: 400 })
@@ -50,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     apiLog({ route: 'student/login', ip, userId: student.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
     const res = NextResponse.json({ ok: true, session })
-    res.cookies.set('edu-student-id', student.id, {
+    res.cookies.set('edu-student-id', signStudentId(student.id), {
       path: '/',
       maxAge: 86400 * 30,
       sameSite: 'lax',

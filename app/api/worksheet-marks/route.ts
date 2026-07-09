@@ -3,9 +3,11 @@ import { createServerComponentClient } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getClientIp } from '@/lib/logger'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getScannerSchoolId, verifyWorksheetInSchool } from '@/lib/scanner-auth'
 
 // GET /api/worksheet-marks?worksheetId=...
-// Returns all marks for a worksheet (teacher-authenticated or scanner via teacherId query param)
+// Returns all marks for a worksheet (teacher-authenticated, or scanner portal via
+// the signed school-scoped token from /api/scanner/connect)
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const worksheetId = searchParams.get('worksheetId')
@@ -24,15 +26,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ marks: data ?? [] })
   }
 
-  // Scanner fallback — verify ownership via teacherId param
-  const teacherId = searchParams.get('teacherId')
-  if (!teacherId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const admin = createAdminClient()
-  const { data: ws } = await admin.from('worksheets').select('teacher_id').eq('id', worksheetId).single()
-  if (!ws || (ws as { teacher_id: string }).teacher_id !== teacherId) {
+  // Scanner fallback — verify the worksheet belongs to the authenticated school
+  const schoolId = getScannerSchoolId(req)
+  if (!schoolId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await verifyWorksheetInSchool(schoolId, worksheetId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const admin = createAdminClient()
   const { data, error } = await admin.from('worksheet_marks').select('*').eq('worksheet_id', worksheetId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ marks: data ?? [] })

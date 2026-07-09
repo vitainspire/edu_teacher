@@ -8,9 +8,12 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { Spinner } from "@/components/scanner/spinner";
 import { BreadcrumbBar } from "@/components/scanner/breadcrumb-bar";
+import { QualityWarning } from "@/components/scanner/quality-warning";
+import { ReviewFlag } from "@/components/scanner/review-flag";
+import { compressAndAssess, type CapturedImage } from "@/lib/scan-capture";
 
 interface Student { id: string; name: string; roll_number: number; }
-type Stage = "capture" | "preview" | "grading" | "manual";
+type Stage = "capture" | "preview" | "grading" | "manual" | "flagged";
 
 function CameraPageInner() {
   const params = useParams<{ classId: string; testId: string }>();
@@ -24,6 +27,8 @@ function CameraPageInner() {
   const [stage, setStage] = useState<Stage>("capture");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [captured, setCaptured] = useState<CapturedImage | null>(null);
+  const [reviewReason, setReviewReason] = useState<string | null>(null);
   const [gradingError, setGradingError] = useState<string | null>(null);
   const [gradingLabel, setGradingLabel] = useState<string>("Grading with AI…");
   const [manualScore, setManualScore] = useState<string>("");
@@ -73,14 +78,25 @@ function CameraPageInner() {
     setPreviewUrl(URL.createObjectURL(file));
     setStage("preview");
     setGradingError(null);
+    setCaptured(null);
+    compressAndAssess(file).then(setCaptured).catch(() => setCaptured(null));
   }
 
   function handleRetake() {
     setStage("capture");
     setPreviewUrl(null);
     setImageFile(null);
+    setCaptured(null);
     setGradingError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  // Grading handlers need the compressed payload; if the background compression
+  // from handleFileChange hasn't resolved yet (or failed), compute it fresh here.
+  async function getCapturedImage(): Promise<CapturedImage> {
+    if (captured) return captured;
+    if (!imageFile) throw new Error("No photo captured");
+    return compressAndAssess(imageFile);
   }
 
   async function handleManualSave() {
@@ -108,7 +124,7 @@ function CameraPageInner() {
     setGradingError(null);
     setGradingLabel("Grading with AI…");
     try {
-      const { base64, mimeType } = await readFileAsBase64(imageFile);
+      const { base64, mimeType } = await getCapturedImage();
       const filename = `${preSelectedStudentName.replace(/\s+/g, "_")}_${testId.slice(0, 8)}.jpg`;
       const [gradeRes, uploadRes] = await Promise.all([
         fetch("/api/grade-scan", {
@@ -123,7 +139,7 @@ function CameraPageInner() {
         }),
       ]);
       if (!gradeRes.ok) { const b = (await gradeRes.json()) as { error?: string }; throw new Error(b.error ?? `Grading failed (${gradeRes.status})`); }
-      const { score, breakdown, feedback } = (await gradeRes.json()) as { score: number | null; breakdown?: unknown[]; feedback?: string | null };
+      const { score, breakdown, feedback, reviewReason: flaggedReason } = (await gradeRes.json()) as { score: number | null; breakdown?: unknown[]; feedback?: string | null; reviewReason?: string | null };
       const imageUrl: string | undefined = uploadRes.ok ? ((await uploadRes.json()) as { url?: string }).url : undefined;
       if (score === null) { setManualScore(""); setStage("manual"); return; }
       setGradingLabel("Saving score…");
@@ -133,6 +149,13 @@ function CameraPageInner() {
         body: JSON.stringify({ studentId: preSelectedStudentId, testId, score, totalMarks, breakdown: breakdown ?? null, feedback: feedback ?? null, imageUrl }),
       });
       if (!saveRes.ok) { const b = (await saveRes.json()) as { error?: string }; throw new Error(b.error ?? "Failed to save score"); }
+      if (flaggedReason) {
+        // Saved, but flagged as worth a second look — pause here instead of
+        // auto-redirecting, so it isn't silently accepted like a normal scan.
+        setReviewReason(flaggedReason);
+        setStage("flagged");
+        return;
+      }
       router.push(`/scanner/${classId}/tests/${testId}/scan`);
       router.refresh();
     } catch (err) {
@@ -141,13 +164,18 @@ function CameraPageInner() {
     }
   }
 
+  function handleContinueAfterFlag() {
+    router.push(`/scanner/${classId}/tests/${testId}/scan`);
+    router.refresh();
+  }
+
   async function handleMatchedGrade() {
     if (!imageFile) return;
     setStage("grading");
     setGradingError(null);
     setGradingLabel("Grading with AI…");
     try {
-      const { base64, mimeType } = await readFileAsBase64(imageFile);
+      const { base64, mimeType } = await getCapturedImage();
       const filename = `scan_${testId.slice(0, 8)}_${Date.now()}.jpg`;
       const [res, uploadRes] = await Promise.all([
         fetch("/api/grade-scan", {
@@ -162,7 +190,7 @@ function CameraPageInner() {
         }),
       ]);
       if (!res.ok) { const b = (await res.json()) as { error?: string }; throw new Error(b.error ?? `Server error ${res.status}`); }
-      const result = (await res.json()) as { matchedStudent: Student | null; score: number | null };
+      const result = (await res.json()) as { matchedStudent: Student | null; score: number | null; needsReview?: boolean; reviewReason?: string | null };
       const imageUrl: string | undefined = uploadRes.ok ? ((await uploadRes.json()) as { url?: string }).url : undefined;
       sessionStorage.setItem("scanResult", JSON.stringify({ ...result, students, totalMarks, imageUrl }));
       router.push(`/scanner/${classId}/tests/${testId}/scan/confirm`);
@@ -178,7 +206,7 @@ function CameraPageInner() {
   }
 
   const backHref = `/scanner/${classId}/tests/${testId}/scan`;
-  const stageTitle = stage === "capture" ? "Take Photo" : stage === "preview" ? "Preview" : stage === "grading" ? "Grading…" : "Enter Score";
+  const stageTitle = stage === "capture" ? "Take Photo" : stage === "preview" ? "Preview" : stage === "grading" ? "Grading…" : stage === "flagged" ? "Saved — Review" : "Enter Score";
   const isManualSaveDisabled = isSavingManual || manualScore === "" || isNaN(Number(manualScore)) || Number(manualScore) < 0 || Number(manualScore) > totalMarks;
 
   return (
@@ -244,6 +272,9 @@ function CameraPageInner() {
 
           {stage === "preview" && (
             <>
+              {captured && !captured.quality.ok && captured.quality.reason && (
+                <QualityWarning reason={captured.quality.reason} onRetake={handleRetake} />
+              )}
               {gradingError && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3"><p className="text-sm text-amber-800 font-medium">{gradingError}</p></div>}
               <div className="flex gap-3">
                 <button onClick={handleRetake} className="flex-1 min-h-[56px] border-2 border-gray-200 text-gray-700 font-bold text-base rounded-2xl active:scale-95 transition-transform flex items-center justify-center gap-2 bg-white">
@@ -254,6 +285,15 @@ function CameraPageInner() {
                 </button>
               </div>
             </>
+          )}
+
+          {stage === "flagged" && reviewReason && (
+            <div className="flex flex-col gap-3">
+              <ReviewFlag reason={reviewReason} />
+              <button onClick={handleContinueAfterFlag} className="w-full min-h-[56px] bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-[0.97] transition-transform flex items-center justify-center gap-2">
+                Continue
+              </button>
+            </div>
           )}
 
           {stage === "manual" && (
@@ -298,26 +338,3 @@ export default function CameraPage() {
   );
 }
 
-function readFileAsBase64(file: File): Promise<{ base64: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const MAX_WIDTH = 1600;
-      const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas 2D not available")); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-      const commaIdx = dataUrl.indexOf(",");
-      if (commaIdx === -1) { reject(new Error("Malformed canvas data URL")); return; }
-      resolve({ base64: dataUrl.slice(commaIdx + 1), mimeType: "image/jpeg" });
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Failed to load image")); };
-    img.src = objectUrl;
-  });
-}

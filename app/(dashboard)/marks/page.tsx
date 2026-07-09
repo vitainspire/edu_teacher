@@ -1,8 +1,10 @@
 'use client'
 import { useState } from 'react'
-import { PenLine, Plus, ChevronRight } from 'lucide-react'
+import { PenLine, Plus, ChevronRight, ArrowLeft } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import MarkEntry from '@/components/marks/MarkEntry'
+import PageHeader from '@/components/theme/PageHeader'
+import { Sticker } from '@/components/theme/StickerIcon'
 
 type Step = 'list' | 'new-test' | 'enter-marks'
 
@@ -58,27 +60,30 @@ export default function MarksPage() {
 
   if (step === 'new-test') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white px-4 pt-4 pb-4 border-b border-gray-100">
+      <div className="paper-page pb-28">
+        <div className="relative z-10 px-5 pt-8 pb-2">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => setStep('list')}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
+              className="w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+              style={{ background: 'rgba(58,44,30,0.08)' }}
             >
-              ←
+              <ArrowLeft size={18} className="text-ink" />
             </button>
-            <h1 className="text-xl font-bold text-gray-900">New Test</h1>
+            <h1 className="font-display font-bold text-ink text-2xl">New Test</h1>
           </div>
         </div>
-        <div className="px-4 py-4 space-y-5">
+        <div className="px-5 pt-3 pb-4 space-y-5 relative z-10">
           <div>
-            <label className="label">Topic *</label>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Topic *</label>
             <input
               type="text"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g. Fractions"
-              className="input-field"
+              className="w-full border-2 rounded-2xl px-4 py-3 text-sm font-medium text-ink placeholder-ink-faint bg-white min-h-[52px] transition-all focus:outline-none"
+              style={{ borderColor: 'rgba(58,44,30,0.15)' }}
               autoFocus
             />
             {/* Quick topic chips */}
@@ -87,9 +92,10 @@ export default function MarksPage() {
                 <button
                   key={t}
                   onClick={() => setTopic(t)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    topic === t ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700'
-                  }`}
+                  className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+                  style={topic === t
+                    ? { background: 'var(--ink)', color: 'var(--paper-soft)' }
+                    : { background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}
                 >
                   {t}
                 </button>
@@ -98,15 +104,16 @@ export default function MarksPage() {
           </div>
 
           <div>
-            <label className="label">Total Marks *</label>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Total Marks *</label>
             <div className="flex gap-2">
               {['5', '10', '20', '25', '50', '100'].map((n) => (
                 <button
                   key={n}
                   onClick={() => setTotalMarks(n)}
-                  className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
-                    totalMarks === n ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700'
-                  }`}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                  style={totalMarks === n
+                    ? { background: 'var(--ink)', color: 'var(--paper-soft)' }
+                    : { background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}
                 >
                   {n}
                 </button>
@@ -115,19 +122,20 @@ export default function MarksPage() {
           </div>
 
           <div>
-            <label className="label">Date</label>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Date</label>
             <input
               type="date"
               value={conductedOn}
               onChange={(e) => setConductedOn(e.target.value)}
-              className="input-field"
+              className="w-full border-2 rounded-2xl px-4 py-3 text-sm font-medium text-ink bg-white min-h-[52px] transition-all focus:outline-none"
+              style={{ borderColor: 'rgba(58,44,30,0.15)' }}
             />
           </div>
 
           <button
             onClick={handleCreateTest}
             disabled={!topic.trim() || !totalMarks || saving}
-            className="btn-primary w-full"
+            className="paper-btn-primary w-full"
           >
             {saving ? 'Creating…' : `Start Entering Marks (${activeStudents.length} students)`}
           </button>
@@ -138,15 +146,15 @@ export default function MarksPage() {
 
   if (step === 'enter-marks' && currentTest) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white px-4 pt-4 pb-4 border-b border-gray-100 sticky top-0 z-10">
-          <h1 className="text-xl font-bold text-gray-900">{currentTest.topic}</h1>
-          <p className="text-sm text-gray-500">
+      <div className="paper-page pb-28">
+        <div className="bg-paper-soft/95 px-5 pt-6 pb-3 sticky top-0 z-10">
+          <h1 className="font-display font-bold text-ink text-2xl">{currentTest.topic}</h1>
+          <p className="text-sm text-ink-soft">
             {teacher?.subject} · Out of {currentTest.totalMarks} ·{' '}
             {new Date(currentTest.conductedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
           </p>
         </div>
-        <div className="px-4 py-4">
+        <div className="px-5 pt-3 relative z-10">
           <MarkEntry
             students={activeStudents}
             totalMarks={currentTest.totalMarks}
@@ -160,43 +168,42 @@ export default function MarksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white px-4 pt-4 pb-4 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Marks</h1>
-            <p className="text-sm text-gray-500">{testSummaries.length} tests recorded</p>
-          </div>
+    <div className="paper-page pb-28">
+      <PageHeader
+        title="Marks"
+        subtitle={`${testSummaries.length} tests recorded`}
+        action={
           <button
             onClick={() => setStep('new-test')}
-            className="flex items-center gap-1.5 bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm"
+            className="flex items-center gap-1.5 font-bold px-3.5 py-2.5 rounded-2xl text-xs active:scale-95 transition-transform"
+            style={{ background: 'var(--ink)', color: 'var(--paper-soft)' }}
           >
-            <Plus size={16} /> New Test
+            <Plus size={14} strokeWidth={2.5} /> New Test
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="px-4 py-4 space-y-2">
+      <div className="px-5 pt-3 space-y-2 relative z-10">
         {testSummaries.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <PenLine size={28} className="text-blue-600" />
-            </div>
-            <p className="text-lg font-semibold text-gray-800">No tests yet</p>
-            <p className="text-gray-500 text-sm mt-1">Tap &quot;New Test&quot; to start entering marks</p>
-            <button onClick={() => setStep('new-test')} className="btn-primary mt-5 px-6">
+          <div className="paper-card text-center py-16">
+            <Sticker tone="cream" size={64} radius={999} style={{ margin: '0 auto 16px' }}>
+              <PenLine size={28} className="text-ink-soft" />
+            </Sticker>
+            <p className="font-display font-bold text-ink text-lg">No tests yet</p>
+            <p className="text-ink-soft text-sm mt-1">Tap &quot;New Test&quot; to start entering marks</p>
+            <button onClick={() => setStep('new-test')} className="paper-btn-primary mt-5 px-6 inline-flex">
               Create First Test
             </button>
           </div>
         ) : (
           testSummaries.map((t) => (
-            <div key={t.id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <PenLine size={18} className="text-blue-600" />
-              </div>
+            <div key={t.id} className="paper-card p-4 flex items-center gap-3">
+              <Sticker tone="cream" size={40} radius={999}>
+                <PenLine size={18} className="text-ink-soft" />
+              </Sticker>
               <div className="flex-1">
-                <p className="font-semibold text-gray-900">{t.topic}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-bold text-ink">{t.topic}</p>
+                <p className="text-sm text-ink-soft">
                   {new Date(t.conductedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} ·{' '}
                   Out of {t.totalMarks} · {t.entryCount}/{activeStudents.length} entered
                 </p>
@@ -208,7 +215,7 @@ export default function MarksPage() {
                   {t.entryCount >= activeStudents.length ? 'Complete' : 'Partial'}
                 </span>
               </div>
-              <ChevronRight size={16} className="text-gray-300" />
+              <ChevronRight size={16} className="text-ink-faint" />
             </div>
           ))
         )}

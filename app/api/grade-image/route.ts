@@ -5,6 +5,10 @@ import { checkVisionRateLimit, getClientIp } from '@/lib/rate-limit'
 import { parseBody, GradeImageSchema } from '@/lib/schemas'
 import { apiLog } from '@/lib/logger'
 
+// The AI call below uses a 90s timeoutMs — without a matching maxDuration the
+// platform could kill the function before that timeout ever fires.
+export const maxDuration = 90
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const t  = Date.now()

@@ -42,6 +42,20 @@ export async function POST(req: Request, { params }: { params: { schoolId: strin
   const { name, grade, section, academicYear } = await req.json()
   if (!name || !grade || !section) return NextResponse.json({ error: 'name, grade, section required' }, { status: 400 })
 
+  const { data: dupe } = await ctx.ac
+    .from('classes')
+    .select('id')
+    .eq('school_id', params.schoolId)
+    .eq('grade', grade)
+    .ilike('section', section)
+    .maybeSingle()
+  if (dupe) {
+    return NextResponse.json(
+      { error: `Grade ${grade} Section ${section} already exists`, code: 'duplicate' },
+      { status: 409 },
+    )
+  }
+
   const school = await fetchSchool(params.schoolId, ctx.ac)
   const classCode = Math.random().toString(36).substring(2, 8).toUpperCase()
   const now = new Date().toISOString()

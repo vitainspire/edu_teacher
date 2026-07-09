@@ -1,4 +1,4 @@
-export type LogStatus = 'ok' | 'error' | 'rate_limited' | 'unauthorized' | 'bad_request'
+export type LogStatus = 'ok' | 'error' | 'rate_limited' | 'unauthorized' | 'forbidden' | 'bad_request'
 
 export function getClientIp(req: { headers: { get: (k: string) => string | null } }): string {
   return (

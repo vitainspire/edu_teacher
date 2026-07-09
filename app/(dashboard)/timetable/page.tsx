@@ -1,77 +1,143 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useApp } from '@/lib/context'
-import { CalendarDays, Clock, Coffee, ChevronDown, ChevronUp } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useApp } from '@/lib/context'
+import { CalendarDays, ClipboardList, Sparkles, BookOpenCheck } from 'lucide-react'
+import type { TimetableEntry } from '@/lib/types'
+import PrepMaterialModal from '@/components/timetable/PrepMaterialModal'
+import SubstituteBanner from '@/components/timetable/SubstituteBanner'
+import PageHeader from '@/components/theme/PageHeader'
+import { Sticker } from '@/components/theme/StickerIcon'
 
-const DAYS     = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-function nowHHMM() {
-  const n = new Date()
-  return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`
-}
+const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
 function todayDayNum() {
   const d = new Date().getDay()
   return d === 0 ? 0 : d
 }
 
+function toMinutes(t: string) {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+const DAY_COLORS = [
+  { bg: '#AAD6A0', ink: '#234A1D' },
+  { bg: '#AACDEA', ink: '#1E3A55' },
+  { bg: '#F0A491', ink: '#5C2416' },
+  { bg: '#C7B7E8', ink: '#31215C' },
+  { bg: '#F0AFC6', ink: '#5C1F38' },
+  { bg: '#EAC968', ink: '#4A3809' },
+]
+function colorForKey(key: string) {
+  let hash = 0
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
+  return DAY_COLORS[hash % DAY_COLORS.length]
+}
+
+// Groups same-time entries so they render side-by-side instead of stacking on top of each other
+function layoutDayEvents(entries: TimetableEntry[]) {
+  const sorted = [...entries].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))
+  const clusters: TimetableEntry[][] = []
+  let cluster: TimetableEntry[] = []
+  let clusterEnd = -1
+
+  for (const e of sorted) {
+    const start = toMinutes(e.startTime)
+    const end   = toMinutes(e.endTime)
+    if (cluster.length === 0 || start < clusterEnd) {
+      cluster.push(e)
+      clusterEnd = Math.max(clusterEnd, end)
+    } else {
+      clusters.push(cluster)
+      cluster = [e]
+      clusterEnd = end
+    }
+  }
+  if (cluster.length) clusters.push(cluster)
+
+  const laidOut: { entry: TimetableEntry; col: number; cols: number }[] = []
+  for (const group of clusters) {
+    const colEnds: number[] = []
+    const colByEntry = new Map<string, number>()
+    for (const e of group) {
+      const start = toMinutes(e.startTime)
+      const end   = toMinutes(e.endTime)
+      let col = colEnds.findIndex(endTime => endTime <= start)
+      if (col === -1) { col = colEnds.length; colEnds.push(end) }
+      else colEnds[col] = end
+      colByEntry.set(e.id, col)
+    }
+    const cols = colEnds.length
+    for (const e of group) laidOut.push({ entry: e, col: colByEntry.get(e.id)!, cols })
+  }
+  return laidOut
+}
+
+const PX_PER_MIN = 1.3
+
 export default function TimetablePage() {
-  const { timetableEntries, classes } = useApp()
+  const { timetableEntries, classes, getTaughtTopicToday, getCurrentPeriod } = useApp()
   const router = useRouter()
-  const [showFullWeek, setShowFullWeek] = useState(false)
+  const [prepModal, setPrepModal] = useState<{ classId: string; subject: string; grade: string } | null>(null)
 
-  const hhmm   = nowHHMM()
+  const hhmm   = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
   const todayN = todayDayNum()
+  const [selectedDay, setSelectedDay] = useState(todayN >= 1 && todayN <= 5 ? todayN : 1)
 
-  const todayLabel = DAY_NAMES[new Date().getDay()]
-
-  // Today's periods sorted by period number
   const todayEntries = useMemo(() =>
-    timetableEntries
-      .filter(e => e.dayOfWeek === todayN)
-      .sort((a, b) => a.periodNumber - b.periodNumber),
+    timetableEntries.filter(e => e.dayOfWeek === todayN).sort((a, b) => a.periodNumber - b.periodNumber),
   [timetableEntries, todayN])
 
-  // All unique period slots for the weekly grid
-  const periodSlots = useMemo(() => {
-    const map = new Map<number, { periodNumber: number; startTime: string; endTime: string }>()
-    timetableEntries.forEach(e => {
-      if (!map.has(e.periodNumber)) {
-        map.set(e.periodNumber, { periodNumber: e.periodNumber, startTime: e.startTime, endTime: e.endTime })
-      }
-    })
-    return Array.from(map.values()).sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const currentEntry = getCurrentPeriod()
+  const nextEntry = useMemo(
+    () => currentEntry ? null : (todayEntries.find(e => e.startTime > hhmm) ?? null),
+    [currentEntry, todayEntries, hhmm]
+  )
+  const heroEntry  = currentEntry ?? nextEntry
+  const heroIsLive = !!currentEntry
+
+  function getClassName(classId: string) { return classes.find(c => c.id === classId)?.name ?? '—' }
+  function getSubject(entry: { classId: string; label?: string }) {
+    return entry.label && entry.label.trim() ? entry.label : getClassName(entry.classId)
+  }
+  function getSecondary(entry: { classId: string; label?: string }) {
+    return entry.label && entry.label.trim() ? getClassName(entry.classId) : null
+  }
+
+  const { dayStartMin, dayEndMin } = useMemo(() => {
+    const weekdayEntries = timetableEntries.filter(e => e.dayOfWeek >= 1 && e.dayOfWeek <= 5)
+    if (weekdayEntries.length === 0) return { dayStartMin: 8 * 60, dayEndMin: 15 * 60 }
+    const starts = weekdayEntries.map(e => toMinutes(e.startTime))
+    const ends   = weekdayEntries.map(e => toMinutes(e.endTime))
+    return {
+      dayStartMin: Math.floor(Math.min(...starts) / 60) * 60,
+      dayEndMin:   Math.ceil(Math.max(...ends) / 60) * 60,
+    }
   }, [timetableEntries])
 
-  function entryAt(dayOfWeek: number, periodNumber: number) {
-    return timetableEntries.find(e => e.dayOfWeek === dayOfWeek && e.periodNumber === periodNumber)
-  }
+  const gridHeight = Math.max((dayEndMin - dayStartMin) * PX_PER_MIN, 320)
 
-  function getClassName(classId: string) {
-    return classes.find(c => c.id === classId)?.name ?? '—'
-  }
+  const selectedDayEntries = useMemo(
+    () => timetableEntries
+      .filter(e => e.dayOfWeek === selectedDay)
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime)),
+    [timetableEntries, selectedDay]
+  )
 
-  function getClassColor(classId: string) {
-    const idx = classes.findIndex(c => c.id === classId)
-    return idx >= 0 ? CLASS_COLORS[idx % CLASS_COLORS.length] : CLASS_COLORS[0]
+  function fmtTime(t: string) {
+    const [h, m] = t.split(':').map(Number)
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
   }
-
-  const isNowPeriod = (startTime: string, endTime: string) =>
-    hhmm >= startTime && hhmm < endTime
 
   if (timetableEntries.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center"
-        style={{ background: '#f1f5f9' }}>
-        <div className="w-16 h-16 rounded-3xl flex items-center justify-center mb-5"
-          style={{ background: 'linear-gradient(135deg, #eff6ff, #dbeafe)' }}>
-          <CalendarDays size={28} className="text-blue-600" />
-        </div>
-        <h2 className="text-xl font-black text-slate-800 mb-2">No Timetable Yet</h2>
-        <p className="text-sm text-slate-500 max-w-xs leading-relaxed">
+      <div className="paper-page flex flex-col items-center justify-center px-6 text-center pb-28" style={{ minHeight: '100vh' }}>
+        <Sticker tone="blue" size={72} radius={22} style={{ marginBottom: 20 }}>
+          <CalendarDays size={30} style={{ color: '#1E3A55' }} />
+        </Sticker>
+        <h2 className="font-display font-bold text-ink text-xl mb-2">No Timetable Yet</h2>
+        <p className="text-sm text-ink-soft max-w-xs leading-relaxed">
           Your school admin hasn&apos;t published your timetable yet. Once they do, your full weekly schedule will appear here.
         </p>
       </div>
@@ -79,241 +145,211 @@ export default function TimetablePage() {
   }
 
   return (
-    <div className="min-h-screen pb-28 md:pb-8" style={{ background: '#f1f5f9' }}>
+    <div className="paper-page pb-28">
+      <PageHeader
+        title="Weekly Timetable"
+        subtitle={todayEntries.length > 0 ? `${todayEntries.length} class${todayEntries.length !== 1 ? 'es' : ''} today` : 'No classes scheduled today'}
+      />
 
-      {/* Header */}
-      <div className="gradient-header px-4 pt-10 pb-16 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-          }} />
-        <div className="relative z-10">
-          <p className="text-blue-300/70 text-[11px] font-semibold tracking-widest uppercase mb-2">
-            {todayLabel}
+      <div className="px-4 md:px-6 relative z-10 space-y-4">
+
+        <SubstituteBanner />
+
+        {/* Current / next class banner */}
+        <div className="rounded-3xl p-5" style={{ background: heroIsLive ? '#AACDEA' : 'rgba(58,44,30,0.06)', border: '2px solid rgba(58,44,30,0.12)' }}>
+          <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: heroIsLive ? '#1E3A55' : 'var(--ink-soft)' }}>
+            {heroIsLive ? 'Current Class' : heroEntry ? 'Up Next' : 'No Class Right Now'}
           </p>
-          <h1 className="text-3xl font-black text-white leading-none flex items-center gap-3">
-            <CalendarDays size={28} className="opacity-80" />
-            Today&apos;s Schedule
-          </h1>
-          <p className="text-blue-200/60 text-sm font-medium mt-1.5">
-            {todayEntries.length > 0
-              ? `${todayEntries.length} class${todayEntries.length !== 1 ? 'es' : ''} today`
-              : 'No classes scheduled today'}
-          </p>
+          {heroEntry ? (
+            <>
+              <p className="font-display font-bold text-xl leading-tight" style={{ color: heroIsLive ? '#1E3A55' : 'var(--ink)' }}>
+                {getSubject(heroEntry)}{getSecondary(heroEntry) ? ` - ${getSecondary(heroEntry)}` : ''}
+              </p>
+              <p className="text-sm font-medium mt-1" style={{ color: heroIsLive ? '#1E3A55' : 'var(--ink-soft)', opacity: 0.75 }}>
+                Period {heroEntry.periodNumber} · {fmtTime(heroEntry.startTime)}–{fmtTime(heroEntry.endTime)}
+              </p>
+              <div className="flex gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setPrepModal({
+                    classId: heroEntry.classId,
+                    subject: getSubject(heroEntry),
+                    grade: classes.find(c => c.id === heroEntry.classId)?.grade ?? '',
+                  })}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-sm font-bold active:scale-95 transition-all"
+                  style={{ background: 'rgba(255,255,255,0.6)', color: heroIsLive ? '#1E3A55' : 'var(--ink)' }}
+                >
+                  <Sparkles size={13} /> Prep Material
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/classes/${heroEntry.classId}/attendance`)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-all"
+                  style={{ background: 'var(--ink)' }}
+                >
+                  <ClipboardList size={13} /> Take Attendance
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm font-medium text-ink-soft">No more classes scheduled today.</p>
+          )}
         </div>
-      </div>
 
-      <div className="-mt-8 px-3 md:px-6 relative z-10 max-w-2xl md:mx-auto space-y-3">
+        {/* Weekly grid — mobile: single-day agenda (no horizontal scroll); desktop: Mon–Fri columns */}
+        <div className="paper-card p-3 md:p-4">
 
-        {/* Today's class list */}
-        {todayEntries.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 text-center shadow-sm border border-slate-100">
-            <Coffee size={28} className="text-slate-300 mx-auto mb-3" />
-            <p className="font-bold text-slate-500">No classes on {todayLabel}</p>
-            <p className="text-xs text-slate-400 mt-1">Use the button below to check your full week</p>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {todayEntries.map(entry => {
-              const isNow  = isNowPeriod(entry.startTime, entry.endTime)
-              const color  = getClassColor(entry.classId)
-              const cls    = classes.find(c => c.id === entry.classId)
-
+          {/* Mobile day tabs */}
+          <div className="flex md:hidden gap-1.5 mb-3">
+            {DAY_SHORT.map((day, i) => {
+              const dayNum     = i + 1
+              const isToday    = dayNum === todayN
+              const isSelected = dayNum === selectedDay
               return (
                 <button
-                  key={entry.id}
-                  onClick={() => router.push(`/classes/${entry.classId}/attendance`)}
-                  className="w-full text-left bg-white rounded-2xl overflow-hidden shadow-sm border transition-all active:scale-[0.98] hover:shadow-md"
+                  key={day}
+                  type="button"
+                  onClick={() => setSelectedDay(dayNum)}
+                  className="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-bold transition-colors"
                   style={{
-                    borderColor: isNow ? '#3b82f6' : '#e2e8f0',
-                    boxShadow: isNow ? '0 0 0 2px #bfdbfe' : undefined,
+                    background: isSelected ? 'var(--ink)' : 'rgba(58,44,30,0.06)',
+                    color: isSelected ? '#fff' : 'var(--ink-soft)',
                   }}
                 >
-                  <div className="flex items-stretch">
-                    {/* Color strip */}
-                    <div className="w-1.5 shrink-0" style={{ background: color.text }} />
-
-                    {/* Period badge */}
-                    <div className="flex flex-col items-center justify-center px-4 py-4 border-r border-slate-100"
-                      style={{ background: isNow ? '#eff6ff' : '#f8fafc', minWidth: 64 }}>
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black mb-1"
-                        style={isNow
-                          ? { background: '#2563eb', color: '#fff' }
-                          : { background: color.bg, color: color.text }}>
-                        {entry.periodNumber}
-                      </div>
-                      {isNow && (
-                        <span className="text-[8px] font-black text-blue-500 animate-pulse tracking-wide">NOW</span>
-                      )}
-                    </div>
-
-                    {/* Class info */}
-                    <div className="flex-1 px-4 py-4">
-                      <p className="font-black text-slate-800 text-base leading-none">
-                        {getClassName(entry.classId)}
-                      </p>
-                      {entry.label && (
-                        <p className="text-xs font-medium mt-0.5" style={{ color: color.text }}>{entry.label}</p>
-                      )}
-                    </div>
-
-                    {/* Time */}
-                    <div className="flex flex-col items-end justify-center px-4 py-4 shrink-0">
-                      <div className="flex items-center gap-1 mb-0.5">
-                        <Clock size={10} className="text-slate-400" />
-                        <span className="text-[11px] font-bold text-slate-500">{entry.startTime}</span>
-                      </div>
-                      <span className="text-[11px] text-slate-300">{entry.endTime}</span>
-                      {isNow && (
-                        <span className="text-[9px] font-bold text-blue-500 mt-1">Tap → Attend</span>
-                      )}
-                    </div>
-                  </div>
+                  {day}
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: isToday ? (isSelected ? '#fff' : 'var(--ink)') : 'transparent' }} />
                 </button>
               )
             })}
           </div>
-        )}
 
-        {/* View Full Week toggle */}
-        <button
-          onClick={() => setShowFullWeek(v => !v)}
-          className="w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 mt-1"
-          style={{
-            background: showFullWeek ? '#eff6ff' : '#fff',
-            border: `1.5px solid ${showFullWeek ? '#3b82f6' : '#e2e8f0'}`,
-            color: showFullWeek ? '#2563eb' : '#64748b',
-          }}
-        >
-          <CalendarDays size={15} />
-          {showFullWeek ? 'Hide Full Week' : 'View Full Week'}
-          {showFullWeek ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-        </button>
+          {/* Mobile agenda for the selected day */}
+          <div className="md:hidden space-y-2">
+            {selectedDayEntries.length === 0 ? (
+              <p className="text-sm text-ink-faint text-center py-8">No classes scheduled.</p>
+            ) : selectedDayEntries.map(entry => {
+              const isToday    = selectedDay === todayN
+              const color      = colorForKey(getSubject(entry))
+              const subject    = getSubject(entry)
+              const secondary  = getSecondary(entry)
+              const taught     = isToday ? getTaughtTopicToday(entry.classId) : null
 
-        {/* Full weekly grid — shown only when toggled */}
-        {showFullWeek && (
-          <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
-            <div className="px-4 py-3 border-b border-slate-100">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Weekly Timetable</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse" style={{ minWidth: 600 }}>
-                <thead>
-                  <tr>
-                    <th className="w-20 px-3 py-3 text-left border-b border-slate-100" style={{ background: '#f8fafc' }}>
-                      <div className="flex items-center gap-1.5">
-                        <Clock size={12} className="text-slate-400" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Time</span>
-                      </div>
-                    </th>
-                    {DAYS.map((day, i) => {
-                      const dayNum = i + 1
-                      const isToday = dayNum === todayN
+              return (
+                <button
+                  key={entry.id}
+                  disabled={!isToday}
+                  onClick={() => isToday && setPrepModal({
+                    classId: entry.classId,
+                    subject,
+                    grade: classes.find(c => c.id === entry.classId)?.grade ?? '',
+                  })}
+                  className={`w-full flex items-center gap-3 text-left rounded-2xl px-3 py-2.5 transition-transform ${isToday ? 'active:scale-[0.98] cursor-pointer' : 'cursor-default'}`}
+                  style={{
+                    background: isToday ? color.bg : 'rgba(58,44,30,0.06)',
+                    border: '1.5px solid rgba(58,44,30,0.12)',
+                    opacity: isToday ? 1 : 0.85,
+                  }}
+                >
+                  <p className="shrink-0 text-[11px] font-bold leading-tight text-right" style={{ width: 54, color: isToday ? color.ink : 'var(--ink-soft)' }}>
+                    {fmtTime(entry.startTime)}
+                  </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate" style={{ color: isToday ? color.ink : 'var(--ink-soft)' }}>{subject}</p>
+                    {secondary && (
+                      <p className="text-xs font-medium truncate" style={{ color: isToday ? color.ink : 'var(--ink-soft)', opacity: 0.75 }}>{secondary}</p>
+                    )}
+                  </div>
+                  {taught && (
+                    <span className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 20, height: 20, background: isToday ? color.ink : 'var(--ink-faint)' }}>
+                      <BookOpenCheck size={11} className="text-white" />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Desktop: Mon–Fri columns, stacked period cards */}
+          <div className="hidden md:flex">
+            {DAY_SHORT.map((day, i) => {
+              const dayNum   = i + 1
+              const isToday  = dayNum === todayN
+              const dayEntries = layoutDayEvents(timetableEntries.filter(e => e.dayOfWeek === dayNum))
+
+              return (
+                <div key={day} className="flex-1 px-1">
+                  <div className="text-center mb-2">
+                    <p className="text-sm font-display font-bold" style={{ color: isToday ? 'var(--ink)' : 'var(--ink-soft)' }}>{day}</p>
+                    {isToday && (
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-black text-white" style={{ background: 'var(--ink)' }}>
+                        TODAY
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative rounded-2xl" style={{ height: gridHeight, background: 'rgba(58,44,30,0.03)' }}>
+                    {dayEntries.map(({ entry, col, cols }) => {
+                      const rawTop    = (toMinutes(entry.startTime) - dayStartMin) * PX_PER_MIN
+                      const rawHeight = Math.max((toMinutes(entry.endTime) - toMinutes(entry.startTime)) * PX_PER_MIN, 46)
+                      const top       = Math.max(rawTop, 0) + 3
+                      const height    = rawHeight - 6
+                      const colPct    = 100 / cols
+                      const color     = colorForKey(getSubject(entry))
+                      const subject   = getSubject(entry)
+                      const secondary = getSecondary(entry)
+                      const taught    = isToday ? getTaughtTopicToday(entry.classId) : null
+
                       return (
-                        <th key={day} className="px-2 py-3 text-center border-b border-slate-100"
-                          style={{ background: isToday ? '#eff6ff' : '#f8fafc', minWidth: 90 }}>
-                          <p className={`text-xs font-black ${isToday ? 'text-blue-700' : 'text-slate-600'}`}>{DAY_SHORT[i]}</p>
-                          <p className={`text-[10px] font-medium ${isToday ? 'text-blue-400' : 'text-slate-400'}`}>{day}</p>
-                          {isToday && (
-                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-black text-white"
-                              style={{ background: '#2563eb' }}>TODAY</span>
+                        <button
+                          key={entry.id}
+                          disabled={!isToday}
+                          onClick={() => isToday && setPrepModal({
+                            classId: entry.classId,
+                            subject,
+                            grade: classes.find(c => c.id === entry.classId)?.grade ?? '',
+                          })}
+                          className={`absolute text-left rounded-xl px-2 py-1.5 overflow-hidden transition-transform ${isToday ? 'active:scale-[0.97] cursor-pointer' : 'cursor-default'}`}
+                          style={{
+                            top, height,
+                            left:  `calc(${col * colPct}% + 2px)`,
+                            width: `calc(${colPct}% - 4px)`,
+                            background: isToday ? color.bg : 'rgba(58,44,30,0.08)',
+                            border: '1.5px solid rgba(58,44,30,0.15)',
+                            opacity: isToday ? 1 : 0.8,
+                          }}
+                        >
+                          {taught && (
+                            <span className="absolute top-1 right-1 flex items-center justify-center rounded-full"
+                              style={{ width: 14, height: 14, background: isToday ? color.ink : 'var(--ink-faint)' }}>
+                              <BookOpenCheck size={9} className="text-white" />
+                            </span>
                           )}
-                        </th>
+                          <p className="text-xs font-bold truncate leading-tight" style={{ color: isToday ? color.ink : 'var(--ink-soft)' }}>{subject}</p>
+                          {secondary && height > 40 && (
+                            <p className="text-[10px] font-medium truncate" style={{ color: isToday ? color.ink : 'var(--ink-soft)', opacity: 0.75 }}>{secondary}</p>
+                          )}
+                          {height > 56 && (
+                            <p className="text-[10px] font-medium truncate" style={{ color: isToday ? color.ink : 'var(--ink-soft)', opacity: 0.6 }}>{fmtTime(entry.startTime)}</p>
+                          )}
+                        </button>
                       )
                     })}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {periodSlots.map((slot, idx) => {
-                    const isNow = isNowPeriod(slot.startTime, slot.endTime)
-                    return (
-                      <tr key={idx} className={isNow ? '' : 'hover:bg-slate-50 transition-colors'}
-                        style={isNow ? { background: '#eff6ff' } : {}}>
-
-                        <td className="px-3 py-3 border-b border-slate-100 align-middle" style={{ background: isNow ? '#dbeafe' : '#f8fafc' }}>
-                          <div className="flex items-center gap-1.5">
-                            <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0`}
-                              style={isNow
-                                ? { background: '#2563eb', color: '#fff' }
-                                : { background: '#dbeafe', color: '#1d4ed8' }}>
-                              {slot.periodNumber}
-                            </div>
-                          </div>
-                          <p className={`text-[9px] font-medium mt-1 ${isNow ? 'text-blue-700' : 'text-slate-400'}`}>{slot.startTime}</p>
-                          <p className="text-[9px] text-slate-300">{slot.endTime}</p>
-                          {isNow && <p className="text-[8px] font-black text-blue-500 mt-0.5 animate-pulse">NOW</p>}
-                        </td>
-
-                        {DAYS.map((_, di) => {
-                          const dayNum = di + 1
-                          const entry  = entryAt(dayNum, slot.periodNumber)
-                          const isToday   = dayNum === todayN
-                          const isCurrent = isToday && isNow
-                          const color = entry ? getClassColor(entry.classId) : null
-
-                          return (
-                            <td key={dayNum} className="px-2 py-2 border-b border-slate-100 align-middle"
-                              style={{ background: isCurrent ? '#dbeafe' : isToday ? '#f0f7ff' : undefined }}>
-                              {entry ? (
-                                <button
-                                  onClick={() => router.push(`/classes/${entry.classId}/attendance`)}
-                                  className="w-full text-left rounded-xl p-2 transition-all hover:shadow-sm active:scale-95"
-                                  style={{
-                                    background: color?.bg ?? '#f0fdf4',
-                                    border: `1px solid ${color?.border ?? '#bbf7d0'}`,
-                                    boxShadow: isCurrent ? '0 0 0 2px #3b82f6' : undefined,
-                                  }}>
-                                  <p className="text-[11px] font-black truncate leading-tight" style={{ color: color?.text ?? '#065f46' }}>
-                                    {getClassName(entry.classId)}
-                                  </p>
-                                  {entry.label && (
-                                    <p className="text-[9px] font-medium mt-0.5 truncate opacity-75" style={{ color: color?.text ?? '#065f46' }}>
-                                      {entry.label}
-                                    </p>
-                                  )}
-                                  {isCurrent && (
-                                    <p className="text-[8px] font-black mt-0.5 text-blue-600">Tap → Attendance</p>
-                                  )}
-                                </button>
-                              ) : (
-                                <div className="h-10 rounded-xl border border-dashed border-slate-100 flex items-center justify-center">
-                                  <span className="text-[10px] text-slate-200">—</span>
-                                </div>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="px-4 py-3 border-t border-slate-100 flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded" style={{ background: '#dbeafe', border: '1px solid #3b82f6' }} />
-                <span className="text-[10px] text-slate-500 font-medium">Current period</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }} />
-                <span className="text-[10px] text-slate-500 font-medium">Today</span>
-              </div>
-              <div className="flex items-center gap-1.5 ml-auto">
-                <Coffee size={11} className="text-slate-400" />
-                <span className="text-[10px] text-slate-400">Tap any period to take attendance</span>
-              </div>
-            </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        )}
+        </div>
 
+        <p className="text-xs text-ink-faint text-center pb-2">Tap today&apos;s classes to open prep material — other days are view-only</p>
       </div>
+
+      <PrepMaterialModal
+        open={!!prepModal}
+        onClose={() => setPrepModal(null)}
+        classId={prepModal?.classId ?? ''}
+        subject={prepModal?.subject ?? ''}
+        grade={prepModal?.grade ?? ''}
+      />
     </div>
   )
 }
-
-const CLASS_COLORS = [
-  { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' },
-]

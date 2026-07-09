@@ -4,17 +4,14 @@ import { createServerClient } from '@supabase/ssr'
 
 // Paths that are always public — no auth required
 const PUBLIC_PREFIXES = [
-  '/portals',
-  '/features',
-  '/login',
+  '/teacher/login',
   '/admin/login',
   '/student/login',
+  '/scanner/login',
   '/api/admin/login',
   '/api/admin/register',
   '/api/school/has-admin',
   '/api/student',
-  '/api/personality-story',
-  '/api/personality-progress',
   '/favicon.ico',
   '/sw.js',
   '/workbox',
@@ -25,7 +22,17 @@ const PUBLIC_PREFIXES = [
   // Student-facing AI routes — protected by rate-limit, not Supabase session
   '/api/practice-quiz',
   '/api/catchup-plan',
-  // Scanner portal routes — no Supabase session, rate-limited only
+  '/api/flashcards',
+  '/api/test-prep',
+  '/api/test-study-guide',
+  // Student-facing, but authenticated via verifyStudentCookie() inside the
+  // route itself (edu-student-id cookie) rather than a Supabase session.
+  '/api/personality-story',
+  // Scanner portal routes — no Supabase session; authorization is via a signed
+  // school-scoped token (see lib/scanner-auth.ts), not the Supabase session.
+  // NOTE: '/api/scanner/profile' is intentionally NOT public — it's a separate,
+  // Supabase-session-authenticated scanner-staff flow.
+  '/api/scanner/connect',
   '/api/multi-grade-scan',
   '/api/scanner-save-score',
   '/api/scanner-upload',
@@ -45,21 +52,33 @@ export async function middleware(req: NextRequest) {
   // Always allow public paths
   if (isPublic(pathname)) return NextResponse.next()
 
-  // Student portal pages — separate cookie auth, no Supabase session needed here
-  if (pathname.startsWith('/student')) {
+  // Student portal pages — separate cookie auth, no Supabase session needed here.
+  // Trailing slash matters: '/students/[id]' (teacher-facing) must NOT match here.
+  if (pathname === '/student' || pathname.startsWith('/student/')) {
     if (!req.cookies.has('edu-student-id')) {
       return NextResponse.redirect(new URL('/student/login', req.url))
     }
     return NextResponse.next()
   }
 
-  // Root: send logged-in users straight to their portal; everyone else sees the landing page
+  // Root — the portal chooser. Only redirect away when a session actually
+  // exists; unauthenticated visitors should see the chooser page itself.
   if (pathname === '/') {
     const role = req.cookies.get('edu-role')?.value
-    if (role === 'scanner') return NextResponse.redirect(new URL('/scanner/connect', req.url))
-    if (role === 'admin')   return NextResponse.redirect(new URL('/admin/dashboard', req.url))
-    if (role)               return NextResponse.redirect(new URL('/home', req.url))
-    return NextResponse.next() // unauthenticated → show landing page
+    if (role === 'admin') {
+      return NextResponse.redirect(new URL('/admin/dashboard', req.url))
+    }
+
+    const rootSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => req.cookies.getAll(), setAll: () => {} } }
+    )
+    const { data: { user: rootUser } } = await rootSupabase.auth.getUser()
+    if (rootUser) {
+      return NextResponse.redirect(new URL(role === 'scanner' ? '/scanner/connect' : '/home', req.url))
+    }
+    return NextResponse.next()
   }
 
   // Build a Supabase client that can read/refresh the session from cookies.
@@ -91,7 +110,7 @@ export async function middleware(req: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(new URL('/teacher/login', req.url))
   }
 
   // Scanner staff cannot access teacher or admin routes

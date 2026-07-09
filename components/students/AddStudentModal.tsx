@@ -1,6 +1,10 @@
 'use client'
 import { useState, useRef } from 'react'
-import { UserPlus, Users, Sparkles, ScanLine, ImagePlus, X } from 'lucide-react'
+import {
+  UserPlus, Users, Sparkles, ScanLine, ImagePlus, X,
+  CircleDot, Goal, Dumbbell, Clapperboard, Film, ChefHat, Tractor,
+  Music, Palette, PersonStanding, BookOpen, FlaskConical, PawPrint,
+} from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { useApp } from '@/lib/context'
 import clsx from 'clsx'
@@ -12,19 +16,19 @@ interface Props {
 }
 
 const INTERESTS = [
-  { label: 'Cricket',  emoji: '🏏' },
-  { label: 'Football', emoji: '⚽' },
-  { label: 'Kabaddi',  emoji: '🤼' },
-  { label: 'Cartoons', emoji: '🎬' },
-  { label: 'Movies',   emoji: '🎥' },
-  { label: 'Cooking',  emoji: '🍳' },
-  { label: 'Farming',  emoji: '🌾' },
-  { label: 'Music',    emoji: '🎵' },
-  { label: 'Drawing',  emoji: '🎨' },
-  { label: 'Dancing',  emoji: '💃' },
-  { label: 'Reading',  emoji: '📚' },
-  { label: 'Science',  emoji: '🔬' },
-  { label: 'Animals',  emoji: '🐾' },
+  { label: 'Cricket',  Icon: CircleDot },
+  { label: 'Football', Icon: Goal },
+  { label: 'Kabaddi',  Icon: Dumbbell },
+  { label: 'Cartoons', Icon: Clapperboard },
+  { label: 'Movies',   Icon: Film },
+  { label: 'Cooking',  Icon: ChefHat },
+  { label: 'Farming',  Icon: Tractor },
+  { label: 'Music',    Icon: Music },
+  { label: 'Drawing',  Icon: Palette },
+  { label: 'Dancing',  Icon: PersonStanding },
+  { label: 'Reading',  Icon: BookOpen },
+  { label: 'Science',  Icon: FlaskConical },
+  { label: 'Animals',  Icon: PawPrint },
 ]
 
 export default function AddStudentModal({ open, onClose, classId }: Props) {
@@ -133,22 +137,25 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
   return (
     <Modal open={open} onClose={onClose} title="Add Students">
       {/* Tab switcher */}
-      <div className="flex gap-1.5 mb-5 p-1 bg-slate-100 rounded-2xl">
+      <div className="flex gap-1.5 mb-5 p-1 rounded-2xl" style={{ background: 'rgba(58,44,30,0.06)' }}>
         <button
           onClick={() => setTab('single')}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 ${tab === 'single' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+          style={tab === 'single' ? { background: '#fff', color: 'var(--ink)' } : { color: 'var(--ink-soft)' }}
         >
           <span className="flex items-center justify-center gap-1.5"><UserPlus size={14} /> Single</span>
         </button>
         <button
           onClick={() => setTab('bulk')}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 ${tab === 'bulk' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+          style={tab === 'bulk' ? { background: '#fff', color: 'var(--ink)' } : { color: 'var(--ink-soft)' }}
         >
           <span className="flex items-center justify-center gap-1.5"><Users size={14} /> Bulk</span>
         </button>
         <button
           onClick={() => setTab('scan')}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 ${tab === 'scan' ? 'bg-white shadow text-blue-700' : 'text-slate-500'}`}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+          style={tab === 'scan' ? { background: '#fff', color: 'var(--ink)' } : { color: 'var(--ink-soft)' }}
         >
           <span className="flex items-center justify-center gap-1.5"><ScanLine size={14} /> Scan</span>
         </button>
@@ -157,7 +164,7 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
       {tab === 'single' ? (
         <div className="space-y-4">
           <div>
-            <label className="label">Student Name *</label>
+            <label className="label" style={{ color: 'var(--ink-soft)' }}>Student Name *</label>
             <input
               type="text"
               value={name}
@@ -170,7 +177,7 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
           </div>
 
           <div>
-            <label className="label">Roll Number</label>
+            <label className="label" style={{ color: 'var(--ink-soft)' }}>Roll Number</label>
             <input
               type="text"
               value={roll}
@@ -182,38 +189,38 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
 
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <label className="label mb-0">Interests</label>
-              <div className="flex items-center gap-1 bg-violet-50 text-violet-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+              <label className="label mb-0" style={{ color: 'var(--ink-soft)' }}>Interests</label>
+              <div className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#E9E1F6', color: '#31215C' }}>
                 <Sparkles size={10} />
                 Used for personalised AI explanations
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {INTERESTS.map(({ label, emoji }) => (
+              {INTERESTS.map(({ label, Icon }) => (
                 <button
                   key={label}
                   onClick={() => toggleInterest(label)}
                   className={clsx(
-                    'px-3 py-1.5 rounded-2xl text-sm font-semibold transition-all active:scale-95',
-                    selectedInterests.includes(label)
-                      ? 'bg-blue-700 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-sm font-semibold transition-all active:scale-95',
                   )}
+                  style={selectedInterests.includes(label)
+                    ? { background: 'var(--ink)', color: '#fff' }
+                    : { background: 'rgba(58,44,30,0.06)', color: 'var(--ink-soft)' }}
                 >
-                  {emoji} {label}
+                  <Icon size={13} /> {label}
                 </button>
               ))}
             </div>
             {selectedInterests.length > 0 && (
-              <p className="text-xs text-blue-600 font-semibold mt-2">
+              <p className="text-xs font-semibold mt-2" style={{ color: 'var(--ink-soft)' }}>
                 {selectedInterests.length} selected
               </p>
             )}
           </div>
 
           <div>
-            <label className="label">
-              Goal <span className="text-slate-400 font-normal">(optional)</span>
+            <label className="label" style={{ color: 'var(--ink-soft)' }}>
+              Goal <span className="text-ink-faint font-normal">(optional)</span>
             </label>
             <input
               type="text"
@@ -227,7 +234,8 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
           <button
             onClick={handleSingle}
             disabled={!name.trim() || saving}
-            className="btn-primary w-full"
+            className="paper-btn-primary w-full"
+            style={{ opacity: !name.trim() || saving ? 0.5 : 1 }}
           >
             {saving ? 'Adding…' : 'Add Student'}
           </button>
@@ -235,8 +243,8 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="label">Student Names</label>
-            <p className="text-xs text-slate-500 mb-2">
+            <label className="label" style={{ color: 'var(--ink-soft)' }}>Student Names</label>
+            <p className="text-xs text-ink-soft mb-2">
               One per line or comma-separated. Add interests individually after.
             </p>
             <textarea
@@ -248,8 +256,8 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
             />
           </div>
           {bulkText.trim() && (
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
-              <p className="text-sm text-blue-700 font-bold">
+            <div className="rounded-2xl px-4 py-3" style={{ background: '#DCEBF8', border: '1px solid rgba(30,58,85,0.12)' }}>
+              <p className="text-sm font-bold" style={{ color: '#1E3A55' }}>
                 {bulkText.split(/[\n,]/).filter(n => n.trim()).length} students will be added
               </p>
             </div>
@@ -257,7 +265,8 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
           <button
             onClick={handleBulk}
             disabled={!bulkText.trim() || saving}
-            className="btn-primary w-full"
+            className="paper-btn-primary w-full"
+            style={{ opacity: !bulkText.trim() || saving ? 0.5 : 1 }}
           >
             {saving ? 'Adding…' : 'Add All Students'}
           </button>
@@ -280,24 +289,26 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
           {!scanPreview ? (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-slate-200 rounded-2xl py-10 flex flex-col items-center gap-3 active:bg-slate-50 transition-colors"
+              className="w-full rounded-2xl py-10 flex flex-col items-center gap-3 active:bg-black/[0.03] transition-colors"
+              style={{ border: '2px dashed rgba(58,44,30,0.2)' }}
             >
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                style={{ background: '#eff6ff' }}>
-                <ImagePlus size={26} className="text-blue-600" />
+                style={{ background: '#DCEBF8' }}>
+                <ImagePlus size={26} style={{ color: '#1E3A55' }} />
               </div>
               <div className="text-center">
-                <p className="font-bold text-slate-700 text-sm">Take a photo or upload image</p>
-                <p className="text-xs text-slate-400 mt-1">Class register, attendance sheet, student list</p>
+                <p className="font-bold text-ink text-sm">Take a photo or upload image</p>
+                <p className="text-xs text-ink-faint mt-1">Class register, attendance sheet, student list</p>
               </div>
             </button>
           ) : (
-            <div className="relative rounded-2xl overflow-hidden border border-slate-200">
+            <div className="relative rounded-2xl overflow-hidden" style={{ border: '1.5px solid rgba(58,44,30,0.12)' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={scanPreview} alt="Scan preview" className="w-full max-h-52 object-cover" />
               <button
                 onClick={() => { setScanPreview(null); setScanImage(null); setScannedNames(''); setScanError(null) }}
-                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 active:scale-90 transition-transform"
+                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                style={{ background: 'rgba(58,44,30,0.6)' }}
               >
                 <X size={13} className="text-white" />
               </button>
@@ -309,7 +320,8 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
             <button
               onClick={handleScan}
               disabled={scanLoading}
-              className="btn-primary w-full"
+              className="paper-btn-primary w-full"
+              style={{ opacity: scanLoading ? 0.7 : 1 }}
             >
               {scanLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -326,8 +338,8 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
 
           {/* Error */}
           {scanError && (
-            <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
-              <p className="text-sm text-red-600 font-semibold">{scanError}</p>
+            <div className="rounded-2xl px-4 py-3" style={{ background: '#FBE3DC', border: '1px solid rgba(92,36,22,0.15)' }}>
+              <p className="text-sm font-semibold" style={{ color: '#8A3A28' }}>{scanError}</p>
             </div>
           )}
 
@@ -335,7 +347,7 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
           {scannedNames !== '' && (
             <div className="space-y-3">
               <div>
-                <label className="label">Extracted Names — edit if needed</label>
+                <label className="label" style={{ color: 'var(--ink-soft)' }}>Extracted Names — edit if needed</label>
                 <textarea
                   value={scannedNames}
                   onChange={e => setScannedNames(e.target.value)}
@@ -343,15 +355,16 @@ export default function AddStudentModal({ open, onClose, classId }: Props) {
                   className="input-field resize-none"
                 />
               </div>
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
-                <p className="text-sm text-blue-700 font-bold">
+              <div className="rounded-2xl px-4 py-3" style={{ background: '#DCEBF8', border: '1px solid rgba(30,58,85,0.12)' }}>
+                <p className="text-sm font-bold" style={{ color: '#1E3A55' }}>
                   {scannedNames.split(/[\n,]/).filter(n => n.trim()).length} students found
                 </p>
               </div>
               <button
                 onClick={handleScanAdd}
                 disabled={!scannedNames.trim() || saving}
-                className="btn-primary w-full"
+                className="paper-btn-primary w-full"
+                style={{ opacity: !scannedNames.trim() || saving ? 0.5 : 1 }}
               >
                 {saving ? 'Adding…' : 'Add All Students'}
               </button>

@@ -70,3 +70,26 @@ export function computeHomeAlerts(
     })
     .slice(0, 5)
 }
+
+/**
+ * Distinct students with an absence or low-mark/struggling warning, across
+ * every active student in every class — the same per-student criteria the
+ * Alerts page itself uses, so a count shown elsewhere (e.g. the Home screen)
+ * always matches what "View" on the Alerts page reveals.
+ */
+export function countStudentsNeedingAttention(
+  classes: Class[],
+  students: Student[],
+  getStudentWarnings: (studentId: string) => Warning[],
+): number {
+  let count = 0
+  for (const cls of classes) {
+    for (const s of students.filter(st => st.classId === cls.id && st.isActive)) {
+      const warnings = getStudentWarnings(s.id)
+      const hasAbsence = warnings.some(w => w.category === 'absence')
+      const hasLowMark = warnings.some(w => w.category === 'low_marks' || w.category === 'struggling')
+      if (hasAbsence || hasLowMark) count++
+    }
+  }
+  return count
+}

@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
   const { allowed } = await checkRateLimit(ip)
   if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded.' }, { status: 429 })
 
-  let body: { classId: string; topic: string; subject: string; grade: string; teacherId?: string }
+  let body: { classId: string; topic: string; subject: string; grade: string; teacherId?: string; subtopic?: string }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
 
-  const { classId, topic, subject, grade } = body
+  const { classId, topic, subject, grade, subtopic } = body
   if (!classId || !topic || !subject || !grade) {
     return NextResponse.json({ error: 'classId, topic, subject, grade are required' }, { status: 400 })
   }
@@ -122,7 +122,7 @@ This is not remediation. It is just excellent, thorough teaching.`
 
   const userPrompt = `Write a SHORT classroom lesson plan for:
 
-Topic: ${topic}
+Topic: ${topic}${subtopic ? `\nSubtopic (focus specifically on this): ${subtopic}` : ''}
 Subject: ${subject}
 Grade: ${grade}
 Students: ${totalStudents}
@@ -192,6 +192,7 @@ Rules:
 
   return NextResponse.json({
     topic,
+    subtopic: subtopic || undefined,
     subject,
     grade,
     totalStudents,

@@ -5,6 +5,9 @@ import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 import { apiLog } from '@/lib/logger'
 import { CatchupPlanSchema, parseBody } from '@/lib/schemas'
 
+// callAI's primary+fallback retry chain can take up to ~90s on failure.
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = await checkRateLimit(ip)

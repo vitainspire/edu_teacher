@@ -14,24 +14,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { router.replace('/admin/login'); return }
       const role = document.cookie.split('; ').find(r => r.startsWith('edu-role='))?.split('=')[1]
-      if (role !== 'admin') { router.replace('/login'); return }
+      if (role !== 'admin') { router.replace('/'); return }
       setReady(true)
     })
   }, [router])
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#f1f5f9' }}>
-        <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+      <div className="min-h-screen flex items-center justify-center relative" style={{ background: 'var(--paper-bg)' }}>
+        <Loader2 className="w-6 h-6 animate-spin text-ink relative z-10" />
       </div>
     )
   }
 
   return (
     <AdminProvider>
-      <div className="min-h-screen md:flex" style={{ background: '#f8fafc' }}>
+      <div className="min-h-screen md:flex relative" style={{ background: 'var(--paper-bg)' }}>
         <AdminSideNav />
-        <main className="flex-1 min-w-0 overflow-auto">
+        <main className="flex-1 min-w-0 overflow-auto relative z-10">
           {children}
         </main>
       </div>
