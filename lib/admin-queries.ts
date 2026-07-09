@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Admin, School, Teacher, Class, Student, SchoolTimetablePeriod, TimetableEntry, SchoolSchedule, GradeSubject, Announcement, TeacherAvailability, TimetableSubstitution } from './types'
+import type { Admin, School, Teacher, Class, Student, SchoolTimetablePeriod, TimetableEntry, SchoolSchedule, GradeSubject, Announcement, TeacherAvailability, TimetableSubstitution, TeacherQualification } from './types'
 import type { SubstituteCandidate } from './substituteFinder'
 import { findSubstitute } from './substituteFinder'
 
@@ -91,6 +91,47 @@ export async function updateTeacherWorkloadLimits(
     max_periods_per_day: maxPeriodsPerDay,
     max_periods_per_week: maxPeriodsPerWeek,
   }).eq('id', teacherId)
+  if (error) throw new Error(error.message)
+}
+
+export async function updateTeacherSubject(teacherId: string, subject: string, ac: AC): Promise<void> {
+  const { error } = await ac.from('teachers').update({ subject }).eq('id', teacherId)
+  if (error) throw new Error(error.message)
+}
+
+// ── Teacher qualifications (subject + grade + optional section) ────────────────
+
+export async function fetchTeacherQualifications(schoolId: string, ac: AC): Promise<TeacherQualification[]> {
+  const { data, error } = await ac.from('teacher_qualifications').select('*').eq('school_id', schoolId)
+  if (error) throw new Error(error.message)
+  if (!data) return []
+  return data.map(r => ({
+    id: r.id,
+    schoolId: r.school_id,
+    teacherId: r.teacher_id,
+    subject: r.subject,
+    grade: r.grade,
+    section: r.section || undefined,
+  }))
+}
+
+export async function addTeacherQualification(q: TeacherQualification, ac: AC): Promise<void> {
+  const { error } = await ac.from('teacher_qualifications').upsert(
+    {
+      id: q.id,
+      school_id: q.schoolId,
+      teacher_id: q.teacherId,
+      subject: q.subject,
+      grade: q.grade,
+      section: q.section ?? '',
+    },
+    { onConflict: 'teacher_id,subject,grade,section' }
+  )
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteTeacherQualification(id: string, ac: AC): Promise<void> {
+  const { error } = await ac.from('teacher_qualifications').delete().eq('id', id)
   if (error) throw new Error(error.message)
 }
 
@@ -603,14 +644,16 @@ export async function markTeacherUnavailable(
 
   const dayOfWeek = new Date(date + 'T00:00:00').getDay()
 
-  const [{ data: needRows, error: needErr }, availability, existingSubs, candidates] = await Promise.all([
+  const [{ data: needRows, error: needErr }, availability, existingSubs, candidates, classes] = await Promise.all([
     ac.from('timetable').select('*').eq('teacher_id', teacherId).eq('day_of_week', dayOfWeek),
     fetchTeacherAvailability(schoolId, date, ac),
     fetchSubstitutionsForDate(schoolId, date, ac),
     fetchTeacherEligibilityData(schoolId, date, ac),
+    fetchSchoolClasses(schoolId, ac),
   ])
   if (needErr) throw new Error(needErr.message)
 
+  const classById = new Map(classes.map(c => [c.id, c]))
   const excludeTeacherIds = new Set<string>([teacherId, ...availability.map(a => a.teacherId)])
 
   // Seed "already used this slot today" from substitutions already assigned
@@ -627,7 +670,11 @@ export async function markTeacherUnavailable(
 
   const newSubs: TimetableSubstitution[] = []
   for (const row of needRows ?? []) {
-    const need = { dayOfWeek, periodNumber: row.period_number as number, subject: (row.label as string) ?? '' }
+    const cls = classById.get(row.class_id as string)
+    const need = {
+      dayOfWeek, periodNumber: row.period_number as number, subject: (row.label as string) ?? '',
+      grade: cls?.grade ?? '', section: cls?.section || undefined,
+    }
     const slotKey = `${need.dayOfWeek}|${need.periodNumber}`
     const usedThisSlot = usedBySlot.get(slotKey) ?? new Set<string>()
 
@@ -686,19 +733,22 @@ export async function fetchTeacherEligibilityData(schoolId: string, date: string
 
   const { start, end } = weekRangeOf(date)
 
-  const [asgResult, ttResult, subsResult] = await Promise.all([
+  const [asgResult, ttResult, subsResult, qualResult] = await Promise.all([
     ac.from('teacher_class_assignments').select('teacher_id, subject').in('teacher_id', teacherIds),
     ac.from('timetable').select('teacher_id, day_of_week, period_number, label').in('teacher_id', teacherIds),
     ac.from('timetable_substitutions').select('substitute_teacher_id')
       .in('substitute_teacher_id', teacherIds).gte('date', start).lte('date', end),
+    ac.from('teacher_qualifications').select('teacher_id, subject, grade, section').in('teacher_id', teacherIds),
   ])
   if (asgResult.error) throw new Error(asgResult.error.message)
   if (ttResult.error) throw new Error(ttResult.error.message)
   if (subsResult.error) throw new Error(subsResult.error.message)
+  if (qualResult.error) throw new Error(qualResult.error.message)
 
   const subjectsByTeacher = new Map<string, Set<string>>()
   const busyByTeacher = new Map<string, Set<string>>()
   const extraLoadByTeacher = new Map<string, number>()
+  const qualificationsByTeacher = new Map<string, { subject: string; grade: string; section?: string }[]>()
   const ensure = (map: Map<string, Set<string>>, id: string) => {
     if (!map.has(id)) map.set(id, new Set())
     return map.get(id)!
@@ -715,12 +765,17 @@ export async function fetchTeacherEligibilityData(schoolId: string, date: string
     const id = r.substitute_teacher_id as string | null
     if (id) extraLoadByTeacher.set(id, (extraLoadByTeacher.get(id) ?? 0) + 1)
   }
+  for (const r of qualResult.data ?? []) {
+    if (!qualificationsByTeacher.has(r.teacher_id)) qualificationsByTeacher.set(r.teacher_id, [])
+    qualificationsByTeacher.get(r.teacher_id)!.push({ subject: r.subject, grade: r.grade, section: r.section || undefined })
+  }
 
   return teachers.map(t => {
     const busySlots = busyByTeacher.get(t.id) ?? new Set<string>()
     return {
       teacherId: t.id,
       name: t.name,
+      qualifications: qualificationsByTeacher.get(t.id) ?? [],
       subjectsTaught: subjectsByTeacher.get(t.id) ?? new Set<string>(),
       busySlots,
       maxPeriodsPerDay: t.maxPeriodsPerDay,

@@ -1,7 +1,14 @@
+export interface Qualification {
+  subject: string
+  grade: string
+  section?: string   // undefined = qualified for every section of this grade
+}
+
 export interface SubstituteCandidate {
   teacherId: string
   name: string
-  subjectsTaught: Set<string>
+  qualifications: Qualification[]   // explicit, admin-configured — preferred when present
+  subjectsTaught: Set<string>       // legacy fallback: subject only, inferred from assignments/timetable history
   busySlots: Set<string>   // `${dayOfWeek}|${periodNumber}` from the candidate's own published timetable
   maxPeriodsPerDay?: number    // optional workload cap — undefined = no cap
   maxPeriodsPerWeek?: number
@@ -12,16 +19,38 @@ export interface SubstituteNeed {
   dayOfWeek: number
   periodNumber: number
   subject: string
+  grade: string
+  section?: string
 }
 
 /**
- * Finds the best-fit substitute for one period. Only considers teachers who
- * actually teach the period's subject (derived elsewhere from their real
- * assignments/timetable, since Teacher.subject/grade aren't reliable) — no
- * fallback to an unqualified "any free teacher" tier. Hard-excludes anyone
- * who'd breach their own daily/weekly workload cap by taking this period.
- * Ranks survivors by fewest periods already on that weekday, then name, for
- * a deterministic pick.
+ * A candidate is qualified if they have an explicit qualification matching
+ * the subject + grade (and, if the qualification names a specific section,
+ * that section too) of the class needing coverage. Grade is a hard
+ * requirement when explicit qualifications exist — a teacher configured for
+ * Grade 9-10 Math is never eligible for a Grade 3 Math class.
+ *
+ * Teachers with zero qualifications on file (not yet onboarded into this)
+ * fall back to the legacy subject-only inference from their actual
+ * assignments/timetable history, with no grade check — so matching doesn't
+ * silently break for anyone admins haven't gotten around to configuring yet.
+ */
+function isQualified(candidate: SubstituteCandidate, need: SubstituteNeed): boolean {
+  if (candidate.qualifications.length > 0) {
+    return candidate.qualifications.some(q =>
+      q.subject === need.subject &&
+      q.grade === need.grade &&
+      (!q.section || q.section === need.section)
+    )
+  }
+  return candidate.subjectsTaught.has(need.subject)
+}
+
+/**
+ * Finds the best-fit substitute for one period. No fallback to an unqualified
+ * "any free teacher" tier. Hard-excludes anyone who'd breach their own
+ * daily/weekly workload cap by taking this period. Ranks survivors by fewest
+ * periods already on that weekday, then name, for a deterministic pick.
  */
 export function findSubstitute(
   need: SubstituteNeed,
@@ -39,7 +68,7 @@ export function findSubstitute(
     !excludeTeacherIds.has(c.teacherId) &&
     !alreadyUsedThisSlot.has(c.teacherId) &&
     !c.busySlots.has(slotKey) &&
-    c.subjectsTaught.has(need.subject) &&
+    isQualified(c, need) &&
     (c.maxPeriodsPerDay === undefined || periodsOnDay(c) < c.maxPeriodsPerDay) &&
     (c.maxPeriodsPerWeek === undefined || c.weeklyLoad < c.maxPeriodsPerWeek)
   )
@@ -88,7 +117,7 @@ export function suggestSwap(
     if (period.periodNumber === need.periodNumber) continue
 
     const freeingTeacherId = findSubstitute(
-      { dayOfWeek: need.dayOfWeek, periodNumber: period.periodNumber, subject: need.subject },
+      { ...need, periodNumber: period.periodNumber },
       candidates, excludeTeacherIds, alreadyUsedThisSlot(period.periodNumber)
     )
     if (!freeingTeacherId) continue

@@ -59,12 +59,11 @@ export async function middleware(req: NextRequest) {
 
   // Root — the portal chooser. Only redirect away when a session actually
   // exists; unauthenticated visitors should see the chooser page itself.
+  // Checks the real session FIRST — a stale/leftover `edu-role` cookie with
+  // no valid session must never redirect anywhere (that was sending people
+  // into a redirect loop: / -> /admin/dashboard (stale cookie) -> bounced
+  // back to /teacher/login since there's no real session).
   if (pathname === '/') {
-    const role = req.cookies.get('edu-role')?.value
-    if (role === 'admin') {
-      return NextResponse.redirect(new URL('/admin/dashboard', req.url))
-    }
-
     const rootSupabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -72,7 +71,9 @@ export async function middleware(req: NextRequest) {
     )
     const { data: { user: rootUser } } = await rootSupabase.auth.getUser()
     if (rootUser) {
-      return NextResponse.redirect(new URL(role === 'scanner' ? '/scanner/connect' : '/home', req.url))
+      const role = req.cookies.get('edu-role')?.value
+      const dest = role === 'admin' ? '/admin/dashboard' : role === 'scanner' ? '/scanner/connect' : '/home'
+      return NextResponse.redirect(new URL(dest, req.url))
     }
     return NextResponse.next()
   }

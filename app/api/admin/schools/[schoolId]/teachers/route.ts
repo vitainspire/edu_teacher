@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { fetchAdmin, fetchSchool, fetchSchoolTeachers, removeTeacherFromSchool, updateTeacherWorkloadLimits } from '@/lib/admin-queries'
+import { fetchAdmin, fetchSchool, fetchSchoolTeachers, removeTeacherFromSchool, updateTeacherWorkloadLimits, updateTeacherSubject } from '@/lib/admin-queries'
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 function genCode(len = 6) {
@@ -94,8 +94,9 @@ export async function POST(req: Request, { params }: { params: { schoolId: strin
   }
 }
 
-// Sets a teacher's optional workload caps (used by substitute assignment to
-// avoid overloading them). Pass null for either field to clear that cap.
+// Partial update — only touches the fields actually present in the body, so
+// e.g. editing Subject alone never clobbers previously-set workload limits.
+// Workload caps: pass null (or '') for either field to clear that cap.
 export async function PATCH(req: Request, { params }: { params: { schoolId: string } }) {
   try {
     const cookieStore = cookies()
@@ -109,15 +110,23 @@ export async function PATCH(req: Request, { params }: { params: { schoolId: stri
     const ctx = await auth(user.id, params.schoolId)
     if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const { teacherId, maxPeriodsPerDay, maxPeriodsPerWeek } = await req.json()
+    const body = await req.json()
+    const { teacherId } = body
     if (!teacherId) return NextResponse.json({ error: 'teacherId is required.' }, { status: 400 })
 
-    await updateTeacherWorkloadLimits(
-      teacherId,
-      maxPeriodsPerDay === '' || maxPeriodsPerDay == null ? null : Number(maxPeriodsPerDay),
-      maxPeriodsPerWeek === '' || maxPeriodsPerWeek == null ? null : Number(maxPeriodsPerWeek),
-      ctx.ac
-    )
+    if ('maxPeriodsPerDay' in body || 'maxPeriodsPerWeek' in body) {
+      await updateTeacherWorkloadLimits(
+        teacherId,
+        body.maxPeriodsPerDay === '' || body.maxPeriodsPerDay == null ? null : Number(body.maxPeriodsPerDay),
+        body.maxPeriodsPerWeek === '' || body.maxPeriodsPerWeek == null ? null : Number(body.maxPeriodsPerWeek),
+        ctx.ac
+      )
+    }
+
+    if ('subject' in body) {
+      await updateTeacherSubject(teacherId, (body.subject ?? '').trim(), ctx.ac)
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[admin/teachers PATCH] failed:', err)

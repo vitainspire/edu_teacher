@@ -474,6 +474,15 @@ export interface SchoolTimetablePeriod {
   createdAt: string
 }
 
+export interface TeacherQualification {
+  id: string
+  schoolId: string
+  teacherId: string
+  subject: string
+  grade: string
+  section?: string   // undefined/empty = qualified for every section of this grade
+}
+
 export interface TeacherAvailability {
   id: string
   schoolId: string

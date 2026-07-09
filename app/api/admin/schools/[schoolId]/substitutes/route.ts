@@ -38,6 +38,7 @@ async function buildPayload(schoolId: string, date: string, ac: ReturnType<typeo
 
   const teacherName = new Map(teachers.map(t => [t.id, t.name]))
   const className = new Map(classes.map(c => [c.id, c.name]))
+  const classById = new Map(classes.map(c => [c.id, c]))
 
   // For any unresolved period, check whether swapping this class's schedule
   // for the day would free up a qualified teacher — suggestion only, never
@@ -66,8 +67,9 @@ async function buildPayload(schoolId: string, date: string, ac: ReturnType<typeo
         periodNumber: r.period_number as number, subject: (r.label as string) ?? '', teacherId: r.teacher_id as string,
       }))
 
+      const cls = classById.get(s.classId)
       const suggestion = suggestSwap(
-        { dayOfWeek: s.dayOfWeek, periodNumber: s.periodNumber, subject: s.subject ?? '' },
+        { dayOfWeek: s.dayOfWeek, periodNumber: s.periodNumber, subject: s.subject ?? '', grade: cls?.grade ?? '', section: cls?.section || undefined },
         classPeriods, candidates, excludeTeacherIds,
         (pn) => usedBySlot.get(pn) ?? new Set()
       )
