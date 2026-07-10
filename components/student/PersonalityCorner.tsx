@@ -74,7 +74,10 @@ export default function PersonalityCorner({ isMobile }: Props) {
   }
 
   const currentStep = story?.steps[stepIndex]
-  const ending = story && finished ? story.endings[pickEnding(picks)] : null
+  const endingBucket = story && finished ? pickEnding(picks) : null
+  const ending = story && endingBucket ? story.endings[endingBucket] : null
+  const analysis = story && endingBucket ? story.personalityAnalysis[endingBucket] : null
+  const summary = story && endingBucket ? story.learningSummary[endingBucket] : null
 
   return (
     <>
@@ -136,6 +139,9 @@ export default function PersonalityCorner({ isMobile }: Props) {
 
               {!loading && !error && story && !finished && currentStep && (
                 <>
+                  {stepIndex === 0 && story.introduction && (
+                    <p style={{ fontSize: 13.5, color: '#5B6B87', lineHeight: 1.6, fontStyle: 'italic' }}>{story.introduction}</p>
+                  )}
                   <p style={{ fontSize: 14, color: '#1E2A44', lineHeight: 1.6 }}>{currentStep.scene}</p>
 
                   <div>
@@ -181,9 +187,25 @@ export default function PersonalityCorner({ isMobile }: Props) {
               )}
 
               {!loading && !error && story && finished && ending && (
-                <div style={{ padding: '16px 18px', borderRadius: 16, background: '#FFF7E6', border: '2px solid #F5DFA6' }}>
-                  <p style={{ fontSize: 14, color: '#5C4A1E', lineHeight: 1.65 }}>{ending}</p>
-                </div>
+                <>
+                  <div style={{ padding: '16px 18px', borderRadius: 16, background: '#FFF7E6', border: '2px solid #F5DFA6' }}>
+                    <p style={{ fontSize: 14, color: '#5C4A1E', lineHeight: 1.65 }}>{ending}</p>
+                  </div>
+
+                  {analysis && (
+                    <div style={{ padding: '14px 18px', borderRadius: 16, background: '#F0F7EE', border: '2px solid #CDE7C4' }}>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: '#2F6B3F', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>What today showed</p>
+                      <p style={{ fontSize: 13.5, color: '#2F4A34', lineHeight: 1.6 }}>{analysis}</p>
+                    </div>
+                  )}
+
+                  {summary && (
+                    <div style={{ padding: '14px 18px', borderRadius: 16, background: '#EDF2FB', border: '2px solid #C7D6F0' }}>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: '#2A4B8D', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>For next time</p>
+                      <p style={{ fontSize: 13.5, color: '#1E2A44', lineHeight: 1.6 }}>{summary}</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

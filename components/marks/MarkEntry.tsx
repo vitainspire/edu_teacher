@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Check, Sparkles, ChevronDown, ChevronUp, ScanLine, FileImage, X,
-  ZoomIn, ZoomOut, RotateCw, Paperclip, Loader2,
+  ZoomIn, ZoomOut, RotateCw, Paperclip, Loader2, ExternalLink,
 } from 'lucide-react'
 import type { Student, AiQuestion } from '@/lib/types'
 import clsx from 'clsx'
@@ -32,6 +32,7 @@ interface Props {
     source?: string
     breakdown?: { question: number; awarded: number; max: number; errorType?: string | null }[]
     imageUrl?: string
+    driveUrl?: string
   }>
   onSave: (entries: Array<{ studentId: string; score: number; feedback?: string; source?: string }>) => Promise<void>
   onCancel: () => void
@@ -68,6 +69,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
   const [breakdowns, setBreakdowns]         = useState<Record<string, QuestionBreakdown[]>>({})
   const [breakdownOpen, setBreakdownOpen]   = useState<Record<string, boolean>>({})
   const [imageUrls, setImageUrls]           = useState<Record<string, string>>({})
+  const [driveUrls, setDriveUrls]           = useState<Record<string, string>>({})
   const [uploadingFor, setUploadingFor]     = useState<string | null>(null)
   const uploadRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<string | null>(null)
@@ -102,6 +104,10 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
     const urlMap: Record<string, string> = {}
     prefillScores.forEach(e => { if (e.imageUrl) urlMap[e.studentId] = e.imageUrl })
     if (Object.keys(urlMap).length) setImageUrls(prev => ({ ...prev, ...urlMap }))
+
+    const driveMap: Record<string, string> = {}
+    prefillScores.forEach(e => { if (e.driveUrl) driveMap[e.studentId] = e.driveUrl })
+    if (Object.keys(driveMap).length) setDriveUrls(prev => ({ ...prev, ...driveMap }))
 
     const aiIds = new Set(prefillScores.filter(e => e.source === 'ai_scanned').map(e => e.studentId))
     const aiOriginals: Record<string, number> = {}
@@ -188,9 +194,10 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
         body: JSON.stringify({ imageBase64: base64, mimeType, filename }),
       })
       if (!res.ok) throw new Error('Upload failed')
-      const { url } = (await res.json()) as { url?: string }
+      const { url, driveUrl } = (await res.json()) as { url?: string; driveUrl?: string }
       if (url) {
         setImageUrls(prev => ({ ...prev, [studentId]: url }))
+        if (driveUrl) setDriveUrls(prev => ({ ...prev, [studentId]: driveUrl }))
         setViewingUrl(url)
         setViewingName(students.find(s => s.id === studentId)?.name ?? '')
         setZoom(1)
@@ -236,6 +243,7 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
     const isAi     = aiScannedIds.has(student.id)
     const isEdited = editedIds.has(student.id)
     const paperUrl = imageUrls[student.id]
+    const paperDriveUrl = driveUrls[student.id]
     const isUploading = uploadingFor === student.id
 
     return (
@@ -286,7 +294,23 @@ export default function MarkEntry({ students, totalMarks, questions, prefillScor
             >
               <FileImage size={9} /> View Paper
             </button>
-          ) : (
+          ) : null}
+
+          {/* Secondary archive link — best-effort, only shows up when the Drive upload succeeded */}
+          {paperDriveUrl && (
+            <a
+              href={paperDriveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              title="Open the original scan in Google Drive"
+              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-ink/5 text-ink-faint border border-ink/10 hover:bg-ink/10 transition-colors shrink-0"
+            >
+              <ExternalLink size={9} /> Drive
+            </a>
+          )}
+
+          {!paperUrl && (
             <button
               type="button"
               onClick={e => { e.stopPropagation(); openUpload(student.id) }}

@@ -25,11 +25,12 @@ export async function POST(request: NextRequest) {
     breakdown?: unknown
     feedback?: string
     imageUrl?: string
+    driveUrl?: string
   };
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { testId, studentId, score, totalMarks, breakdown, feedback, imageUrl } = body;
+  const { testId, studentId, score, totalMarks, breakdown, feedback, imageUrl, driveUrl } = body;
 
   if (!testId || !studentId || score === undefined || !totalMarks) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
       breakdown: breakdown ?? null,
       feedback: feedback ?? null,
       image_url: imageUrl ?? null,
+      drive_url: driveUrl ?? null,
     },
     { onConflict: 'student_id,test_id' }
   );

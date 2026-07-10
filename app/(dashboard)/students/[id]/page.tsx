@@ -5,7 +5,7 @@ import {
   ArrowLeft, Sparkles, AlertTriangle, Fingerprint,
   RefreshCw, FileText, CheckCircle2, BookX, Calendar,
   ClipboardList, Trash2, Plus, Mic, MicOff, ScanLine,
-  LayoutGrid, TrendingUp, Users2,
+  LayoutGrid, TrendingUp, Users2, Copy, Check,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import LearningFingerprint from '@/components/fingerprint/LearningFingerprint'
@@ -73,6 +73,13 @@ export default function StudentDetailPage() {
   const recognitionRef = useRef<any>(null)
   const [potentialSentence, setPotentialSentence] = useState('')
   const [loadingPotential, setLoadingPotential] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    })
+  }
 
   // AI Report state
   const [report, setReport]               = useState<StudentReport | null>(null)
@@ -324,6 +331,20 @@ export default function StudentDetailPage() {
             {getMasteryLabel(avgMastery)}
           </div>
         </div>
+
+        {student.studentCode && (
+          <button
+            onClick={() => copyCode(student.studentCode!)}
+            className="flex items-center gap-1.5 bg-[#E9E1F6] px-2.5 py-1 rounded-lg text-[11px] font-black text-[#8069B0] tracking-wider active:scale-95 transition-transform mb-3"
+            title="Copy Student ID"
+          >
+            <span className="font-bold tracking-wide opacity-70">STUDENT CODE</span>
+            {student.studentCode}
+            {codeCopied
+              ? <Check size={11} className="text-emerald-500" />
+              : <Copy size={11} className="text-[#8069B0]" />}
+          </button>
+        )}
 
         {/* Tabs */}
         <div className="flex overflow-x-auto no-scrollbar gap-0">

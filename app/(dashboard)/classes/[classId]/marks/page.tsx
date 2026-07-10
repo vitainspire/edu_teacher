@@ -622,7 +622,7 @@ export default function ClassMarksPage() {
             questions={currentTest.questions}
             prefillScores={marks
               .filter(m => m.testId === currentTestId)
-              .map(m => ({ studentId: m.studentId, score: m.score, feedback: m.feedback, source: m.source, breakdown: m.breakdown, imageUrl: m.imageUrl }))}
+              .map(m => ({ studentId: m.studentId, score: m.score, feedback: m.feedback, source: m.source, breakdown: m.breakdown, imageUrl: m.imageUrl, driveUrl: m.driveUrl }))}
             onSave={handleSaveMarks}
             onCancel={() => setStep('list')}
           />

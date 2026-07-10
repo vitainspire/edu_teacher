@@ -23,11 +23,12 @@ export async function POST(req: NextRequest) {
     breakdown?: unknown
     feedback?: string
     imageUrl?: string
+    driveUrl?: string
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }
 
-  const { worksheetId, studentId, score, totalMarks, breakdown, feedback, imageUrl } = body
+  const { worksheetId, studentId, score, totalMarks, breakdown, feedback, imageUrl, driveUrl } = body
   if (!worksheetId || !studentId || score === undefined || !totalMarks) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
       breakdown: breakdown ?? null,
       feedback: feedback ?? null,
       image_url: imageUrl ?? null,
+      drive_url: driveUrl ?? null,
     },
     { onConflict: 'worksheet_id,student_id' }
   )

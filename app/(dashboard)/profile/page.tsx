@@ -1,6 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { LogOut, Check, Copy } from 'lucide-react'
+import { LogOut, Check, Copy, CalendarDays, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useApp } from '@/lib/context'
 import PageHeader from '@/components/theme/PageHeader'
@@ -77,6 +77,21 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={() => router.push('/academic-calendar')}
+          className="paper-card p-5 w-full flex items-center gap-3 text-left"
+        >
+          <Sticker tone="blue" size={36} radius={14}>
+            <CalendarDays size={16} className="text-ink-soft" />
+          </Sticker>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-ink leading-none">Academic Calendar</p>
+            <p className="text-[11px] text-ink-soft mt-1">Holidays, exams, and term dates published by your school</p>
+          </div>
+          <ChevronRight size={16} className="text-ink-faint shrink-0" />
+        </button>
 
         <button
           type="button"

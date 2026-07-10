@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface Student { id: string; name: string; roll_number: number; }
 interface ScanResult {
-  matchedStudent: Student | null; score: number | null; students: Student[]; totalMarks: number; imageUrl?: string;
+  matchedStudent: Student | null; score: number | null; students: Student[]; totalMarks: number; imageUrl?: string; driveUrl?: string;
   needsReview?: boolean; reviewReason?: string | null;
 }
 
@@ -45,7 +45,7 @@ export default function ConfirmPage() {
     const res = await fetch("/api/save-score", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId: selectedStudentId, testId, score: scoreNum, totalMarks: scanResult?.totalMarks, imageUrl: scanResult?.imageUrl }),
+      body: JSON.stringify({ studentId: selectedStudentId, testId, score: scoreNum, totalMarks: scanResult?.totalMarks, imageUrl: scanResult?.imageUrl, driveUrl: scanResult?.driveUrl }),
     });
     if (!res.ok) { const b = (await res.json()) as { error?: string }; setError(b.error ?? "Failed to save. Please try again."); setSaving(false); return; }
     sessionStorage.removeItem("scanResult");

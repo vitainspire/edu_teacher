@@ -84,6 +84,10 @@ export interface Mark {
   enteredAt: string
   source?: 'manual' | 'ai_scanned' | 'teacher_override'
   imageUrl?: string
+  /** Best-effort parallel copy in the school's Google Drive folder — undefined if
+   *  Drive upload wasn't configured or failed; imageUrl (Supabase) is always the
+   *  reliable copy used for the in-app viewer. */
+  driveUrl?: string
 }
 
 /**
@@ -558,8 +562,23 @@ export interface PersonalityStoryStep {
 export interface PersonalityStory {
   trait: string
   title: string
+  /** 1-2 short sentences setting up the story, shown before the first scene. */
+  introduction: string
   steps: PersonalityStoryStep[]
   endings: {
+    wise: string
+    mixed: string
+    regret: string
+  }
+  /** A short, this-story-only reflection on what the choices showed — plain
+   *  language, not a score or trait tally. Varies by which ending was reached. */
+  personalityAnalysis: {
+    wise: string
+    mixed: string
+    regret: string
+  }
+  /** One short, friendly practical takeaway — "what this means for next time." */
+  learningSummary: {
     wise: string
     mixed: string
     regret: string

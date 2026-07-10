@@ -180,9 +180,11 @@ export default function WorksheetMultiScanPage() {
       };
 
       let imageUrl: string | undefined;
+      let driveUrl: string | undefined;
       if (uploadRes.ok) {
-        const up = (await uploadRes.json()) as { url?: string };
+        const up = (await uploadRes.json()) as { url?: string; driveUrl?: string };
         imageUrl = up.url;
+        driveUrl = up.driveUrl;
       }
 
       const saveRes = await fetch("/api/worksheet-save-score", {
@@ -196,6 +198,7 @@ export default function WorksheetMultiScanPage() {
           breakdown: gradeData.breakdown,
           feedback: gradeData.feedback,
           imageUrl,
+          driveUrl,
         }),
       });
 

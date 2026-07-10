@@ -153,9 +153,11 @@ export default function MultiScanPage() {
 
       // Get uploaded image URL (best-effort — if upload failed we still save the mark)
       let imageUrl: string | undefined;
+      let driveUrl: string | undefined;
       if (uploadRes.ok) {
-        const uploadData = (await uploadRes.json()) as { url?: string };
+        const uploadData = (await uploadRes.json()) as { url?: string; driveUrl?: string };
         imageUrl = uploadData.url;
+        driveUrl = uploadData.driveUrl;
       }
 
       // Save score via scanner-save-score (school-scoped token, no Supabase session needed)
@@ -170,6 +172,7 @@ export default function MultiScanPage() {
           breakdown: gradeData.breakdown,
           feedback: gradeData.feedback,
           imageUrl,
+          driveUrl,
         }),
       });
 

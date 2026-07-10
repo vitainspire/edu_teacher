@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   Users, GraduationCap, Wifi, WifiOff,
-  LogOut, Check,
+  LogOut, Check, ClipboardList,
   Sparkles, TrendingUp,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -16,6 +16,7 @@ import FeatureTour from '@/components/onboarding/FeatureTour'
 import PageHeader from '@/components/theme/PageHeader'
 import SubstituteBanner from '@/components/timetable/SubstituteBanner'
 import AttendanceCircle from '@/components/home/AttendanceCircle'
+import PrepMaterialModal from '@/components/timetable/PrepMaterialModal'
 import { Sticker, ClipboardCheckSticker, QuillBookSticker, BellSticker } from '@/components/theme/StickerIcon'
 import { countStudentsNeedingAttention } from '@/lib/logic/home-alerts'
 import clsx from 'clsx'
@@ -60,7 +61,13 @@ export default function HomePage() {
     .filter(e => e.dayOfWeek === new Date().getDay())
     .sort((a, b) => a.periodNumber - b.periodNumber)
   const classNameFor = (classId: string) => classes.find(c => c.id === classId)?.name ?? 'Class'
+  const gradeFor = (classId: string) => classes.find(c => c.id === classId)?.grade ?? ''
   const nowMins = new Date().getHours() * 60 + new Date().getMinutes()
+
+  // Tap a Today's Schedule row to reveal its Prep Material / Take Attendance
+  // actions — accordion-style, only one row expanded at a time.
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null)
+  const [prepModal, setPrepModal] = useState<{ classId: string; subject: string; grade: string } | null>(null)
 
   // Same per-student criteria the Alerts page itself uses, so this count
   // always matches what tapping "View" reveals.
@@ -217,7 +224,11 @@ export default function HomePage() {
                           </div>
                         </div>
                         <div
-                          className="flex-1 min-w-0 rounded-2xl px-3.5 py-2.5 transition-all"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setExpandedEntryId(prev => prev === entry.id ? null : entry.id)}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedEntryId(prev => prev === entry.id ? null : entry.id) } }}
+                          className="flex-1 min-w-0 rounded-2xl px-3.5 py-2.5 transition-all text-left cursor-pointer"
                           style={{
                             background: isNow ? color.bg : 'rgba(58,44,30,0.035)',
                             border: isNow ? `1.5px solid ${color.text}` : '1.5px solid transparent',
@@ -240,6 +251,31 @@ export default function HomePage() {
                           <p className="text-xs font-semibold mt-0.5 truncate" style={{ color: isNow ? color.text : 'var(--ink-soft)', opacity: isNow ? 0.85 : 1 }}>
                             {entry.startTime}–{entry.endTime} · {classNameFor(entry.classId)}
                           </p>
+
+                          {/* Revealed on tap — Prep Material / Take Attendance for this period */}
+                          {expandedEntryId === entry.id && (
+                            <div className="flex gap-2 mt-2.5 animate-fade-up">
+                              <button
+                                type="button"
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  setPrepModal({ classId: entry.classId, subject: entry.label ?? classNameFor(entry.classId), grade: gradeFor(entry.classId) })
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                                style={{ background: 'rgba(255,255,255,0.7)', color: isNow ? color.text : 'var(--ink)' }}
+                              >
+                                <Sparkles size={12} /> Prep Material
+                              </button>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); router.push(`/classes/${entry.classId}/attendance`) }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold text-white active:scale-95 transition-all"
+                                style={{ background: 'var(--ink)' }}
+                              >
+                                <ClipboardList size={12} /> Take Attendance
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -298,6 +334,14 @@ export default function HomePage() {
       </div>
 
       <CreateClassModal open={createOpen} onClose={() => setCreateOpen(false)} />
+
+      <PrepMaterialModal
+        open={!!prepModal}
+        onClose={() => setPrepModal(null)}
+        classId={prepModal?.classId ?? ''}
+        subject={prepModal?.subject ?? ''}
+        grade={prepModal?.grade ?? ''}
+      />
 
       {/* Floating attendance-status button — right above Morning Briefing */}
       {teacher && <AttendanceCircle />}

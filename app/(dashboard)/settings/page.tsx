@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Check, BookOpen, Clock, Trash2, HelpCircle, Copy, RefreshCw, CalendarDays, ChevronRight } from 'lucide-react'
+import { Check, BookOpen, Clock, Trash2, HelpCircle, Copy, RefreshCw } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import FeatureTour from '@/components/onboarding/FeatureTour'
 import FlowGuide from '@/components/onboarding/FlowGuide'
@@ -12,7 +11,6 @@ const DAY_LABELS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function SettingsPage() {
   const { teacher, classes, timetableEntries, removeTimetableEntry } = useApp()
-  const router = useRouter()
 
   const [teacherCodeCopied, setTeacherCodeCopied] = useState(false)
   const [showTour, setShowTour]         = useState(false)
@@ -98,22 +96,6 @@ export default function SettingsPage() {
             Non-teaching staff open the EduScanner app and enter this code to scan answer sheets for <span className="font-semibold text-ink">all your classes</span>. Marks sync straight back to you.
           </p>
         </div>
-
-        {/* Academic Calendar */}
-        <button
-          type="button"
-          onClick={() => router.push('/academic-calendar')}
-          className="paper-card p-5 w-full flex items-center gap-3 text-left"
-        >
-          <Sticker tone="blue" size={36} radius={14}>
-            <CalendarDays size={16} className="text-ink-soft" />
-          </Sticker>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-ink leading-none">Academic Calendar</p>
-            <p className="text-[11px] text-ink-soft mt-1">Holidays, exams, and term dates published by your school</p>
-          </div>
-          <ChevronRight size={16} className="text-ink-faint shrink-0" />
-        </button>
 
         {/* Timetable */}
         <div className="paper-card p-5 space-y-4">

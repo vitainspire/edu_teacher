@@ -14,7 +14,7 @@ import { compressAndAssess, type ImageQuality } from "@/lib/scan-capture";
 interface Student { id: string; name: string; roll_number: number; }
 interface TestInfo { topic: string; total_marks: number; subject: string; questions: unknown[]; }
 interface BatchResult {
-  matchedStudent: Student | null; score: number | null; previewUrl: string; imageUrl?: string;
+  matchedStudent: Student | null; score: number | null; previewUrl: string; imageUrl?: string; driveUrl?: string;
   quality: ImageQuality; needsReview: boolean; reviewReason: string | null;
 }
 type Stage = "capture" | "grading" | "confirm" | "saving";
@@ -76,9 +76,9 @@ function BatchScanInner() {
       ]);
       if (!res.ok) { const b = (await res.json()) as { error?: string }; throw new Error(b.error ?? `Server error ${res.status}`); }
       const data = (await res.json()) as { matchedStudent: Student | null; score: number | null; needsReview?: boolean; reviewReason?: string | null };
-      const imageUrl: string | undefined = uploadRes.ok ? ((await uploadRes.json()) as { url?: string }).url : undefined;
+      const uploadData = uploadRes.ok ? (await uploadRes.json()) as { url?: string; driveUrl?: string } : undefined;
       setResult({
-        matchedStudent: data.matchedStudent, score: data.score, previewUrl, imageUrl,
+        matchedStudent: data.matchedStudent, score: data.score, previewUrl, imageUrl: uploadData?.url, driveUrl: uploadData?.driveUrl,
         quality, needsReview: data.needsReview ?? false, reviewReason: data.reviewReason ?? null,
       });
       setSelectedStudentId(data.matchedStudent?.id ?? "");
@@ -100,7 +100,7 @@ function BatchScanInner() {
       const res = await fetch("/api/save-score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: selectedStudentId, testId, score, totalMarks: testInfo?.total_marks ?? 0, source: "batch_scan", imageUrl: result?.imageUrl }),
+        body: JSON.stringify({ studentId: selectedStudentId, testId, score, totalMarks: testInfo?.total_marks ?? 0, source: "batch_scan", imageUrl: result?.imageUrl, driveUrl: result?.driveUrl }),
       });
       if (!res.ok) { const b = (await res.json()) as { error?: string }; throw new Error(b.error ?? "Failed to save score"); }
       if (result?.previewUrl) URL.revokeObjectURL(result.previewUrl);

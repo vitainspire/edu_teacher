@@ -275,6 +275,7 @@ export async function upsertMark(m: Mark) {
     entered_at: m.enteredAt,
     source: m.source ?? 'manual',
     image_url: m.imageUrl ?? null,
+    drive_url: m.driveUrl ?? null,
   })
   if (error) throw error
 }
@@ -292,6 +293,7 @@ export async function fetchMarks(teacherId: string): Promise<Mark[]> {
     enteredAt: r.entered_at,
     source: (r.source as Mark['source']) ?? undefined,
     imageUrl: r.image_url ?? undefined,
+    driveUrl: r.drive_url ?? undefined,
   }))
 }
 

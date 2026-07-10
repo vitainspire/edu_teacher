@@ -140,13 +140,15 @@ function CameraPageInner() {
       ]);
       if (!gradeRes.ok) { const b = (await gradeRes.json()) as { error?: string }; throw new Error(b.error ?? `Grading failed (${gradeRes.status})`); }
       const { score, breakdown, feedback, reviewReason: flaggedReason } = (await gradeRes.json()) as { score: number | null; breakdown?: unknown[]; feedback?: string | null; reviewReason?: string | null };
-      const imageUrl: string | undefined = uploadRes.ok ? ((await uploadRes.json()) as { url?: string }).url : undefined;
+      const uploadData = uploadRes.ok ? (await uploadRes.json()) as { url?: string; driveUrl?: string } : undefined;
+      const imageUrl = uploadData?.url;
+      const driveUrl = uploadData?.driveUrl;
       if (score === null) { setManualScore(""); setStage("manual"); return; }
       setGradingLabel("Saving score…");
       const saveRes = await fetch("/api/save-score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: preSelectedStudentId, testId, score, totalMarks, breakdown: breakdown ?? null, feedback: feedback ?? null, imageUrl }),
+        body: JSON.stringify({ studentId: preSelectedStudentId, testId, score, totalMarks, breakdown: breakdown ?? null, feedback: feedback ?? null, imageUrl, driveUrl }),
       });
       if (!saveRes.ok) { const b = (await saveRes.json()) as { error?: string }; throw new Error(b.error ?? "Failed to save score"); }
       if (flaggedReason) {
@@ -191,8 +193,10 @@ function CameraPageInner() {
       ]);
       if (!res.ok) { const b = (await res.json()) as { error?: string }; throw new Error(b.error ?? `Server error ${res.status}`); }
       const result = (await res.json()) as { matchedStudent: Student | null; score: number | null; needsReview?: boolean; reviewReason?: string | null };
-      const imageUrl: string | undefined = uploadRes.ok ? ((await uploadRes.json()) as { url?: string }).url : undefined;
-      sessionStorage.setItem("scanResult", JSON.stringify({ ...result, students, totalMarks, imageUrl }));
+      const uploadData = uploadRes.ok ? (await uploadRes.json()) as { url?: string; driveUrl?: string } : undefined;
+      const imageUrl = uploadData?.url;
+      const driveUrl = uploadData?.driveUrl;
+      sessionStorage.setItem("scanResult", JSON.stringify({ ...result, students, totalMarks, imageUrl, driveUrl }));
       router.push(`/scanner/${classId}/tests/${testId}/scan/confirm`);
     } catch {
       sessionStorage.setItem("scanResult", JSON.stringify({ matchedStudent: null, score: null, students, totalMarks }));

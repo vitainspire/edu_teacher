@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { getClientIp } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getScannerSchoolId, verifyTestInSchool, verifyWorksheetInSchool } from "@/lib/scanner-auth";
+import { uploadToGoogleDrive } from "@/lib/google-drive-upload";
 
 export const maxDuration = 30;
 
@@ -53,5 +54,10 @@ export async function POST(request: NextRequest) {
   if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 });
 
   const { data: urlData } = admin.storage.from('scanned-papers').getPublicUrl(filename);
-  return NextResponse.json({ url: urlData.publicUrl });
+
+  // Best-effort parallel archive to Google Drive — never blocks or fails this
+  // request; the Supabase copy above is the one the app relies on.
+  const drive = await uploadToGoogleDrive(base64, filename.split('/').pop() ?? filename, 'image/jpeg');
+
+  return NextResponse.json({ url: urlData.publicUrl, driveUrl: drive?.url });
 }

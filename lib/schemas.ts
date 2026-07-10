@@ -319,6 +319,7 @@ export const SaveScoreSchema = z.object({
   source:     anyStr(LEN.short).optional(),
   feedback:   anyStr(LEN.text).optional(),
   imageUrl:   z.string().max(LEN.url).optional(),
+  driveUrl:   z.string().max(LEN.url).optional(),
   breakdown:  z.array(z.unknown()).max(100).optional(),
 })
 

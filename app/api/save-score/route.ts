@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       apiLog({ route: 'save-score', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request' })
       return parsed.response
     }
-    const { studentId, testId, score, totalMarks, source, breakdown, feedback, imageUrl } = parsed.data
+    const { studentId, testId, score, totalMarks, source, breakdown, feedback, imageUrl, driveUrl } = parsed.data
 
     if (score > totalMarks) {
       apiLog({ route: 'save-score', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'bad_request', error: 'score > totalMarks' })
@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
         breakdown: breakdown ?? null,
         feedback: feedback ?? null,
         image_url: imageUrl ?? null,
+        drive_url: driveUrl ?? null,
       },
       { onConflict: "student_id,test_id" }
     );

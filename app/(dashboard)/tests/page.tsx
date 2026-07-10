@@ -86,7 +86,7 @@ export default function TestsPage() {
   const [selectedClassId, setSelectedClassId] = useState('')
   const [currentTestId, setCurrentTestId]     = useState('')
   const [currentWorksheetId, setCurrentWorksheetId] = useState('')
-  const [wsMarksData, setWsMarksData]         = useState<Array<{ studentId: string; score: number; feedback?: string; source?: string; imageUrl?: string }>>([])
+  const [wsMarksData, setWsMarksData]         = useState<Array<{ studentId: string; score: number; feedback?: string; source?: string; imageUrl?: string; driveUrl?: string }>>([])
   const [wsMarksLoading, setWsMarksLoading]   = useState(false)
 
   // ── New-test form state ──────────────────────────────────────────────────────
@@ -250,13 +250,14 @@ export default function TestsPage() {
     try {
       const res = await fetch(`/api/worksheet-marks?worksheetId=${worksheetId}`)
       if (res.ok) {
-        const data = await res.json() as { marks: Array<{ student_id: string; score: number; feedback?: string; source?: string; image_url?: string }> }
+        const data = await res.json() as { marks: Array<{ student_id: string; score: number; feedback?: string; source?: string; image_url?: string; drive_url?: string }> }
         setWsMarksData((data.marks ?? []).map(m => ({
           studentId: m.student_id,
           score: m.score,
           feedback: m.feedback,
           source: m.source,
           imageUrl: m.image_url,
+          driveUrl: m.drive_url,
         })))
       }
     } catch { /* ignore */ }
@@ -956,7 +957,7 @@ export default function TestsPage() {
             questions={currentTest.questions}
             prefillScores={marks
               .filter(m => m.testId === currentTestId)
-              .map(m => ({ studentId: m.studentId, score: m.score, feedback: m.feedback, source: m.source, breakdown: m.breakdown, imageUrl: m.imageUrl }))}
+              .map(m => ({ studentId: m.studentId, score: m.score, feedback: m.feedback, source: m.source, breakdown: m.breakdown, imageUrl: m.imageUrl, driveUrl: m.driveUrl }))}
             onSave={handleSaveMarks}
             onCancel={() => { setStep('list'); setCurrentTestId('') }}
           />

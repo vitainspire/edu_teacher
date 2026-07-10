@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerComponentClient } from "@/lib/supabase-server";
 import { parseBody, UploadScanSchema } from "@/lib/schemas";
 import { apiLog, getClientIp } from "@/lib/logger";
+import { uploadToGoogleDrive } from "@/lib/google-drive-upload";
 
 export const maxDuration = 30;
 
@@ -40,8 +41,12 @@ export async function POST(request: NextRequest) {
       .from("scanned-papers")
       .getPublicUrl(uniqueName);
 
+    // Best-effort parallel archive to Google Drive — never blocks or fails
+    // this request; the Supabase copy above is the one the app relies on.
+    const drive = await uploadToGoogleDrive(imageBase64, uniqueName, mimeType);
+
     apiLog({ route: 'upload-scan', ip, userId: user.id, durationMs: Date.now() - t, fromCache: false, status: 'ok' })
-    return NextResponse.json({ url: urlData.publicUrl });
+    return NextResponse.json({ url: urlData.publicUrl, driveUrl: drive?.url });
   } catch (err) {
     apiLog({ route: 'upload-scan', ip, durationMs: Date.now() - t, fromCache: false, status: 'error', error: String(err) })
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

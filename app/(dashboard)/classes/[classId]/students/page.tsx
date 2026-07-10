@@ -42,14 +42,6 @@ export default function ClassStudentsPage() {
 
   const cls = classes.find(c => c.id === classId)
   const [codeCopied, setCodeCopied] = useState(false)
-  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null)
-
-  const copyStudentCode = (code: string, id: string) => {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedStudentId(id)
-      setTimeout(() => setCopiedStudentId(null), 2000)
-    })
-  }
   const [addOpen, setAddOpen]       = useState(false)
   const [search, setSearch]           = useState('')
   const [expandedId, setExpandedId]   = useState<string | null>(null)
@@ -237,18 +229,6 @@ export default function ClassStudentsPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <p className="text-xs text-ink-soft font-medium">Roll #{student.rollNumber}</p>
-                      {student.studentCode && (
-                        <button
-                          onClick={e => { e.preventDefault(); e.stopPropagation(); copyStudentCode(student.studentCode!, student.id) }}
-                          className="flex items-center gap-1 bg-[#E9E1F6] px-1.5 py-0.5 rounded text-[10px] font-black text-[#8069B0] tracking-wider active:scale-95 transition-transform"
-                          title="Copy Student ID"
-                        >
-                          {student.studentCode}
-                          {copiedStudentId === student.id
-                            ? <Check size={9} className="text-emerald-500" />
-                            : <Copy size={9} className="text-[#8069B0]" />}
-                        </button>
-                      )}
                     </div>
                     {student.interests.length > 0 ? (
                       <p className="text-xs text-[#5B87AD] mt-0.5">
