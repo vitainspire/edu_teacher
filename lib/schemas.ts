@@ -159,6 +159,12 @@ export const FlashcardsSchema = z.object({
   interests: z.array(anyStr(LEN.name)).max(20).optional(),
 })
 
+export const UnderstandingCheckSchema = z.object({
+  topic:   reqStr(LEN.topic),
+  subject: reqStr(LEN.topic),
+  grade:   anyStr(LEN.short),
+})
+
 export const TestPrepSchema = z.object({
   topic:      reqStr(LEN.topic),
   subject:    reqStr(LEN.topic),
