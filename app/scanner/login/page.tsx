@@ -13,6 +13,14 @@ function setRoleCookie(role: 'scanner') {
 function setSessionCookie() {
   document.cookie = 'edu-session=1; path=/; SameSite=Strict; max-age=604800'
 }
+async function clearSession() {
+  const expired = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict'
+  document.cookie = `edu-session=; ${expired}`
+  document.cookie = `edu-role=; ${expired}`
+  localStorage.removeItem('scanner_school_id')
+  localStorage.removeItem('scanner_school_name')
+  await supabase.auth.signOut()
+}
 
 export default function ScannerLoginPage() {
   const router = useRouter()
@@ -109,7 +117,7 @@ export default function ScannerLoginPage() {
         </div>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => { void (async () => { await clearSession(); router.push('/') })() }}
           className="mt-5 w-full flex items-center justify-center gap-2 text-ink-soft hover:text-ink text-sm font-medium transition-colors py-2"
         >
           <ArrowLeft size={14} /> Back to portal selection

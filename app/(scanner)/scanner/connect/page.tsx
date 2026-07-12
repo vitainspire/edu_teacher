@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   BookOpen, ArrowRight, ScanLine, CheckCircle2,
-  FileText, LogOut, RefreshCw, ClipboardList,
+  FileText, LogOut, RefreshCw, ClipboardList, SlidersHorizontal, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/scanner/spinner";
@@ -68,6 +68,78 @@ export default function ConnectPage() {
   const [worksheetGroups, setWorksheetGroups] = useState<WorksheetGroup[]>([]);
   const [testsLoading, setTestsLoading] = useState(false);
   const [testsError, setTestsError]     = useState<string | null>(null);
+
+  // ── Filters ─────────────────────────────────────────────────────────────────
+  const [showFilters, setShowFilters]   = useState(false);
+  const [filterGrade, setFilterGrade]   = useState("");
+  const [filterClassId, setFilterClassId] = useState("");
+  const [filterSubject, setFilterSubject] = useState("");
+  const [filterKind, setFilterKind]     = useState<"all" | "tests" | "worksheets">("all");
+  const [pendingOnly, setPendingOnly]   = useState(false);
+
+  const allClasses = useMemo(() => {
+    const map = new Map<string, ClassRow>();
+    for (const g of testGroups) if (g.cls) map.set(g.cls.id, g.cls);
+    for (const g of worksheetGroups) if (g.cls) map.set(g.cls.id, g.cls);
+    return [...map.values()];
+  }, [testGroups, worksheetGroups]);
+
+  const grades = useMemo(
+    () => Array.from(new Set(allClasses.map(c => c.grade).filter((g): g is string => !!g))).sort(),
+    [allClasses]
+  );
+
+  const classesForGrade = useMemo(
+    () => (filterGrade ? allClasses.filter(c => c.grade === filterGrade) : allClasses),
+    [allClasses, filterGrade]
+  );
+
+  const subjects = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of testGroups) for (const t of g.tests) if (t.subject) set.add(t.subject);
+    for (const g of worksheetGroups) for (const w of g.worksheets) if (w.subject) set.add(w.subject);
+    return Array.from(set).sort();
+  }, [testGroups, worksheetGroups]);
+
+  // Selecting a grade that no longer contains the picked class clears the class filter.
+  useEffect(() => {
+    if (filterClassId && !classesForGrade.some(c => c.id === filterClassId)) setFilterClassId("");
+  }, [classesForGrade, filterClassId]);
+
+  const filtersActive = !!(filterGrade || filterClassId || filterSubject || pendingOnly || filterKind !== "all");
+
+  function clearFilters() {
+    setFilterGrade(""); setFilterClassId(""); setFilterSubject("");
+    setFilterKind("all"); setPendingOnly(false);
+  }
+
+  const filteredTestGroups = useMemo(() => {
+    if (filterKind === "worksheets") return [];
+    return testGroups
+      .filter(g => (!filterGrade || g.cls?.grade === filterGrade) && (!filterClassId || g.cls?.id === filterClassId))
+      .map(g => ({
+        ...g,
+        tests: g.tests.filter(t =>
+          (!filterSubject || t.subject === filterSubject) &&
+          (!pendingOnly || t.scanned < t.total)
+        ),
+      }))
+      .filter(g => g.tests.length > 0);
+  }, [testGroups, filterGrade, filterClassId, filterSubject, pendingOnly, filterKind]);
+
+  const filteredWorksheetGroups = useMemo(() => {
+    if (filterKind === "tests") return [];
+    return worksheetGroups
+      .filter(g => (!filterGrade || g.cls?.grade === filterGrade) && (!filterClassId || g.cls?.id === filterClassId))
+      .map(g => ({
+        ...g,
+        worksheets: g.worksheets.filter(w =>
+          (!filterSubject || w.subject === filterSubject) &&
+          (!pendingOnly || w.scanned < w.total)
+        ),
+      }))
+      .filter(g => g.worksheets.length > 0);
+  }, [worksheetGroups, filterGrade, filterClassId, filterSubject, pendingOnly, filterKind]);
 
   const loadAll = useCallback(async (sId: string) => {
     setTestsLoading(true);
@@ -247,6 +319,19 @@ export default function ConnectPage() {
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <button
+                onClick={() => setShowFilters(v => !v)}
+                className={cn(
+                  "relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors",
+                  showFilters || filtersActive ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                )}
+                title="Filters"
+              >
+                <SlidersHorizontal size={15} />
+                {filtersActive && (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                )}
+              </button>
+              <button
                 onClick={() => void loadAll(schoolId)}
                 disabled={testsLoading}
                 className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-40"
@@ -264,6 +349,89 @@ export default function ConnectPage() {
             </div>
           </div>
 
+          {/* Filters */}
+          {showFilters && !testsLoading && (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-3.5 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={filterGrade}
+                  onChange={e => setFilterGrade(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  <option value="">All grades</option>
+                  {grades.map(g => <option key={g} value={g}>Grade {g}</option>)}
+                </select>
+                <select
+                  value={filterClassId}
+                  onChange={e => setFilterClassId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  <option value="">All sections</option>
+                  {classesForGrade.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.section ? `Sec ${c.section}` : c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <select
+                value={filterSubject}
+                onChange={e => setFilterSubject(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <option value="">All subjects</option>
+                {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+
+              <div className="flex items-center gap-1.5 rounded-xl bg-gray-50 border border-gray-200 p-1">
+                {(["all", "tests", "worksheets"] as const).map(k => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setFilterKind(k)}
+                    className={cn(
+                      "flex-1 py-1.5 rounded-lg text-xs font-bold capitalize transition-colors",
+                      filterKind === k ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400"
+                    )}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPendingOnly(v => !v)}
+                className={cn(
+                  "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors",
+                  pendingOnly ? "bg-indigo-50 text-indigo-700" : "bg-gray-50 text-gray-500"
+                )}
+              >
+                Pending only (hide fully scanned)
+                <span className={cn(
+                  "w-9 h-5 rounded-full relative transition-colors shrink-0",
+                  pendingOnly ? "bg-indigo-500" : "bg-gray-300"
+                )}>
+                  <span className={cn(
+                    "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform",
+                    pendingOnly ? "translate-x-4" : "translate-x-0.5"
+                  )} />
+                </span>
+              </button>
+
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <X size={13} /> Clear filters
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Body */}
           {testsLoading ? (
             <div className="flex justify-center py-16"><Spinner size="lg" /></div>
@@ -279,17 +447,27 @@ export default function ConnectPage() {
               <p className="text-gray-500 font-bold text-sm">No tests or worksheets yet</p>
               <p className="text-xs text-gray-400 mt-1">Teachers haven&apos;t created any content yet.</p>
             </div>
+          ) : (filteredTestGroups.length === 0 && filteredWorksheetGroups.length === 0) ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 rounded-3xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <SlidersHorizontal size={24} className="text-gray-300" />
+              </div>
+              <p className="text-gray-500 font-bold text-sm">Nothing matches these filters</p>
+              <button type="button" onClick={clearFilters} className="text-xs font-bold text-indigo-500 mt-2">
+                Clear filters
+              </button>
+            </div>
           ) : (
             <div className="space-y-8">
 
               {/* ── Tests section ── */}
-              {testGroups.length > 0 && (
+              {filteredTestGroups.length > 0 && (
                 <div className="space-y-5">
                   <div className="flex items-center gap-2">
                     <FileText size={13} className="text-indigo-400 shrink-0" />
                     <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-400">Tests</p>
                   </div>
-                  {testGroups.map((group, gi) => (
+                  {filteredTestGroups.map((group, gi) => (
                     <div key={gi}>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 px-1">
                         {group.cls
@@ -377,13 +555,13 @@ export default function ConnectPage() {
               )}
 
               {/* ── Worksheets section ── */}
-              {worksheetGroups.length > 0 && (
+              {filteredWorksheetGroups.length > 0 && (
                 <div className="space-y-5">
                   <div className="flex items-center gap-2">
                     <ClipboardList size={13} className="text-violet-500 shrink-0" />
                     <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-500">Worksheets</p>
                   </div>
-                  {worksheetGroups.map((group, gi) => (
+                  {filteredWorksheetGroups.map((group, gi) => (
                     <div key={gi}>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 px-1">
                         {group.cls

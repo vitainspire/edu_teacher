@@ -11,7 +11,7 @@ function setRoleCookie(role: 'teacher') {
 }
 
 export default function TeacherLoginPage() {
-  const { signIn } = useApp()
+  const { signIn, logout } = useApp()
   const router = useRouter()
 
   const [showPw, setShowPw] = useState(false)
@@ -90,7 +90,7 @@ export default function TeacherLoginPage() {
         </div>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => { void (async () => { await logout(); router.push('/') })() }}
           className="mt-5 w-full flex items-center justify-center gap-2 text-ink-soft hover:text-ink text-sm font-medium transition-colors py-2"
         >
           <ArrowLeft size={14} /> Back to portal selection

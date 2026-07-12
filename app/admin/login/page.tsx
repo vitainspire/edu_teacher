@@ -1,11 +1,20 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { Shield, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react'
 
 const TONE = { bg: '#AACDEA', ink: '#1E3A55' }
 
 type Mode = 'signin' | 'register'
+
+async function clearSession() {
+  const expired = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict'
+  document.cookie = `edu-session=; ${expired}`
+  document.cookie = `edu-role=; ${expired}`
+  localStorage.removeItem('eduteach_teacher')
+  await supabase.auth.signOut()
+}
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -170,7 +179,7 @@ export default function AdminLoginPage() {
         </div>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => { void (async () => { await clearSession(); router.push('/') })() }}
           className="mt-5 w-full flex items-center justify-center gap-2 text-ink-soft hover:text-ink text-sm font-medium transition-colors py-2"
         >
           <ArrowLeft size={14} /> Back to portal selection

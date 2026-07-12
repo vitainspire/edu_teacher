@@ -5,6 +5,12 @@ import { BookOpen, LogIn, Hash, ArrowLeft } from 'lucide-react'
 
 const TONE = { bg: '#EAC968', ink: '#4A3809' }
 
+function clearSession() {
+  const expired = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict'
+  document.cookie = `edu-student-id=; ${expired}`
+  localStorage.removeItem('eduteach_student_session')
+}
+
 export default function StudentLoginPage() {
   const router = useRouter()
   const [studentCode, setStudentCode] = useState('')
@@ -96,7 +102,7 @@ export default function StudentLoginPage() {
         </div>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => { clearSession(); router.push('/') }}
           className="mt-5 w-full flex items-center justify-center gap-2 text-ink-soft hover:text-ink text-sm font-medium transition-colors py-2"
         >
           <ArrowLeft size={14} /> Back to portal selection
