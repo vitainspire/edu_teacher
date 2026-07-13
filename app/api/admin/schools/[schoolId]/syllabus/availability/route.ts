@@ -47,7 +47,16 @@ export async function GET(req: NextRequest, { params }: { params: { schoolId: st
     const yearEvent = (rawEvents ?? []).find(e => e.category === 'term' && e.title === 'Academic Year')
     if (!yearEvent) return NextResponse.json({ availableSessions: 0, academicYearEnd: null, error: 'No Academic Year set in the calendar yet' })
 
-    const { data: timetable } = await ac.from('timetable').select('day_of_week, label').in('class_id', classIds)
+    const { data: timetable } = await ac.from('timetable').select('class_id, day_of_week, label').in('class_id', classIds)
+    // Sections of a grade are assumed to share the same weekly pacing (the
+    // syllabus itself is authored once per grade and fanned out per section) —
+    // so exactly one section's timetable is the right scope here. Summing
+    // periods across every section would multiply the count by however many
+    // sections the grade has. Pick the first section that actually has a
+    // timetable yet, in case classIds[0]'s hasn't been generated.
+    const representativeClassId = classIds.find(id => (timetable ?? []).some(t => t.class_id === id)) ?? classIds[0]
+    const representativeTimetable = (timetable ?? []).filter(t => t.class_id === representativeClassId)
+
     // Exact match (trimmed, case-insensitive) rather than substring — a substring
     // match risks false positives ("Science" inside "Home Science"); an exact
     // match at least fails loudly (0 sessions, surfaced below) instead of quietly
@@ -56,7 +65,7 @@ export async function GET(req: NextRequest, { params }: { params: { schoolId: st
     const periodsPerWeekday: Record<number, number> = {}
     const otherLabelsSeen = new Set<string>()
     let matchedPeriods = 0
-    for (const t of timetable ?? []) {
+    for (const t of representativeTimetable) {
       const label = String(t.label ?? '').trim()
       if (label.toLowerCase() === target) {
         periodsPerWeekday[t.day_of_week] = (periodsPerWeekday[t.day_of_week] ?? 0) + 1
