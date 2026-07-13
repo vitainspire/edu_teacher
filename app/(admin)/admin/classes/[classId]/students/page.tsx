@@ -1,15 +1,41 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAdmin } from '@/lib/admin-context'
-import { GraduationCap, Upload, Loader2, Plus, X, Trash2, Users, Copy, Check } from 'lucide-react'
-import { useParams } from 'next/navigation'
+import {
+  GraduationCap, Upload, Loader2, Plus, X, Trash2, Users, Copy, Check,
+  FileText, Image as ImageIcon, FileSpreadsheet, Sparkles, AlertCircle,
+} from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
 import type { Student } from '@/lib/types'
 import PageHeader from '@/components/theme/PageHeader'
+import * as XLSX from 'xlsx'
 
 interface StudentRow { name: string; rollNumber: string }
 
+// First row that looks like a header ("Name", "Roll No.", etc.) is used to
+// locate the right columns; otherwise falls back to column position
+// (name first, roll number second) so a plain two-column sheet still works.
+function parseExcelRows(rows: unknown[][]): StudentRow[] {
+  if (rows.length === 0) return []
+  const headerRow = rows[0].map(c => String(c ?? '').trim().toLowerCase())
+  const nameIdx = headerRow.findIndex(h => h.includes('name'))
+  const rollIdx = headerRow.findIndex(h => h.includes('roll'))
+  const hasHeader = nameIdx !== -1
+  const dataRows = hasHeader ? rows.slice(1) : rows
+  const nameCol = hasHeader ? nameIdx : 0
+  const rollCol = hasHeader ? (rollIdx !== -1 ? rollIdx : -1) : 1
+
+  return dataRows
+    .map((r, i) => ({
+      name: String(r[nameCol] ?? '').trim(),
+      rollNumber: (rollCol !== -1 ? String(r[rollCol] ?? '').trim() : '') || String(i + 1),
+    }))
+    .filter(s => s.name.length > 0)
+}
+
 export default function StudentsPage() {
   const { school } = useAdmin()
+  const router = useRouter()
   const params = useParams()
   const classId = params.classId as string
 
@@ -22,8 +48,20 @@ export default function StudentsPage() {
   const [singleRoll, setSingleRoll] = useState('')
 
   // Bulk import
+  const [importMode, setImportMode] = useState<'text' | 'image' | 'excel'>('text')
   const [bulkText, setBulkText] = useState('')
   const [preview, setPreview] = useState<StudentRow[]>([])
+
+  // Photo mode
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [extracting, setExtracting]     = useState(false)
+  const [extractError, setExtractError] = useState('')
+  const imgInputRef = useRef<HTMLInputElement>(null)
+
+  // Excel mode
+  const [excelFileName, setExcelFileName] = useState('')
+  const [excelError, setExcelError]       = useState('')
+  const excelInputRef = useRef<HTMLInputElement>(null)
 
   const [importing, setImporting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -66,6 +104,68 @@ export default function StudentsPage() {
       })
   }
 
+  function switchImportMode(mode: 'text' | 'image' | 'excel') {
+    setImportMode(mode)
+    setPreview([])
+    setBulkText(''); setImagePreview(null); setExtractError('')
+    setExcelFileName(''); setExcelError('')
+  }
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImagePreview(reader.result as string)
+      setPreview([])
+      setExtractError('')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function handleExtractPhoto() {
+    if (!imagePreview) return
+    setExtracting(true); setExtractError('')
+    try {
+      const res = await fetch('/api/extract-students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imagePreview }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Extraction failed')
+      if (!data.students?.length) throw new Error('No students found in this photo.')
+      setPreview(data.students)
+    } catch (e: unknown) {
+      setExtractError(e instanceof Error ? e.message : 'Extraction failed')
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  function handleExcelSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setExcelFileName(file.name)
+    setExcelError('')
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const buf = reader.result as ArrayBuffer
+        const wb = XLSX.read(buf, { type: 'array' })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 })
+        const parsedRows = parseExcelRows(rows)
+        if (parsedRows.length === 0) { setExcelError('No student names found in this sheet.'); setPreview([]); return }
+        setPreview(parsedRows)
+      } catch {
+        setExcelError('Could not read this file. Make sure it’s a valid Excel or CSV file.')
+        setPreview([])
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
   async function addSingle(e: React.FormEvent) {
     e.preventDefault()
     if (!school || !singleName || !singleRoll) return
@@ -97,8 +197,9 @@ export default function StudentsPage() {
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Import failed'); setImporting(false); return }
     setSuccess(`${data.inserted} students imported successfully`)
-    setBulkText('')
-    setPreview([])
+    setBulkText(''); setPreview([])
+    setImagePreview(null); setExtractError('')
+    setExcelFileName(''); setExcelError('')
     setImporting(false)
     load()
   }
@@ -165,16 +266,21 @@ export default function StudentsPage() {
                   className="flex items-center justify-between px-5 py-3 gap-3"
                   style={{ borderTop: i > 0 ? '1px solid rgba(58,44,30,0.08)' : 'none' }}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/admin/students/${s.id}`)}
+                    className="flex items-center gap-3 min-w-0 text-left"
+                    title="View full student record"
+                  >
                     <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-black flex-shrink-0"
                       style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length].bg, color: AVATAR_COLORS[i % AVATAR_COLORS.length].text }}>
                       {s.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-ink truncate">{s.name}</p>
+                      <p className="text-sm font-bold text-ink truncate hover:underline">{s.name}</p>
                       <p className="text-xs text-ink-soft">Roll No. {s.rollNumber}</p>
                     </div>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-2 shrink-0">
                     {s.studentCode ? (
                       <div className="flex items-center gap-1.5 rounded-xl px-2.5 py-1" style={{ background: 'rgba(58,44,30,0.06)' }}>
@@ -236,28 +342,167 @@ export default function StudentsPage() {
           </div>
 
           {/* Bulk import */}
-          <div className="paper-card p-5">
+          <div className="paper-card p-5 md:col-span-2">
             <h2 className="font-display font-bold text-ink flex items-center gap-2 mb-4">
               <Upload className="w-4 h-4 text-ink-soft" /> Bulk Import
             </h2>
-            <p className="text-xs text-ink-soft mb-3">
-              One per line: <span className="font-mono">Name, RollNumber</span><br />
-              Roll number is optional (auto-assigned if missing)
-            </p>
-            <textarea
-              value={bulkText}
-              onChange={e => setBulkText(e.target.value)}
-              placeholder={"Arjun Sharma, 1\nPriya Patel, 2\nRohan Kumar"}
-              rows={6}
-              className="input-field resize-none font-mono"
-            />
-            {preview.length > 0 && (
-              <p className="text-xs font-semibold text-ink-soft mt-1 mb-3">{preview.length} students detected</p>
+
+            {/* Mode tabs */}
+            <div className="flex gap-2 mb-4">
+              {([
+                ['text', 'Paste Text', FileText],
+                ['image', 'Upload Photo', ImageIcon],
+                ['excel', 'Upload Excel', FileSpreadsheet],
+              ] as const).map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => switchImportMode(id)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    importMode === id ? 'text-white' : 'bg-black/[0.03] text-ink-soft border border-black/10'
+                  }`}
+                  style={importMode === id ? { background: 'var(--ink)' } : undefined}
+                >
+                  <Icon className="w-4 h-4" /> {label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Paste text mode ── */}
+            {importMode === 'text' && (
+              <div className="space-y-3">
+                <p className="text-xs text-ink-soft">
+                  One per line: <span className="font-mono">Name, RollNumber</span><br />
+                  Roll number is optional (auto-assigned if missing)
+                </p>
+                <textarea
+                  value={bulkText}
+                  onChange={e => setBulkText(e.target.value)}
+                  placeholder={"Arjun Sharma, 1\nPriya Patel, 2\nRohan Kumar"}
+                  rows={6}
+                  className="input-field resize-none font-mono"
+                />
+              </div>
             )}
+
+            {/* ── Photo mode ── */}
+            {importMode === 'image' && (
+              <div className="space-y-3">
+                <p className="text-xs text-ink-soft">
+                  Upload a photo of a handwritten or printed class roster — AI reads the names and roll numbers.
+                </p>
+                <input ref={imgInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+
+                {imagePreview ? (
+                  <div className="relative">
+                    <img src={imagePreview} alt="Roster" className="w-full rounded-2xl border border-black/10 object-contain max-h-64" />
+                    <button
+                      type="button"
+                      onClick={() => { setImagePreview(null); setPreview([]); setExtractError('') }}
+                      className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center border border-black/10"
+                    >
+                      <X className="w-3.5 h-3.5 text-ink-soft" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => imgInputRef.current?.click()}
+                    className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-[#AACDEA] bg-white text-[#5B87AD] active:bg-[#DCEBF8] transition-colors"
+                  >
+                    <div className="w-12 h-12 bg-[#AACDEA]/60 rounded-2xl flex items-center justify-center">
+                      <Upload className="w-5 h-5 text-[#5B87AD]" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold text-sm">Tap to upload a roster photo</p>
+                      <p className="text-xs text-ink-soft mt-0.5">JPG, PNG — register page, admission list, handwritten sheet</p>
+                    </div>
+                  </button>
+                )}
+
+                {imagePreview && (
+                  <button
+                    type="button"
+                    onClick={handleExtractPhoto}
+                    disabled={extracting}
+                    className="w-full flex items-center justify-center gap-2 bg-[#5B87AD] text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
+                  >
+                    {extracting ? <><Loader2 className="w-4 h-4 animate-spin" /> Reading photo...</> : <><Sparkles className="w-4 h-4" /> Extract Students with AI</>}
+                  </button>
+                )}
+
+                {extractError && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-700">{extractError}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Excel mode ── */}
+            {importMode === 'excel' && (
+              <div className="space-y-3">
+                <p className="text-xs text-ink-soft">
+                  Upload an Excel (.xlsx) or CSV file — a "Name" and "Roll Number" column are detected automatically.
+                </p>
+                <input ref={excelInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelSelect} className="hidden" />
+                <button
+                  type="button"
+                  onClick={() => excelInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-[#AACDEA] bg-white text-[#5B87AD] active:bg-[#DCEBF8] transition-colors"
+                >
+                  <div className="w-12 h-12 bg-[#AACDEA]/60 rounded-2xl flex items-center justify-center">
+                    <FileSpreadsheet className="w-5 h-5 text-[#5B87AD]" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-sm">{excelFileName || 'Tap to upload a spreadsheet'}</p>
+                    <p className="text-xs text-ink-soft mt-0.5">.xlsx, .xls, or .csv</p>
+                  </div>
+                </button>
+                {excelError && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-700">{excelError}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Shared preview + import (all three modes) ── */}
+            {preview.length > 0 && (
+              <div className="mt-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-ink">{preview.length} students detected · review before importing</p>
+                  <button type="button" onClick={() => setPreview([])} className="text-xs text-ink-soft hover:text-ink">Clear</button>
+                </div>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                  {preview.map((s, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-black/[0.03] rounded-xl px-3 py-2">
+                      <input
+                        value={s.name}
+                        onChange={e => setPreview(prev => prev.map((p, pi) => pi === i ? { ...p, name: e.target.value } : p))}
+                        className="flex-1 text-sm bg-transparent border-none outline-none text-ink font-semibold min-w-0"
+                      />
+                      <input
+                        value={s.rollNumber}
+                        onChange={e => setPreview(prev => prev.map((p, pi) => pi === i ? { ...p, rollNumber: e.target.value } : p))}
+                        className="w-16 text-sm bg-transparent border-none outline-none text-ink-soft text-right"
+                      />
+                      <button type="button" onClick={() => setPreview(prev => prev.filter((_, pi) => pi !== i))}
+                        className="text-ink-faint hover:text-red-400 transition-colors shrink-0 p-0.5">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               onClick={importStudents}
               disabled={importing || preview.length === 0}
-              className="paper-btn-primary w-full text-sm disabled:opacity-60">
+              className="paper-btn-primary w-full text-sm disabled:opacity-60 mt-3">
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               Import {preview.length > 0 ? `${preview.length} Students` : 'Students'}
             </button>

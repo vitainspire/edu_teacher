@@ -1,7 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { LogOut, Check, Copy, CalendarDays, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { LogOut, CalendarDays, ChevronRight } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import PageHeader from '@/components/theme/PageHeader'
 import { Sticker, NotebookSticker } from '@/components/theme/StickerIcon'
@@ -9,7 +8,6 @@ import { Sticker, NotebookSticker } from '@/components/theme/StickerIcon'
 export default function ProfilePage() {
   const { teacher, logout } = useApp()
   const router = useRouter()
-  const [copied, setCopied] = useState(false)
 
   const handleLogout = async () => { await logout(); router.replace('/teacher/login') }
 
@@ -48,35 +46,6 @@ export default function ProfilePage() {
             </div>
           ))}
         </div>
-
-        {teacher?.teacherCode && (
-          <div className="paper-card p-5 space-y-3">
-            <p className="font-bold text-ink">Scanner Code</p>
-            <p className="text-xs text-ink-soft leading-relaxed">
-              Give this to whoever scans your papers — it links scans back to your classes.
-            </p>
-            <div className="flex items-center gap-3">
-              <div
-                className="flex-1 rounded-2xl py-3.5 text-center font-black text-2xl"
-                style={{ background: 'rgba(58,44,30,0.06)', border: '2px dashed rgba(58,44,30,0.25)', letterSpacing: '0.4em', color: 'var(--ink)' }}
-              >
-                {teacher.teacherCode}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(teacher.teacherCode!).catch(() => {})
-                  setCopied(true)
-                  setTimeout(() => setCopied(false), 2000)
-                }}
-                className="w-11 h-11 flex items-center justify-center rounded-2xl transition-all active:scale-90"
-                style={{ background: 'rgba(58,44,30,0.06)' }}
-              >
-                {copied ? <Check size={17} className="text-ink" /> : <Copy size={17} className="text-ink-soft" />}
-              </button>
-            </div>
-          </div>
-        )}
 
         <button
           type="button"

@@ -7,12 +7,14 @@ import {
   Home, ClipboardCheck, UserCircle, BookOpen, Bell, ChevronLeft, ChevronRight, ArrowLeft,
   Palette, Goal, CircleDot, Music, Drama, Hourglass,
   Clapperboard, ChefHat, Leaf, PawPrint, Gamepad2, Bot, Puzzle, AlertTriangle, Construction, UserCheck,
+  BarChart3, CheckCircle2, Handshake, Send,
 } from 'lucide-react'
 import type {
   Student, TopicMastery, Mark, Attendance, CatchupMaterial,
   Class, Session, SyllabusTopic, TimetableEntry, TopicPoll, Test,
 } from '@/lib/types'
 import { QuizPanel } from '@/components/student/QuizPanel'
+import { AdaptiveQuizPanel } from '@/components/student/AdaptiveQuizPanel'
 import { FlashcardsPanel } from '@/components/student/FlashcardsPanel'
 import { NotesPanel } from '@/components/student/NotesPanel'
 import { TestsPanel } from '@/components/student/TestsPanel'
@@ -25,6 +27,9 @@ import {
   BookSticker, TrophySticker, MedalSticker, GradCapSticker, RocketSticker,
   StarSticker, FlameSticker, CalendarCheckSticker, TrendingUpSticker, DumbbellSticker,
 } from '@/components/student/StudentStickers'
+import ScoreChart from '@/components/charts/ScoreChart'
+import AttendanceChart from '@/components/charts/AttendanceChart'
+import { getMasteryLabel, getMasteryColor } from '@/lib/logic/mastery'
 
 // ── Badge definitions ─────────────────────────────────────────────────────────
 
@@ -116,6 +121,15 @@ function ProgressRing({ pct, size = 78 }: { pct: number; size?: number }) {
   )
 }
 
+function StatTile({ value, label, color }: { value: string; label: string; color?: string }) {
+  return (
+    <div style={{ background: '#FFFFFF', borderRadius: 20, border: '2.5px solid rgba(30,42,68,0.22)', padding: '18px 14px', textAlign: 'center' }}>
+      <p style={{ fontSize: 26, fontWeight: 800, color: color ?? '#1E2A44', letterSpacing: '-.4px' }}>{value}</p>
+      <p style={{ fontSize: 11.5, fontWeight: 700, color: '#5B6B87', marginTop: 4 }}>{label}</p>
+    </div>
+  )
+}
+
 // ── Sidebar navigation (top-level sections only — Home is the only one wired up so far) ──
 
 interface NavGroup { id: string; label: string; Icon: LucideIcon }
@@ -124,6 +138,8 @@ const NAV_GROUPS: NavGroup[] = [
   { id: 'home',      label: 'Home',       Icon: Home },
   { id: 'learn',     label: 'Learn',      Icon: GraduationCap },
   { id: 'tests',     label: 'Tests',      Icon: ClipboardCheck },
+  { id: 'report',    label: 'Progress',   Icon: BarChart3 },
+  { id: 'buddies',   label: 'Buddies',    Icon: Handshake },
   { id: 'profile',   label: 'Profile',    Icon: UserCircle },
 ]
 
@@ -199,6 +215,12 @@ interface TaughtSession {
   date: string
 }
 
+interface PeerMatch { studentId: string; name: string; reason: string }
+interface PeerIncoming { id: string; fromStudentId: string; fromName: string; subject?: string; createdAt: string }
+interface PeerOutgoing { id: string; toStudentId: string; toName: string; subject?: string; createdAt: string }
+interface PeerActive { id: string; partnerStudentId: string; partnerName: string; subject?: string; activity?: string; createdAt: string; progressNote?: string }
+interface PeerData { matches: PeerMatch[]; incoming: PeerIncoming[]; outgoing: PeerOutgoing[]; active: PeerActive[] }
+
 interface TodaySubstitution {
   periodNumber: number
   subject?: string
@@ -212,6 +234,8 @@ interface SubjectData {
   presentCount: number
   attendanceStreak: number
   recentMarks: (Mark & { topic: string; totalMarks: number; conductedOn: string })[]
+  scoreHistory: (Mark & { topic: string; totalMarks: number; conductedOn: string })[]
+  weeklyAttendance: { weekKey: string; present: number; total: number }[]
   weakTopics: TopicMastery[]
   strongTopics: TopicMastery[]
   catchupPlans: CatchupMaterial[]
@@ -327,6 +351,29 @@ function buildSubjectData(raw: {
   const recentMarks = [...raw.marks]
     .sort((a, b) => b.conductedOn.localeCompare(a.conductedOn)).slice(0, 4)
 
+  // Full score history (not capped like recentMarks) — used by the Progress
+  // Report's trend chart, oldest first so the line reads left-to-right in time.
+  const scoreHistory = [...raw.marks].sort((a, b) => a.conductedOn.localeCompare(b.conductedOn))
+
+  // Weekly attendance buckets (Monday-start weeks), keyed by the week's date so
+  // multiple subjects sharing a class can be merged without double-counting.
+  const weekMap = new Map<string, { present: number; total: number }>()
+  for (const s of raw.sessions) {
+    const att = raw.attendance.find(a => a.sessionId === s.id)
+    if (!att) continue
+    const d   = new Date(s.date + 'T00:00:00')
+    const mon = new Date(d)
+    mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const weekKey = mon.toISOString().split('T')[0]
+    const rec = weekMap.get(weekKey) ?? { present: 0, total: 0 }
+    rec.total += 1
+    if (att.status !== 'absent') rec.present += 1
+    weekMap.set(weekKey, rec)
+  }
+  const weeklyAttendance = [...weekMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekKey, v]) => ({ weekKey, present: v.present, total: v.total }))
+
   const sorted      = [...raw.mastery].sort((a, b) => a.mastery - b.mastery)
   const weakTopics  = sorted.filter(m => m.mastery < 0.6).slice(0, 4)
   const strongTopics = sorted.filter(m => m.mastery >= 0.75).slice(-3).reverse()
@@ -382,7 +429,8 @@ function buildSubjectData(raw: {
   return {
     attendanceRate, totalSessions: unique.length,
     presentCount, attendanceStreak,
-    recentMarks, weakTopics, strongTopics, catchupPlans,
+    recentMarks, scoreHistory, weeklyAttendance,
+    weakTopics, strongTopics, catchupPlans,
     syllabusTopics: [...raw.syllabusTopics].sort((a, b) => a.orderIndex - b.orderIndex),
     timetable: raw.timetable,
     substitutions: raw.substitutions ?? [],
@@ -392,6 +440,45 @@ function buildSubjectData(raw: {
     taughtTopics,
     catchupTopics,
   }
+}
+
+// Resolves a topic name to whichever unmastered prerequisite (if any) should
+// really be tackled first instead — walks the chain, bounded against bad data.
+function resolvePrerequisite(topicName: string, syllabusTopics: SyllabusTopic[]): string {
+  const byName  = new Map(syllabusTopics.map(t => [t.topic.trim().toLowerCase(), t]))
+  const byDefId = new Map(syllabusTopics.filter(t => t.definitionId).map(t => [t.definitionId!, t]))
+  let current = byName.get(topicName.trim().toLowerCase())
+  const seen = new Set<string>()
+  while (current?.prerequisiteDefinitionId && !seen.has(current.prerequisiteDefinitionId)) {
+    seen.add(current.prerequisiteDefinitionId)
+    const prereq = byDefId.get(current.prerequisiteDefinitionId)
+    if (!prereq || prereq.isCompleted) break
+    current = prereq
+  }
+  return current?.topic ?? topicName
+}
+
+// The adaptive "what's next" pick. Priority: a catch-up plan (absence-driven,
+// always most urgent) > the single weakest already-tested topic (shoring up a
+// demonstrated gap beats blindly moving forward) > the teacher's plain next
+// topic in order. Whichever topic wins gets redirected to an unmastered
+// prerequisite first, if it has one.
+function pickNextTopic(
+  bySubject: { tab: SubjectTab; data: SubjectData }[]
+): { label: string; topic: string; subjectLabel: string } | null {
+  for (const { tab, data } of bySubject) {
+    if (data.catchupPlans[0]) return { label: 'Catch up on', topic: data.catchupPlans[0].topic, subjectLabel: tab.label }
+  }
+  for (const { tab, data } of bySubject) {
+    if (data.weakTopics[0]) {
+      return { label: 'Review', topic: resolvePrerequisite(data.weakTopics[0].topic, data.syllabusTopics), subjectLabel: tab.label }
+    }
+  }
+  for (const { tab, data } of bySubject) {
+    const nextTopic = data.syllabusTopics.find(t => !t.isCompleted)
+    if (nextTopic) return { label: 'Continue with', topic: resolvePrerequisite(nextTopic.topic, data.syllabusTopics), subjectLabel: tab.label }
+  }
+  return null
 }
 
 function useIsMobile(): boolean {
@@ -417,7 +504,7 @@ export default function StudentHomePage() {
   const [loading,     setLoading]     = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [activeNavGroup, setActiveNavGroup] = useState<string>('home')
-  const [learnTab, setLearnTab] = useState<'notes' | 'flashcards' | 'quizzes'>('notes')
+  const [learnTab, setLearnTab] = useState<'notes' | 'flashcards' | 'quizzes' | 'adaptive' | 'syllabus'>('notes')
   const [selectedLearnSubject, setSelectedLearnSubject] = useState<string | null>(null)
   const [learnPreload, setLearnPreload] = useState<{ subject: string; topic: string } | null>(null)
   const isMobile = useIsMobile()
@@ -434,6 +521,60 @@ export default function StudentHomePage() {
   const contentPaneRef = useRef<HTMLDivElement>(null)
   const recentScrollRef = useRef<HTMLDivElement>(null)
   const [recentScrollState, setRecentScrollState] = useState({ left: false, right: false })
+
+  // ── Study Buddies (peer pairing) ────────────────────────────────────────────
+  const [peerData, setPeerData] = useState<PeerData | null>(null)
+  const [peerLoading, setPeerLoading] = useState(false)
+  const [peerError, setPeerError] = useState<string | null>(null)
+  const [peerActionId, setPeerActionId] = useState<string | null>(null)
+
+  async function loadPeerData() {
+    if (!cls) return
+    setPeerLoading(true)
+    setPeerError(null)
+    try {
+      const res = await fetch(`/api/student/peer-matches?classId=${cls.id}`)
+      if (!res.ok) throw new Error()
+      setPeerData(await res.json())
+    } catch {
+      setPeerError('Could not load study buddies right now.')
+    } finally {
+      setPeerLoading(false)
+    }
+  }
+
+  async function sendPeerRequest(targetStudentId: string) {
+    if (!cls) return
+    setPeerActionId(targetStudentId)
+    try {
+      const res = await fetch('/api/student/peer-pairings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: cls.id, targetStudentId }),
+      })
+      if (!res.ok) { setPeerError('Could not send that request — try again.'); return }
+      await loadPeerData()
+    } catch {
+      setPeerError('Could not send that request — try again.')
+    } finally {
+      setPeerActionId(null)
+    }
+  }
+
+  async function respondPeerRequest(id: string, action: 'accept' | 'cancel') {
+    setPeerActionId(id)
+    try {
+      const res = await fetch('/api/student/peer-pairings', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      })
+      if (!res.ok) { setPeerError('Could not update that request — try again.'); return }
+      await loadPeerData()
+    } catch {
+      setPeerError('Could not update that request — try again.')
+    } finally {
+      setPeerActionId(null)
+    }
+  }
 
   function updateRecentScrollState() {
     const el = recentScrollRef.current
@@ -602,6 +743,25 @@ export default function StudentHomePage() {
     const attendPct     = totalSessions > 0 ? Math.round((totalPresent / totalSessions) * 100) : 100
     const bestStreak     = byClass.reduce((max, x) => Math.max(max, x.data.attendanceStreak), 0)
 
+    // Merge each class's weekly attendance buckets by week, so a student with
+    // subjects across multiple classes still gets one combined trend line.
+    const weekMap = new Map<string, { present: number; total: number }>()
+    byClass.forEach(({ data }) => {
+      data.weeklyAttendance.forEach(w => {
+        const rec = weekMap.get(w.weekKey) ?? { present: 0, total: 0 }
+        rec.present += w.present; rec.total += w.total
+        weekMap.set(w.weekKey, rec)
+      })
+    })
+    const weeklyAttendance = [...weekMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-10)
+      .map(([weekKey, v]) => ({
+        week: new Date(weekKey + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        rate: v.total > 0 ? v.present / v.total : 0,
+        present: v.present, total: v.total,
+      }))
+
     const allUpcomingTests = bySubject
       .flatMap(({ tab, data }) => data.upcomingTests.map(t => ({ ...t, subjectLabel: tab.label })))
       .sort((a, b) => a.conductedOn.localeCompare(b.conductedOn))
@@ -618,20 +778,49 @@ export default function StudentHomePage() {
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 8)
 
-    let continueItem: { label: string; topic: string; subjectLabel: string } | null = null
-    for (const { tab, data } of bySubject) {
-      if (data.catchupPlans[0]) { continueItem = { label: 'Catch up on', topic: data.catchupPlans[0].topic, subjectLabel: tab.label }; break }
-    }
-    if (!continueItem) for (const { tab, data } of bySubject) {
-      const nextTopic = data.syllabusTopics.find(t => !t.isCompleted)
-      if (nextTopic) { continueItem = { label: 'Continue with', topic: nextTopic.topic, subjectLabel: tab.label }; break }
-    }
-    if (!continueItem) for (const { tab, data } of bySubject) {
-      if (data.weakTopics[0]) { continueItem = { label: 'Review', topic: data.weakTopics[0].topic, subjectLabel: tab.label }; break }
-    }
+    const continueItem = pickNextTopic(bySubject)
 
-    return { bySubject, todayPeriods, attendPct, totalPresent, totalSessions, bestStreak, upcomingTests, allUpcomingTests, allAwaitingResults, taughtTopics, continueItem }
+    return { bySubject, todayPeriods, attendPct, totalPresent, totalSessions, bestStreak, weeklyAttendance, upcomingTests, allUpcomingTests, allAwaitingResults, taughtTopics, continueItem }
   }, [subjects, allData])
+
+  // ── Progress Report — the full picture in one place, merged across every subject ──
+
+  const reportView = useMemo(() => {
+    const scoreHistory = homeFeed.bySubject
+      .flatMap(({ tab, data }) => data.scoreHistory.map(m => ({ ...m, subjectLabel: tab.label })))
+      .sort((a, b) => a.conductedOn.localeCompare(b.conductedOn))
+
+    const avgScorePct = scoreHistory.length
+      ? scoreHistory.reduce((sum, m) => sum + (m.totalMarks > 0 ? m.score / m.totalMarks : 0), 0) / scoreHistory.length
+      : 0
+
+    const scorePoints = scoreHistory.map(m => ({
+      label: new Date(m.conductedOn + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      pct: m.totalMarks > 0 ? m.score / m.totalMarks : 0,
+      topic: m.topic,
+    }))
+
+    // Gentle framing — "things to work on," not the teacher-side critical/watch
+    // severity language, since this is shown directly to the child.
+    const weakTopics = homeFeed.bySubject
+      .flatMap(({ tab, data }) => data.weakTopics.map(t => ({ ...t, subjectLabel: tab.label })))
+      .sort((a, b) => a.mastery - b.mastery)
+      .slice(0, 5)
+
+    const bySubjectStats = homeFeed.bySubject.map(({ tab, data }) => {
+      const avg = data.scoreHistory.length
+        ? data.scoreHistory.reduce((sum, m) => sum + (m.totalMarks > 0 ? m.score / m.totalMarks : 0), 0) / data.scoreHistory.length
+        : null
+      return {
+        label: tab.label,
+        attendanceRate: data.attendanceRate,
+        avgScorePct: avg,
+        testsCount: data.scoreHistory.length,
+      }
+    })
+
+    return { scoreHistory, avgScorePct, scorePoints, weakTopics, bySubjectStats }
+  }, [homeFeed])
 
   // ── All badges (earned + locked), merged across every subject ──────────────
 
@@ -713,6 +902,7 @@ export default function StudentHomePage() {
     setActiveNavGroup(id)
     setLearnPreload(null)   // navigating manually shows the topic picker, not a preloaded topic
     setSelectedLearnSubject(null)
+    if (id === 'buddies' && !peerData && !peerLoading) loadPeerData()
   }
 
   // A newly scheduled test stays flagged "New" (with a count on the Tests nav item)
@@ -1094,13 +1284,13 @@ export default function StudentHomePage() {
                   <p style={{ fontSize: 18, fontWeight: 800, color: '#1E2A44', letterSpacing: '-.3px' }}>{selectedLearnSubject}</p>
                 </div>
 
-                {/* Sub-tabs: Notes / Flashcards / Quiz (pill switcher) */}
-                <div style={{ display: 'flex', gap: 4, background: '#fff', borderRadius: 14, padding: 4, border: '2.5px solid rgba(30,42,68,0.22)' }}>
-                  {([['notes', 'Summary Notes'], ['flashcards', 'Flashcards'], ['quizzes', 'Quiz']] as const).map(([id, label]) => {
+                {/* Sub-tabs: Notes / Flashcards / Quiz / Adaptive / Syllabus (pill switcher) */}
+                <div style={{ display: 'flex', gap: 4, background: '#fff', borderRadius: 14, padding: 4, border: '2.5px solid rgba(30,42,68,0.22)', flexWrap: 'wrap' }}>
+                  {([['notes', 'Summary Notes'], ['flashcards', 'Flashcards'], ['quizzes', 'Quiz'], ['adaptive', 'Adaptive'], ['syllabus', 'Syllabus']] as const).map(([id, label]) => {
                     const isAct = learnTab === id
                     return (
                       <button key={id} onClick={() => setLearnTab(id)}
-                        style={{ flex: 1, padding: '10px 8px', borderRadius: 11, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 800, transition: 'all .15s', background: isAct ? '#3D6CB4' : 'transparent', color: isAct ? '#fff' : '#5B6B87' }}>
+                        style={{ flex: '1 1 30%', minWidth: 70, padding: '10px 6px', borderRadius: 11, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 800, transition: 'all .15s', background: isAct ? '#3D6CB4' : 'transparent', color: isAct ? '#fff' : '#5B6B87' }}>
                         {label}
                       </button>
                     )
@@ -1109,14 +1299,79 @@ export default function StudentHomePage() {
                 <div style={{ ...HCARD }}>
                   {(() => {
                     const subjectOnly = learnSubjects.filter(s => s.label === selectedLearnSubject)
-                    return learnTab === 'notes'
-                      ? <NotesPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
-                          onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
-                      : learnTab === 'flashcards'
-                      ? <FlashcardsPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
-                          onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
-                      : <QuizPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
-                          onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                    if (learnTab === 'notes') return (
+                      <NotesPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                        onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                    )
+                    if (learnTab === 'flashcards') return (
+                      <FlashcardsPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                        onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                    )
+                    if (learnTab === 'quizzes') return (
+                      <QuizPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                        onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                    )
+                    if (learnTab === 'adaptive') return (
+                      <AdaptiveQuizPanel subjects={subjectOnly} interests={student.interests ?? []} preselect={learnPreload} hideSubjectHeading
+                        onTopicPicked={(subject, topic) => setLearnPreload({ subject, topic })} onBack={() => setLearnPreload(null)} />
+                    )
+
+                    // ── Syllabus checklist — everything in this subject, what's
+                    // done, and what's next. Pulled straight from syllabusTopics,
+                    // which was already being fetched just to compute one badge.
+                    const topics = homeFeed.bySubject
+                      .filter(({ tab }) => tab.label === selectedLearnSubject)
+                      .flatMap(({ data }) => data.syllabusTopics)
+                      .sort((a, b) => a.orderIndex - b.orderIndex)
+                    if (topics.length === 0) return (
+                      <p style={{ fontSize: 13.5, color: '#5B6B87', textAlign: 'center', padding: '24px 0' }}>
+                        No syllabus set up for this subject yet.
+                      </p>
+                    )
+                    const doneCount = topics.filter(t => t.isCompleted).length
+                    const nextId = topics.find(t => !t.isCompleted)?.id
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: '#1E2A44' }}>{doneCount} of {topics.length} topics done</p>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: '#3D6CB4' }}>{Math.round((doneCount / topics.length) * 100)}%</p>
+                          </div>
+                          <div style={{ height: 8, borderRadius: 4, background: 'rgba(30,42,68,0.1)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.round((doneCount / topics.length) * 100)}%`, background: '#3D6CB4', borderRadius: 4, transition: 'width .4s ease' }} />
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {topics.map(t => {
+                            const isNext = t.id === nextId
+                            return (
+                              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px' }}>
+                                {t.isCompleted ? (
+                                  <CheckCircle2 size={20} color="#059669" style={{ flexShrink: 0 }} />
+                                ) : (
+                                  <span style={{
+                                    width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                                    border: `2.5px solid ${isNext ? '#3D6CB4' : 'rgba(30,42,68,0.22)'}`,
+                                    background: isNext ? '#DCEBF8' : 'transparent',
+                                  }} />
+                                )}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ fontSize: 13.5, fontWeight: t.isCompleted ? 600 : 700, color: t.isCompleted ? '#5B6B87' : '#1E2A44', textDecoration: t.isCompleted ? 'line-through' : 'none' }}>
+                                    {t.topic}
+                                  </p>
+                                  {t.weekNumber != null && (
+                                    <p style={{ fontSize: 11, color: '#A6AEC2', marginTop: 1 }}>Week {t.weekNumber}</p>
+                                  )}
+                                </div>
+                                {isNext && (
+                                  <span style={{ fontSize: 10, fontWeight: 800, color: '#3D6CB4', background: '#DCEBF8', padding: '3px 9px', borderRadius: 8, flexShrink: 0 }}>NEXT</span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
                   })()}
                 </div>
               </>
@@ -1124,6 +1379,193 @@ export default function StudentHomePage() {
 
           ) : activeNavGroup === 'tests' ? (
             <TestsPanel upcomingTests={testsView.upcoming} awaitingResults={testsView.awaitingResults} pastScores={testsView.pastScores} interests={student.interests ?? []} />
+
+          ) : activeNavGroup === 'report' ? (
+            <>
+              {/* ── Snapshot stats ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
+                <StatTile value={`${homeFeed.attendPct}%`} label="Attendance"
+                  color={homeFeed.attendPct >= 90 ? '#059669' : homeFeed.attendPct >= 75 ? '#D97706' : '#dc2626'} />
+                <StatTile value={reportView.scoreHistory.length > 0 ? `${Math.round(reportView.avgScorePct * 100)}%` : '—'} label="Avg Score"
+                  color={reportView.avgScorePct >= 0.75 ? '#059669' : reportView.avgScorePct >= 0.5 ? '#D97706' : '#dc2626'} />
+                <StatTile value={String(reportView.scoreHistory.length)} label="Tests Taken" />
+                <StatTile value={reportView.scoreHistory.length > 0 ? getMasteryLabel(reportView.avgScorePct) : '—'} label="Overall" />
+              </div>
+
+              {/* ── Score progress chart ── */}
+              {reportView.scorePoints.length > 0 && (
+                <div style={{ ...HCARD }}>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 2 }}>Score Progress</p>
+                  <p style={{ fontSize: 12, color: '#5B6B87', marginBottom: 10 }}>{reportView.scorePoints.length} test{reportView.scorePoints.length !== 1 ? 's' : ''} this year</p>
+                  <ScoreChart points={reportView.scorePoints} />
+                </div>
+              )}
+
+              {/* ── Attendance trend chart ── */}
+              {homeFeed.weeklyAttendance.length > 0 && (
+                <div style={{ ...HCARD }}>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 10 }}>Attendance by Week</p>
+                  <AttendanceChart weeks={homeFeed.weeklyAttendance} />
+                </div>
+              )}
+
+              {/* ── By subject ── */}
+              {reportView.bySubjectStats.length > 0 && (
+                <div style={{ ...HCARD }}>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 12 }}>By Subject</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {reportView.bySubjectStats.map(s => (
+                      <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <p style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#1E2A44' }}>{s.label}</p>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#5B6B87' }}>{Math.round(s.attendanceRate * 100)}% present</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#5B6B87' }}>{s.avgScorePct != null ? `${Math.round(s.avgScorePct * 100)}% avg` : 'No tests'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Things to work on ── */}
+              {reportView.weakTopics.length > 0 && (
+                <div style={{ ...HCARD }}>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 12 }}>Things to Work On</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {reportView.weakTopics.map(t => (
+                      <div key={`${t.subjectLabel}-${t.topic}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 13.5, fontWeight: 700, color: '#1E2A44' }}>{t.topic}</p>
+                          <p style={{ fontSize: 11.5, color: '#5B6B87', marginTop: 1 }}>{t.subjectLabel}</p>
+                        </div>
+                        <button onClick={() => openLesson('quizzes', t.subjectLabel, t.topic)}
+                          style={{ padding: '8px 14px', borderRadius: 12, background: '#DCEBF8', border: 'none', color: '#3D6CB4', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                          Practice
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {reportView.scoreHistory.length === 0 && homeFeed.weeklyAttendance.length === 0 && (
+                <div style={{ ...CARD, alignItems: 'center', justifyContent: 'center', padding: '48px 20px', textAlign: 'center' }}>
+                  <BarChart3 size={40} color="#A6AEC2" strokeWidth={1.75} />
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginTop: 12 }}>Nothing to show yet</p>
+                  <p style={{ fontSize: 13, color: '#5B6B87', marginTop: 5, lineHeight: 1.6, maxWidth: 300 }}>Once your teacher records attendance and tests, your progress will show up here.</p>
+                </div>
+              )}
+            </>
+
+          ) : activeNavGroup === 'buddies' ? (
+            <>
+              {peerError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderRadius: 14, background: '#fef2f2', border: '2.5px solid #fca5a5' }}>
+                  <AlertTriangle size={18} color="#dc2626" style={{ flexShrink: 0 }} />
+                  <p style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#991b1b', lineHeight: 1.5 }}>{peerError}</p>
+                  <button onClick={() => setPeerError(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fca5a5', display: 'flex', padding: 0, fontFamily: 'inherit' }}><X size={18} /></button>
+                </div>
+              )}
+
+              {peerLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="animate-pulse" style={{ height: 90, borderRadius: 22, background: 'rgba(30,42,68,0.08)' }} />
+                  <div className="animate-pulse" style={{ height: 90, borderRadius: 22, background: 'rgba(30,42,68,0.08)' }} />
+                </div>
+              ) : !peerData ? null : (
+                <>
+                  {/* ── Requests waiting for you ── */}
+                  {peerData.incoming.length > 0 && (
+                    <div style={{ ...HCARD }}>
+                      <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 12 }}>Requests Waiting For You</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {peerData.incoming.map(r => (
+                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#3D6CB4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {r.fromName[0]?.toUpperCase() ?? '?'}
+                            </div>
+                            <p style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#1E2A44' }}>{r.fromName} wants to be study buddies{r.subject ? ` for ${r.subject}` : ''}</p>
+                            <button onClick={() => respondPeerRequest(r.id, 'accept')} disabled={peerActionId === r.id}
+                              style={{ padding: '8px 16px', borderRadius: 12, background: '#3D6CB4', border: 'none', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: peerActionId === r.id ? 0.6 : 1 }}>
+                              {peerActionId === r.id ? '…' : 'Accept'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Your Study Buddies ── */}
+                  {peerData.active.length > 0 && (
+                    <div style={{ ...HCARD }}>
+                      <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 12 }}>Your Study Buddies</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        {peerData.active.map(a => (
+                          <div key={a.id} style={{ padding: '14px 16px', borderRadius: 16, background: '#F0F7EE', border: '2px solid #CDE7C4' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: a.activity ? 8 : 0 }}>
+                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                                {a.partnerName[0]?.toUpperCase() ?? '?'}
+                              </div>
+                              <p style={{ fontSize: 14, fontWeight: 800, color: '#1E2A44' }}>{a.partnerName}{a.subject ? ` · ${a.subject}` : ''}</p>
+                            </div>
+                            {a.activity && (
+                              <p style={{ fontSize: 13, color: '#2F4A34', lineHeight: 1.5 }}>{a.activity}</p>
+                            )}
+                            {a.progressNote && (
+                              <p style={{ fontSize: 12, fontWeight: 700, color: '#059669', marginTop: 6 }}>🎉 {a.progressNote}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Your sent requests ── */}
+                  {peerData.outgoing.length > 0 && (
+                    <div style={{ ...HCARD }}>
+                      <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 12 }}>Waiting For A Reply</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {peerData.outgoing.map(r => (
+                          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <p style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: '#5B6B87' }}>Sent to <strong style={{ color: '#1E2A44' }}>{r.toName}</strong></p>
+                            <button onClick={() => respondPeerRequest(r.id, 'cancel')} disabled={peerActionId === r.id}
+                              style={{ padding: '7px 14px', borderRadius: 12, background: 'transparent', border: '2px solid rgba(30,42,68,0.22)', color: '#5B6B87', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: peerActionId === r.id ? 0.6 : 1 }}>
+                              {peerActionId === r.id ? '…' : 'Cancel'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Suggested matches ── */}
+                  <div style={{ ...HCARD }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: '#1E2A44', marginBottom: 2 }}>Suggested Matches</p>
+                    <p style={{ fontSize: 12, color: '#5B6B87', marginBottom: 12 }}>Classmates who could make a great study team with you</p>
+                    {peerData.matches.length === 0 ? (
+                      <p style={{ fontSize: 13.5, color: '#5B6B87', textAlign: 'center', padding: '16px 0' }}>No suggested matches right now — check back once more classmates have interests or tests recorded.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {peerData.matches.map(m => (
+                          <div key={m.studentId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#DCEBF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#3D6CB4', flexShrink: 0 }}>
+                              {m.name[0]?.toUpperCase() ?? '?'}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 13.5, fontWeight: 800, color: '#1E2A44' }}>{m.name}</p>
+                              <p style={{ fontSize: 11.5, color: '#5B6B87', marginTop: 1 }}>{m.reason}</p>
+                            </div>
+                            <button onClick={() => sendPeerRequest(m.studentId)} disabled={peerActionId === m.studentId}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, background: '#3D6CB4', border: 'none', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: peerActionId === m.studentId ? 0.6 : 1 }}>
+                              <Send size={12} /> {peerActionId === m.studentId ? '…' : 'Request'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
 
           ) : activeNavGroup === 'profile' ? (
             <>

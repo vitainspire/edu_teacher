@@ -9,8 +9,6 @@ import SubstituteBanner from '@/components/timetable/SubstituteBanner'
 import PageHeader from '@/components/theme/PageHeader'
 import { Sticker } from '@/components/theme/StickerIcon'
 
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-
 function todayDayNum() {
   const d = new Date().getDay()
   return d === 0 ? 0 : d
@@ -83,7 +81,17 @@ export default function TimetablePage() {
 
   const hhmm   = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
   const todayN = todayDayNum()
-  const [selectedDay, setSelectedDay] = useState(todayN >= 1 && todayN <= 5 ? todayN : 1)
+
+  // Show a Saturday column/tab only when the school's published timetable actually has one —
+  // avoids hardcoding a 5-day week when a school runs 6 days.
+  const days = useMemo(
+    () => timetableEntries.some(e => e.dayOfWeek === 6)
+      ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    [timetableEntries]
+  )
+
+  const [selectedDay, setSelectedDay] = useState(todayN >= 1 && todayN <= days.length ? todayN : 1)
 
   const todayEntries = useMemo(() =>
     timetableEntries.filter(e => e.dayOfWeek === todayN).sort((a, b) => a.periodNumber - b.periodNumber),
@@ -106,7 +114,7 @@ export default function TimetablePage() {
   }
 
   const { dayStartMin, dayEndMin } = useMemo(() => {
-    const weekdayEntries = timetableEntries.filter(e => e.dayOfWeek >= 1 && e.dayOfWeek <= 5)
+    const weekdayEntries = timetableEntries.filter(e => e.dayOfWeek >= 1 && e.dayOfWeek <= 6)
     if (weekdayEntries.length === 0) return { dayStartMin: 8 * 60, dayEndMin: 15 * 60 }
     const starts = weekdayEntries.map(e => toMinutes(e.startTime))
     const ends   = weekdayEntries.map(e => toMinutes(e.endTime))
@@ -201,7 +209,7 @@ export default function TimetablePage() {
 
           {/* Mobile day tabs */}
           <div className="flex md:hidden gap-1.5 mb-3">
-            {DAY_SHORT.map((day, i) => {
+            {days.map((day, i) => {
               const dayNum     = i + 1
               const isToday    = dayNum === todayN
               const isSelected = dayNum === selectedDay
@@ -269,9 +277,9 @@ export default function TimetablePage() {
             })}
           </div>
 
-          {/* Desktop: Mon–Fri columns, stacked period cards */}
+          {/* Desktop: weekly columns (5 or 6 depending on the school), stacked period cards */}
           <div className="hidden md:flex">
-            {DAY_SHORT.map((day, i) => {
+            {days.map((day, i) => {
               const dayNum   = i + 1
               const isToday  = dayNum === todayN
               const dayEntries = layoutDayEvents(timetableEntries.filter(e => e.dayOfWeek === dayNum))

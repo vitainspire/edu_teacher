@@ -64,6 +64,17 @@ export function useSyllabusActions(
     targets.forEach(t => sbq.upsertSyllabusTopic({ ...t, estimatedSessions }).catch(console.error))
   }, [syllabusRef, setSyllabusTopics])
 
+  const updateSyllabusTopicPrerequisite = useCallback(async (topicId: string, prerequisiteDefinitionId: string | null) => {
+    const topic = syllabusRef.current!.find(t => t.id === topicId)
+    const defId = topic?.definitionId
+    const targets = defId
+      ? syllabusRef.current!.filter(t => t.definitionId === defId)
+      : (topic ? [topic] : [])
+    const ids = new Set(targets.map(t => t.id))
+    setSyllabusTopics(prev => prev.map(t => ids.has(t.id) ? { ...t, prerequisiteDefinitionId: prerequisiteDefinitionId ?? undefined } : t))
+    targets.forEach(t => sbq.upsertSyllabusTopic({ ...t, prerequisiteDefinitionId: prerequisiteDefinitionId ?? undefined }).catch(console.error))
+  }, [syllabusRef, setSyllabusTopics])
+
   const deleteSyllabusTopic = useCallback(async (topicId: string) => {
     const topic = syllabusRef.current!.find(t => t.id === topicId)
     const defId = topic?.definitionId
@@ -202,7 +213,7 @@ export function useSyllabusActions(
   }, [classesRef, syllabusRef, subTopicsRef, setSyllabusTopics, setSyllabusSubTopics, teacher])
 
   return {
-    addSyllabusTopic, toggleTopicComplete, updateSyllabusTopicEstimate,
+    addSyllabusTopic, toggleTopicComplete, updateSyllabusTopicEstimate, updateSyllabusTopicPrerequisite,
     deleteSyllabusTopic, getClassSyllabus, ensureClassSyllabus,
     addSubTopic, deleteSubTopic, toggleSubTopicComplete, getTopicSubTopics,
   }

@@ -9,7 +9,7 @@ import { useApp } from '@/lib/context'
 
 const FAQS = [
   { q: 'How do I add a new class?', a: 'Go to Classes and tap "New" (or "Add Another Class"). Your school admin may also assign classes to you directly.' },
-  { q: 'How do marks get scanned automatically?', a: 'Share your Scanner Code (found on your Profile page) with whoever scans answer sheets — marks sync back to the matching test.' },
+  { q: 'How do marks get scanned automatically?', a: 'Whoever scans answer sheets signs into the Staff Scanner portal with the school code from your admin — marks sync back to the matching test automatically.' },
   { q: 'Can I edit my weekly timetable?', a: 'Your timetable is managed by your school admin. Reach out to them for changes.' },
 ]
 

@@ -137,6 +137,18 @@ export interface TopicMastery {
   lastUpdated: string
 }
 
+export interface PeerPairing {
+  id: string
+  classId: string
+  subject?: string
+  requesterStudentId: string
+  targetStudentId: string
+  status: 'pending' | 'active' | 'dissolved'
+  activity?: string
+  createdAt: string
+  respondedAt?: string
+}
+
 export interface SyllabusTopic {
   id: string
   classId: string
@@ -151,6 +163,10 @@ export interface SyllabusTopic {
   orderIndex: number
   isCompleted: boolean   // per-section completion (each section's row tracks its own)
   createdAt: string
+  // References another topic's `definitionId` (not a raw id) so it resolves
+  // correctly across every section sharing this topic — the adaptive
+  // recommendation engine skips ahead to this instead if it isn't done yet.
+  prerequisiteDefinitionId?: string
 }
 
 export interface SyllabusSubTopic {
@@ -165,6 +181,7 @@ export interface SyllabusSubTopic {
   isCompleted: boolean
   completedAt?: string
   createdAt: string
+  estimatedSessions?: number   // admin-set (or AI-suggested), splits the parent topic's total
 }
 
 export interface RecoveryAttempt {
@@ -547,9 +564,10 @@ export interface ExamPlanItem {
 
 export interface PersonalityStoryOption {
   text: string
-  outcome: string
   // Internal steering signal — never shown to the student. Decides which of
   // the three closing scenes the story lands on; not a score, not shown as a grade.
+  // Choosing an option never reveals this or any judgment — the story just
+  // continues silently to the next scene. Nothing is explained until the end.
   leadsToward: 'wise' | 'regret'
 }
 
@@ -565,19 +583,23 @@ export interface PersonalityStory {
   /** 1-2 short sentences setting up the story, shown before the first scene. */
   introduction: string
   steps: PersonalityStoryStep[]
+  /** The actual result of how the choices leaned — shown only once, at the very
+   *  end. Can be a genuinely poor outcome for "regret". */
   endings: {
     wise: string
     mixed: string
     regret: string
   }
-  /** A short, this-story-only reflection on what the choices showed — plain
-   *  language, not a score or trait tally. Varies by which ending was reached. */
+  /** Shown right after the ending — explains, in plain words, WHY that outcome
+   *  happened, tied to the specific pattern of choices made this story. */
   personalityAnalysis: {
     wise: string
     mixed: string
     regret: string
   }
-  /** One short, friendly practical takeaway — "what this means for next time." */
+  /** Shown last — states plainly what the better choice would have been (or,
+   *  for "wise", what to keep doing), so the child knows what to do before a
+   *  similar real situation happens to them. */
   learningSummary: {
     wise: string
     mixed: string

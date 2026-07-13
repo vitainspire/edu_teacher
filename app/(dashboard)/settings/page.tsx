@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Check, BookOpen, Clock, Trash2, HelpCircle, Copy, RefreshCw } from 'lucide-react'
+import { Clock, Trash2, HelpCircle, RefreshCw, Handshake, Loader2 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import FeatureTour from '@/components/onboarding/FeatureTour'
 import FlowGuide from '@/components/onboarding/FlowGuide'
@@ -9,14 +9,57 @@ import { Sticker } from '@/components/theme/StickerIcon'
 
 const DAY_LABELS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+interface PeerPairRow {
+  id: string
+  status: 'pending' | 'active' | 'dissolved'
+  subject?: string
+  activity?: string
+  requesterName: string
+  targetName: string
+  createdAt: string
+  progressStatus?: 'too_early' | 'improving' | 'no_change' | 'unknown'
+}
+interface PeerPairClassGroup {
+  classId: string
+  className: string
+  grade: string
+  section: string
+  pairings: PeerPairRow[]
+}
+
 export default function SettingsPage() {
   const { teacher, classes, timetableEntries, removeTimetableEntry } = useApp()
 
-  const [teacherCodeCopied, setTeacherCodeCopied] = useState(false)
   const [showTour, setShowTour]         = useState(false)
   const [showFlowGuide, setShowFlowGuide] = useState(false)
   const [showGuideBtn, setShowGuideBtn] = useState(true)
   const guideBtnKey = teacher ? `eduteach_show_guide_btn_${teacher.id}` : null
+
+  const [peerGroups, setPeerGroups] = useState<PeerPairClassGroup[]>([])
+  const [peerLoading, setPeerLoading] = useState(true)
+  const [dissolvingId, setDissolvingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/teacher/peer-pairings')
+      .then(r => r.ok ? r.json() : { classes: [] })
+      .then(d => setPeerGroups(d.classes ?? []))
+      .catch(() => setPeerGroups([]))
+      .finally(() => setPeerLoading(false))
+  }, [])
+
+  async function dissolvePair(id: string) {
+    setDissolvingId(id)
+    try {
+      const res = await fetch('/api/teacher/peer-pairings', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+      })
+      if (res.ok) {
+        setPeerGroups(prev => prev.map(g => ({ ...g, pairings: g.pairings.filter(p => p.id !== id) })))
+      }
+    } finally {
+      setDissolvingId(null)
+    }
+  }
 
   useEffect(() => {
     if (!guideBtnKey) return
@@ -52,49 +95,6 @@ export default function SettingsPage() {
               <span className="text-sm font-semibold text-ink">{row.value || '—'}</span>
             </div>
           ))}
-        </div>
-
-        {/* Scanner Teacher Code */}
-        <div className="paper-card p-5 space-y-3">
-          <div className="flex items-center gap-2.5 mb-1">
-            <Sticker tone="coral" size={36} radius={14}>
-              <BookOpen size={16} className="text-ink-soft" />
-            </Sticker>
-            <div>
-              <p className="font-bold text-ink leading-none">Scanner Code</p>
-              <p className="text-[11px] text-ink-soft mt-0.5">Give this to whoever scans your papers</p>
-            </div>
-          </div>
-          {teacher?.teacherCode ? (
-            <div className="flex items-center gap-3">
-              <div
-                className="flex-1 rounded-2xl py-3.5 text-center font-black text-2xl"
-                style={{ background: 'rgba(58,44,30,0.06)', border: '2px dashed rgba(58,44,30,0.25)', letterSpacing: '0.4em', color: 'var(--ink)' }}
-              >
-                {teacher.teacherCode}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(teacher.teacherCode!).catch(() => {})
-                  setTeacherCodeCopied(true)
-                  setTimeout(() => setTeacherCodeCopied(false), 2000)
-                }}
-                className="w-11 h-11 flex items-center justify-center rounded-2xl transition-all active:scale-90"
-                style={{ background: 'rgba(58,44,30,0.06)' }}
-                title="Copy scanner code"
-              >
-                {teacherCodeCopied ? <Check size={17} className="text-ink" /> : <Copy size={17} className="text-ink-soft" />}
-              </button>
-            </div>
-          ) : (
-            <p className="text-xs text-ink-soft text-center py-2">
-              Sign out and sign in again to generate your scanner code.
-            </p>
-          )}
-          <p className="text-[11px] text-ink-soft leading-relaxed">
-            Non-teaching staff open the EduScanner app and enter this code to scan answer sheets for <span className="font-semibold text-ink">all your classes</span>. Marks sync straight back to you.
-          </p>
         </div>
 
         {/* Timetable */}
@@ -146,6 +146,68 @@ export default function SettingsPage() {
             <p className="text-xs text-ink-soft text-center py-2">
               No timetable set. Your school admin manages the timetable.
             </p>
+          )}
+        </div>
+
+        {/* Study Buddy Pairs */}
+        <div className="paper-card p-5 space-y-4">
+          <div className="flex items-center gap-2.5 mb-1">
+            <Sticker tone="coral" size={36} radius={14}>
+              <Handshake size={16} className="text-ink-soft" />
+            </Sticker>
+            <div>
+              <p className="font-bold text-ink leading-none">Study Buddy Pairs</p>
+              <p className="text-[11px] text-ink-soft mt-0.5">Student-requested peer pairings, per class</p>
+            </div>
+          </div>
+
+          {peerLoading ? (
+            <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-ink-soft" /></div>
+          ) : peerGroups.every(g => g.pairings.length === 0) ? (
+            <p className="text-xs text-ink-soft text-center py-2">No pairing requests yet in any of your classes.</p>
+          ) : (
+            <div className="space-y-4">
+              {peerGroups.filter(g => g.pairings.length > 0).map(group => (
+                <div key={group.classId}>
+                  <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
+                    Grade {group.grade}{group.section ? ` · Sec ${group.section}` : ''} — {group.className}
+                  </p>
+                  <div className="space-y-2">
+                    {group.pairings.map(p => (
+                      <div key={p.id} className="flex items-center gap-3 py-2.5 px-3 rounded-2xl" style={{ background: 'rgba(58,44,30,0.04)' }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-ink truncate">
+                            {p.requesterName} ↔ {p.targetName}
+                            {p.subject ? <span className="font-medium text-ink-soft"> · {p.subject}</span> : null}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${p.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {p.status === 'active' ? 'Active' : 'Pending'}
+                            </span>
+                            {p.progressStatus === 'improving' && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">📈 Improving</span>
+                            )}
+                            {p.progressStatus === 'no_change' && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-red-100 text-red-700">No improvement yet — consider reassigning</span>
+                            )}
+                            {p.activity && <span className="text-xs text-ink-soft truncate">{p.activity}</span>}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => dissolvePair(p.id)}
+                          disabled={dissolvingId === p.id}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl text-ink-faint hover:bg-red-50 hover:text-red-500 transition-colors shrink-0"
+                          title="Dissolve this pairing"
+                        >
+                          {dissolvingId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

@@ -159,12 +159,6 @@ export const FlashcardsSchema = z.object({
   interests: z.array(anyStr(LEN.name)).max(20).optional(),
 })
 
-export const UnderstandingCheckSchema = z.object({
-  topic:   reqStr(LEN.topic),
-  subject: reqStr(LEN.topic),
-  grade:   anyStr(LEN.short),
-})
-
 export const TestPrepSchema = z.object({
   topic:      reqStr(LEN.topic),
   subject:    reqStr(LEN.topic),
@@ -233,6 +227,10 @@ export const ExtractSyllabusSchema = z.object({
   text:  z.string().max(50_000).optional(),   // pasted syllabus text
   image: z.string().min(1).optional(),        // data URL — payload size limited by infra
 }).refine(d => d.text || d.image, { message: 'Provide text or image' })
+
+export const ExtractStudentsSchema = z.object({
+  image: z.string().min(1),   // data URL — photo of a class roster/register
+})
 
 export const GradeImageSchema = z.object({
   imageBase64: z.string().min(1),
@@ -335,6 +333,16 @@ export const UploadScanSchema = z.object({
   filename:    anyStr(LEN.name).optional(),
 })
 
+// Not used by anything in this local project folder — this project doesn't
+// have app/api/understanding-check/route.ts — but the deployed repo (master)
+// does, and it imports this export. Kept here so a future reconciliation
+// push doesn't overwrite the fix on the remote with a local copy missing it.
+export const UnderstandingCheckSchema = z.object({
+  topic:   reqStr(LEN.topic),
+  subject: reqStr(LEN.topic),
+  grade:   anyStr(LEN.short),
+})
+
 export const StudentDoubtSchema = z.object({
   classId:     shortId,
   subject:     anyStr(LEN.topic).optional(),
@@ -348,6 +356,21 @@ export const StudentPollSchema = z.object({
   topic:           anyStr(LEN.topic).optional(),
   subject:         anyStr(LEN.topic).optional(),
   response:        z.enum(['understood', 'partial', 'confused']),
+})
+
+export const PeerPairRequestSchema = z.object({
+  classId:         shortId,
+  targetStudentId: shortId,
+  subject:         anyStr(LEN.topic).optional(),
+})
+
+export const PeerPairActionSchema = z.object({
+  id:     shortId,
+  action: z.enum(['accept', 'cancel']),
+})
+
+export const PeerPairDissolveSchema = z.object({
+  id: shortId,
 })
 
 export const AnnouncementSchema = z.object({

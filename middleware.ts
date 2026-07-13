@@ -21,6 +21,7 @@ const PUBLIC_PREFIXES = [
   '/api/health',
   // Student-facing AI routes — protected by rate-limit, not Supabase session
   '/api/practice-quiz',
+  '/api/adaptive-quiz',
   '/api/catchup-plan',
   '/api/flashcards',
   '/api/test-prep',

@@ -133,6 +133,9 @@ export async function GET(req: NextRequest) {
         weekNumber: r.week_number ?? undefined, orderIndex: r.order_index ?? 0,
         isCompleted: r.is_completed ?? false, createdAt: r.created_at ?? '',
         estimatedSessions: r.estimated_sessions ?? undefined,
+        definitionId: r.definition_id ?? undefined,
+        subject: r.subject ?? undefined,
+        prerequisiteDefinitionId: r.prerequisite_definition_id ?? undefined,
       })),
       timetable: (timetableRes.data ?? []).map(r => ({
         id: r.id, teacherId: r.teacher_id, classId: r.class_id,

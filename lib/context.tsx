@@ -79,6 +79,7 @@ interface AppContextType {
   addSyllabusTopic: (classId: string, data: { topic: string; description?: string; weekNumber?: number }) => Promise<string>
   toggleTopicComplete: (topicId: string, isCompleted: boolean) => Promise<void>
   updateSyllabusTopicEstimate: (topicId: string, estimatedSessions: number) => Promise<void>
+  updateSyllabusTopicPrerequisite: (topicId: string, prerequisiteDefinitionId: string | null) => Promise<void>
   deleteSyllabusTopic: (topicId: string) => Promise<void>
   getClassSyllabus: (classId: string) => SyllabusTopic[]
   ensureClassSyllabus: (classId: string) => Promise<number>

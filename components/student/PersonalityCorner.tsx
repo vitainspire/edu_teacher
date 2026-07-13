@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Sprout, X, Loader2, AlertTriangle, ArrowRight } from 'lucide-react'
+import { Sprout, X, Loader2, AlertTriangle } from 'lucide-react'
 import type { PersonalityStory } from '@/lib/types'
 
 interface Props {
@@ -25,7 +25,6 @@ export default function PersonalityCorner({ isMobile }: Props) {
 
   // Story-walk state
   const [stepIndex, setStepIndex]   = useState(0)
-  const [pickedIndex, setPickedIndex] = useState<number | null>(null)
   const [picks, setPicks]           = useState<('wise' | 'regret')[]>([])
   const [finished, setFinished]     = useState(false)
 
@@ -50,22 +49,16 @@ export default function PersonalityCorner({ isMobile }: Props) {
   function close() {
     setOpen(false)
     setStepIndex(0)
-    setPickedIndex(null)
     setPicks([])
     setFinished(false)
   }
 
-  function choose(i: number) {
-    if (pickedIndex !== null || !story) return
-    setPickedIndex(i)
-  }
-
-  function continueStory() {
+  // Picking silently advances the story — no reveal, no judgment, at any of
+  // the 3 steps. The child only sees an explanation once, at the very end.
+  function choose(leadsToward: 'wise' | 'regret') {
     if (!story) return
-    const leadsToward = story.steps[stepIndex].options[pickedIndex!].leadsToward
     const nextPicks = [...picks, leadsToward]
     setPicks(nextPicks)
-    setPickedIndex(null)
     if (stepIndex + 1 < story.steps.length) {
       setStepIndex(stepIndex + 1)
     } else {
@@ -147,42 +140,21 @@ export default function PersonalityCorner({ isMobile }: Props) {
                   <div>
                     <p style={{ fontSize: 13.5, fontWeight: 800, color: '#1E2A44', marginBottom: 10 }}>{currentStep.question}</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {currentStep.options.map((opt, i) => {
-                        const picked = pickedIndex === i
-                        const disabled = pickedIndex !== null && !picked
-                        return (
-                          <div key={i}>
-                            <button
-                              onClick={() => choose(i)}
-                              disabled={pickedIndex !== null}
-                              style={{
-                                width: '100%', textAlign: 'left', padding: '11px 14px', borderRadius: 14,
-                                border: `2.5px solid ${picked ? '#3D6CB4' : 'rgba(30,42,68,0.22)'}`,
-                                background: picked ? '#DCEBF8' : '#fff',
-                                color: disabled ? '#9AA5B8' : '#1E2A44',
-                                fontSize: 13, fontWeight: 700, cursor: pickedIndex === null ? 'pointer' : 'default',
-                                fontFamily: 'inherit', opacity: disabled ? 0.55 : 1, transition: 'all .12s',
-                              }}
-                            >
-                              {opt.text}
-                            </button>
-                            {picked && (
-                              <p style={{ fontSize: 12.5, color: '#3A4A6B', lineHeight: 1.5, padding: '10px 14px', marginTop: 6, borderRadius: 12, background: '#F4F7FB' }}>
-                                {opt.outcome}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {currentStep.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => choose(opt.leadsToward)}
+                          style={{
+                            width: '100%', textAlign: 'left', padding: '11px 14px', borderRadius: 14,
+                            border: '2.5px solid rgba(30,42,68,0.22)', background: '#fff', color: '#1E2A44',
+                            fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s',
+                          }}
+                        >
+                          {opt.text}
+                        </button>
+                      ))}
                     </div>
                   </div>
-
-                  {pickedIndex !== null && (
-                    <button onClick={continueStory}
-                      style={{ alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 12, background: '#1E2A44', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      Continue <ArrowRight size={14} />
-                    </button>
-                  )}
                 </>
               )}
 
@@ -194,14 +166,14 @@ export default function PersonalityCorner({ isMobile }: Props) {
 
                   {analysis && (
                     <div style={{ padding: '14px 18px', borderRadius: 16, background: '#F0F7EE', border: '2px solid #CDE7C4' }}>
-                      <p style={{ fontSize: 11, fontWeight: 800, color: '#2F6B3F', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>What today showed</p>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: '#2F6B3F', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Why this happened</p>
                       <p style={{ fontSize: 13.5, color: '#2F4A34', lineHeight: 1.6 }}>{analysis}</p>
                     </div>
                   )}
 
                   {summary && (
                     <div style={{ padding: '14px 18px', borderRadius: 16, background: '#EDF2FB', border: '2px solid #C7D6F0' }}>
-                      <p style={{ fontSize: 11, fontWeight: 800, color: '#2A4B8D', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>For next time</p>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: '#2A4B8D', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>A better choice, for next time</p>
                       <p style={{ fontSize: 13.5, color: '#1E2A44', lineHeight: 1.6 }}>{summary}</p>
                     </div>
                   )}

@@ -42,6 +42,10 @@ export async function GET(
       subjectName: string
       teacherName: string
       teacherId: string | null
+      // The row that actually owns this subject's attendance/marks — in the
+      // legacy model each subject is a separate class with its own sibling
+      // `students` row for the same physical child, distinct from `student.id`.
+      studentRowId: string
     }> = []
 
     const { data: assignments } = await ac
@@ -50,7 +54,7 @@ export async function GET(
       .eq('class_id', cls.id)
 
     if (assignments && assignments.length > 0 && assignments.some((a: { subject: string }) => a.subject)) {
-      // New model: one tab per subject assignment on this class
+      // New model: one tab per subject assignment on this class — same student row throughout.
       for (const a of assignments) {
         const { data: t } = await ac.from('teachers').select('name').eq('id', a.teacher_id).maybeSingle()
         subjects.push({
@@ -58,6 +62,7 @@ export async function GET(
           subjectName: a.subject || 'Subject',
           teacherName: t?.name ?? 'Unknown Teacher',
           teacherId: a.teacher_id,
+          studentRowId: student.id,
         })
       }
     } else {
@@ -69,7 +74,8 @@ export async function GET(
       const { data: allClasses } = await q
 
       for (const c of allClasses ?? []) {
-        // Check student exists in this class (by roll number)
+        // Check student exists in this class (by roll number) — this sibling
+        // row's own id is what its attendance/marks are actually recorded against.
         const { data: st } = await ac
           .from('students').select('id')
           .eq('class_id', c.id)
@@ -84,6 +90,7 @@ export async function GET(
           subjectName: t?.subject || c.name,
           teacherName: t?.name ?? 'Unknown Teacher',
           teacherId: c.teacher_id,
+          studentRowId: st.id,
         })
       }
     }
@@ -91,11 +98,12 @@ export async function GET(
     // For each subject, fetch attendance stats and recent marks
     const subjectData = await Promise.all(
       subjects.map(async (s) => {
-        // Attendance stats for this student in this class
+        // Attendance stats for this student in this class — keyed to the row
+        // that actually owns this subject (see `studentRowId` above).
         const { data: attRows } = await ac
           .from('attendance')
           .select('status')
-          .eq('student_id', params.studentId)
+          .eq('student_id', s.studentRowId)
           .eq('class_id', s.classId)
 
         const totalSessions = attRows?.length ?? 0
@@ -118,7 +126,7 @@ export async function GET(
             const { data: marks } = await ac
               .from('marks')
               .select('test_id, score')
-              .eq('student_id', params.studentId)
+              .eq('student_id', s.studentRowId)
               .in('test_id', testIds)
 
             if (marks && marks.length > 0) {

@@ -143,30 +143,34 @@ export async function fetchClasses(teacherId: string, _schoolId?: string, _schoo
 export async function upsertSyllabusTopic(t: SyllabusTopic) {
   const { error } = await supabase.from('syllabus_topics').upsert({
     id: t.id, class_id: t.classId, teacher_id: t.teacherId ?? null,
-    grade: t.grade ?? null, definition_id: t.definitionId ?? null,
+    grade: t.grade ?? null, subject: t.subject ?? null, definition_id: t.definitionId ?? null,
     topic: t.topic, description: t.description,
     week_number: t.weekNumber ?? null, order_index: t.orderIndex,
     is_completed: t.isCompleted, created_at: t.createdAt,
     estimated_sessions: t.estimatedSessions ?? null,
+    prerequisite_definition_id: t.prerequisiteDefinitionId ?? null,
   })
   if (error) throw error
 }
 
-export async function fetchSyllabusTopics(teacherId: string, classIds: string[]): Promise<SyllabusTopic[]> {
+// Scoped by class only, not by who originally authored a topic — syllabus
+// content belongs to the class (now typically admin-authored, grade+subject-
+// wide), not to whichever teacher happened to create the row.
+export async function fetchSyllabusTopics(_teacherId: string, classIds: string[]): Promise<SyllabusTopic[]> {
   if (!classIds.length) return []
   const { data, error } = await supabase
     .from('syllabus_topics').select('*')
-    .eq('teacher_id', teacherId)
     .in('class_id', classIds)
     .order('order_index')
   if (error) throw error
   return (data ?? []).map(r => ({
     id: r.id, classId: r.class_id, teacherId: r.teacher_id ?? undefined,
-    grade: r.grade ?? undefined, definitionId: r.definition_id ?? undefined,
+    grade: r.grade ?? undefined, subject: r.subject ?? undefined, definitionId: r.definition_id ?? undefined,
     topic: r.topic, description: r.description ?? '',
     weekNumber: r.week_number ?? undefined, orderIndex: r.order_index ?? 0,
     isCompleted: r.is_completed ?? false, createdAt: r.created_at ?? '',
     estimatedSessions: r.estimated_sessions ?? undefined,
+    prerequisiteDefinitionId: r.prerequisite_definition_id ?? undefined,
   }))
 }
 
@@ -370,17 +374,20 @@ export async function upsertSubTopic(t: SyllabusSubTopic): Promise<void> {
       teacher_id: t.teacherId ?? null, definition_id: t.definitionId ?? null,
       name: t.name, description: t.description ?? null, order_index: t.orderIndex,
       is_completed: t.isCompleted, completed_at: t.completedAt ?? null, created_at: t.createdAt,
+      estimated_sessions: t.estimatedSessions ?? null,
     })
     if (error) throw error
   } catch { /* table may not exist yet */ }
 }
 
-export async function fetchSubTopics(teacherId: string, classIds: string[]): Promise<SyllabusSubTopic[]> {
+// Scoped by class only, not by author — same fix as fetchSyllabusTopics, now
+// load-bearing here too since admin-authored sub-topics have no teacher_id
+// a teacher's own fetch could ever match.
+export async function fetchSubTopics(_teacherId: string, classIds: string[]): Promise<SyllabusSubTopic[]> {
   try {
     if (!classIds.length) return []
     const { data, error } = await supabase
       .from('syllabus_sub_topics').select('*')
-      .eq('teacher_id', teacherId)
       .in('class_id', classIds)
       .order('order_index')
     if (error) return []
@@ -389,7 +396,7 @@ export async function fetchSubTopics(teacherId: string, classIds: string[]): Pro
       teacherId: r.teacher_id ?? undefined, definitionId: r.definition_id ?? undefined,
       name: r.name, description: r.description ?? undefined, orderIndex: r.order_index ?? 0,
       isCompleted: r.is_completed ?? false, completedAt: r.completed_at ?? undefined,
-      createdAt: r.created_at ?? '',
+      createdAt: r.created_at ?? '', estimatedSessions: r.estimated_sessions ?? undefined,
     }))
   } catch { return [] }
 }

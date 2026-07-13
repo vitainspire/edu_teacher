@@ -100,3 +100,35 @@ export function computeWorkingCapacity(
     nonWorkingDays: totalDays - workingDays,
   }
 }
+
+/**
+ * How many real class sessions a specific subject actually has left this
+ * year — not a generic school-wide working-day count, but grounded in that
+ * subject's own timetable (which weekdays, how many periods each) with
+ * holidays subtracted out. Used to sanity-check an AI-estimated
+ * sessions-per-topic total against what's actually possible.
+ */
+export function computeSubjectSessionAvailability(
+  fromDate: string,
+  toDate: string,
+  events: Pick<AcademicEvent, 'category' | 'startDate' | 'endDate' | 'countsAsNonWorking'>[],
+  periodsPerWeekday: Record<number, number>, // dayOfWeek 1=Mon..6=Sat -> periods that day
+): number {
+  const blockedRanges = events
+    .filter(e => (e.category === 'holiday' || e.category === 'exam') && e.countsAsNonWorking !== false)
+    .map(e => ({ start: e.startDate, end: e.endDate }))
+
+  const start = new Date(fromDate + 'T00:00:00Z')
+  const end = new Date(toDate + 'T00:00:00Z')
+
+  let sessions = 0
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const dow = d.getUTCDay()
+    const count = periodsPerWeekday[dow]
+    if (!count) continue
+    const dateStr = toDateStr(d)
+    const blocked = blockedRanges.some(r => dateStr >= r.start && dateStr <= r.end)
+    if (!blocked) sessions += count
+  }
+  return sessions
+}

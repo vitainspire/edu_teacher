@@ -14,7 +14,6 @@ function isValidOption(o: unknown): boolean {
   const opt = o as Record<string, unknown>
   return (
     typeof opt.text === 'string' &&
-    typeof opt.outcome === 'string' &&
     (opt.leadsToward === 'wise' || opt.leadsToward === 'regret')
   )
 }
@@ -103,29 +102,32 @@ READING LEVEL — this is the most important rule. Write for a 6-10 year old rea
 
 SETTING — keep it to a child's real world. Good scenarios: school, classroom, playground, friends, siblings, parents, grandparents, festivals (Diwali, Holi, Eid, etc.), sharing food or toys, homework, a cricket/sports match, pocket money, finding something that isn't theirs, a promise to a friend, screen time / TV / games. Do NOT use grown-up settings like jobs, careers, exams-as-high-stakes, dating, or money problems beyond simple pocket money.
 
-Write the story as exactly 3 connected scenes ("steps"), each ending at a decision point. Each scene must continue directly from what happened in the previous one — the SAME ongoing situation, not a new unrelated one each time. Give it something real a child would recognize (a friendship, a game, a promise, a family moment) — not a generic "be nice" filler scenario.
+Write the story as exactly 3 connected scenes ("steps"), each ending at a decision point. Each scene must continue directly from the one before it — the SAME ongoing situation moving forward in time, not a new unrelated one each time. Give it something real a child would recognize (a friendship, a game, a promise, a family moment) — not a generic "be nice" filler scenario.
+
+IMPORTANT — the child is NEVER interrupted with feedback while the story is happening. They pick an option and the story silently moves straight on to the next scene, with no reveal, no judgment, no hint of right-or-wrong at any point in the middle. Because of this, write each step's "scene" so it reads naturally as the next moment in the story NO MATTER which of the 3 options was picked before it — do not write it as a direct reaction to one specific choice. Keep the situation moving forward in a way that stays sensible regardless of which option led there.
 
 First, write an "introduction" — 1-2 short sentences that introduce the character and where they are, before anything happens yet.
 
 For each of the 3 steps, write:
-- "scene": 2-3 short sentences of story. For step 1, this sets up the situation right after the introduction. For steps 2 and 3, this continues from whatever happened after the previous choice. End right at the moment of a decision.
+- "scene": 2-3 short sentences of story. For step 1, this sets up the situation right after the introduction. For steps 2 and 3, this moves the same situation forward to its next moment. End right at the moment of a decision.
 - "question": one short sentence asking what the character should do next.
-- "options": exactly 3 short choices (a few words each, simple words). For EACH option, also write:
-  - "outcome": 1-2 short sentences of what happens next, told as story — this becomes the opening of the next scene, so keep it concrete and continuable, not a judgment.
+- "options": exactly 3 short choices (a few words each, simple words), each with:
   - "leadsToward": "wise" if this choice reflects ${trait} well, or "regret" if it doesn't. Choices should feel understandable either way (never villainous or scary), just leaning one way or the other.
 
-After the 3 steps, write three possible closing scenes in "endings" — these are NOT verdicts or advice, they are genuine continuations of the story, as if the reader is still following the character. Each must be specific to what actually happened across the 3 steps, not a generic wrap-up:
-- "wise": the character mostly chose well through the story. Show the concrete good result those specific choices led to, AND have someone (a friend, parent, or teacher) or the character themself plainly say something warm, in their own words — the child should clearly come away knowing "I did well here."
-- "regret": the character mostly chose poorly. Spell out the actual, specific thing that went wrong, and because of which choice — concrete and simple, not a vague feeling — then end on the character's own quiet realization of what they'd do differently next time. Keep it gentle, never harsh or scary, and never stated as a lesson to the reader.
-- "mixed": a softer in-between scene — name one specific thing that went right and one that went less well, then a small realization.
+Only AFTER all 3 choices are made does the child see anything else — the story then plays out to ONE ending that reflects the whole pattern of choices, followed by an explanation. Nothing before this point may reveal how any single choice turned out.
 
-Then write "personalityAnalysis" — one short, warm paragraph (2-3 simple sentences) for EACH of wise/mixed/regret, reflecting on what THIS story's choices showed about the child, written directly to them ("You..."). Plain, encouraging, simple words only — not a score, not a list of traits, just a kind observation matching that ending.
+Write three possible closing scenes in "endings" — this is the single moment the child finally sees the real result of their choices, specific to what actually happened across all 3 steps, not a generic wrap-up:
+- "wise": the character mostly chose well through the story. Show the concrete good result those specific choices led to, AND have someone (a friend, parent, or teacher) or the character themself plainly say something warm, in their own words.
+- "regret": the character mostly chose poorly. This should be a genuinely disappointing outcome, not softened — spell out the actual, specific thing that went wrong because of those choices, concrete and simple (not vague feelings), so the child clearly feels "that didn't go well." Keep it age-appropriate and never scary or harsh toward the character as a person — the choices were wrong, not the child.
+- "mixed": an in-between result — name one specific thing that went right and one that went less well, and the result is noticeably weaker than the "wise" ending.
 
-Then write "learningSummary" — one short, friendly sentence for EACH of wise/mixed/regret — a simple, practical tip for "next time," in plain child-friendly words.
+Then write "personalityAnalysis" — for EACH of wise/mixed/regret, 2-3 simple sentences spoken directly to the child ("You...") plainly explaining WHY that outcome happened — connect it clearly to the specific choices made across the story. Plain words only, not abstract ("because you chose to X, then Y happened").
+
+Then write "learningSummary" — for EACH of wise/mixed/regret, one short, concrete sentence telling the child exactly what the better choice would have been at these decision points (for "wise", instead affirm that this is exactly what to keep doing). This must be real, usable advice for a similar situation in real life — not a vague mood note. Say plainly what to do differently, in simple child-friendly words.
 
 Also write a short "title" (3-6 simple words) for the story.
 
-No violence, no scary content, no narrator voice stating a moral mid-story — everything in the steps and endings must come through as the character's own experience. The personalityAnalysis and learningSummary are the only places allowed to speak directly to the reader.
+No violence, no scary content, no narrator voice stating a moral mid-story — everything in the steps and endings must come through as the character's own experience. The personalityAnalysis and learningSummary are the only places allowed to speak directly to the reader, and only after the ending.
 
 Return ONLY valid JSON, no markdown, no extra text:
 {
@@ -136,9 +138,9 @@ Return ONLY valid JSON, no markdown, no extra text:
       "scene": "string",
       "question": "string",
       "options": [
-        { "text": "string", "outcome": "string", "leadsToward": "wise" },
-        { "text": "string", "outcome": "string", "leadsToward": "wise" },
-        { "text": "string", "outcome": "string", "leadsToward": "regret" }
+        { "text": "string", "leadsToward": "wise" },
+        { "text": "string", "leadsToward": "wise" },
+        { "text": "string", "leadsToward": "regret" }
       ]
     }
   ],
